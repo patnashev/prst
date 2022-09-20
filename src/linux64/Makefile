@@ -18,8 +18,8 @@ LIBS2  = -lm -lpthread -lstdc++ -static
 
 CC  = gcc
 CXX = g++
-CFLAGS   = -I.. -I../../framework/gwnum                                                -DX86_64 -O2 -std=c99     -Wall -Wextra
-CXXFLAGS = -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
+CFLAGS   = -I.. -I../../framework/gwnum                                                               -DX86_64 -O2 -std=c99     -Wall -Wextra
+CXXFLAGS = -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DFILE_APPID=4 -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
 
 #########################################################################
 
