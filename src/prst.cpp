@@ -12,6 +12,7 @@
 #include "task.h"
 #include "params.h"
 #include "fermat.h"
+#include "proof.h"
 
 using namespace arithmetic;
 
@@ -29,11 +30,16 @@ int main(int argc, char *argv[])
     //guessCpuType();
     //CPU_FLAGS &= ~CPU_FMA3;
 
+    File::FILE_APPID = 4;
+
     int i, j;
     GWState gwstate;
     GWArithmetic gw(gwstate);
     Params params;
     uint64_t maxMem = 0;
+    int proof_op = Proof::NO_OP;
+    int proof_count = 0;
+    std::string proof_cert;
     InputNum input;
     std::string toFile;
     int log_level = Logging::LEVEL_WARNING;
@@ -104,6 +110,95 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(argv[i], "-generic") == 0)
                 gwstate.force_general_mod = true;
+            else if (i < argc - 2 && strcmp(argv[i], "-proof") == 0)
+            {
+                while (true)
+                    if (i < argc - 2 && strcmp(argv[i + 1], "save") == 0)
+                    {
+                        i += 2;
+                        proof_op = Proof::SAVE;
+                        proof_count = atoi(argv[i]);
+                    }
+                    else if (i < argc - 2 && strcmp(argv[i + 1], "build") == 0)
+                    {
+                        i += 2;
+                        proof_op = Proof::BUILD;
+                        proof_count = atoi(argv[i]);
+                    }
+                    else if (i < argc - 2 && strcmp(argv[i + 1], "cert") == 0)
+                    {
+                        i += 2;
+                        proof_op = Proof::CERT;
+                        proof_cert = argv[i];
+                    }
+                    else if (i < argc - 3 && strcmp(argv[i + 1], "name") == 0)
+                    {
+                        i += 2;
+                        params.ProofPointFilename = argv[i];
+                        i++;
+                        params.ProofProductFilename = argv[i];
+                    }
+                    else if (i < argc - 2 && strcmp(argv[i + 1], "check") == 0)
+                    {
+                        i += 2;
+                        int check = atoi(argv[i]);
+                        if (check > proof_count)
+                            params.ProofChecksPerPoint = check/proof_count;
+                        else
+                            params.ProofPointsPerCheck = proof_count/check;
+                    }
+                    else if (i < argc - 2 && strcmp(argv[i + 1], "security") == 0)
+                    {
+                        i += 2;
+                        params.ProofSecuritySeed = argv[i];
+                    }
+                    else
+                        break;
+            }
+            else if (i < argc - 1 && strcmp(argv[i], "-check") == 0)
+            {
+                while (true)
+                    if (i < argc - 1 && strcmp(argv[i + 1], "near") == 0)
+                    {
+                        i++;
+                        params.CheckNear = true;
+                        params.Check = false;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "always") == 0)
+                    {
+                        i++;
+                        params.CheckNear = false;
+                        params.Check = true;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "never") == 0)
+                    {
+                        i++;
+                        params.CheckNear = false;
+                        params.Check = false;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "Gerbicz") == 0)
+                    {
+                        i++;
+                        params.CheckGerbicz = true;
+                        if (i < argc - 2 && strcmp(argv[i + 1], "count") == 0)
+                        {
+                            i += 2;
+                            params.GerbiczCount = atoi(argv[i]);
+                        }
+                        if (i < argc - 2 && strcmp(argv[i + 1], "L") == 0)
+                        {
+                            i += 2;
+                            params.GerbiczL = atoi(argv[i]);
+                        }
+                        if (i < argc - 2 && strcmp(argv[i + 1], "L2") == 0)
+                        {
+                            i += 2;
+                            params.GerbiczL2 = atoi(argv[i]);
+                        }
+                    }
+                    else
+                        break;
+            }
             else if (strcmp(argv[i], "-time") == 0)
             {
                 while (true)
@@ -173,20 +268,63 @@ int main(int argc, char *argv[])
 
     Logging logging(log_level);
 
-    Fermat fermat(input, params, nullptr, logging);
+    uint32_t fingerprint = input.fingerprint();
+    File file_cert(!proof_cert.empty() && proof_cert != "default" ? proof_cert : "prst_" + std::to_string(fingerprint) + ".cert", fingerprint);
+    std::unique_ptr<Proof> proof;
+    if (proof_op != Proof::NO_OP)
+    {
+        if (proof_op == Proof::CERT && (proof_count = Proof::read_cert_power(file_cert)) == 0)
+        {
+            logging.error("Invalid certificate file.\n");
+            return 0;
+        }
+        proof.reset(new Proof(proof_op, proof_count, input, params, logging));
+    }
+
+    std::unique_ptr<Fermat> fermat;
+    
+    if (proof_op == Proof::CERT)
+    {
+    }
+    else if (proof)
+        fermat.reset(new Fermat(input, params, logging, proof.get()));
+    else
+        fermat.reset(new Fermat(input, params, logging, nullptr));
+
 
     gwstate.maxmulbyconst = params.maxmulbyconst;
     input.setup(gwstate);
     
     try
     {
-        File file_progress("prst_" + std::to_string(gwstate.fingerprint), gwstate.fingerprint);
+        File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
         file_progress.hash = false;
         logging.progress_file(&file_progress);
-        File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", gwstate.fingerprint);
-        File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", gwstate.fingerprint);
 
-        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        if (proof_op == Proof::CERT)
+        {
+            fingerprint = File::unique_fingerprint(fingerprint, file_cert.filename());
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.c", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.r", fingerprint);
+            proof->run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+        }
+        else if (proof)
+        {
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof_count) + "." + std::to_string(proof->points()[proof_count]));
+            File file_proofpoint(!params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
+            File file_proofproduct(!params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint);
+            proof->init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
+            fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
+        }
+        else if (fermat)
+        {
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
+            fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
+        }
 
         file_progress.clear();
     }

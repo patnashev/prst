@@ -94,11 +94,11 @@ int genProthBase(Giant& k, uint32_t n) {
 }
 // END LLR code
 
-Fermat::Fermat(InputNum& input, Params& params, FastDC* fastdc, Logging& logging)
+Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
 {
     if (input.b() == 2 && input.c() == 1)
         _Proth = true;
-    else if (input.is_base2() && input.c() == 1)
+    else if (input.is_base2() && input.c() == 1 && proof == nullptr)
     {
         _input_k.reset(new InputNum());
         _input_base2.reset(new InputNum());
@@ -113,7 +113,7 @@ Fermat::Fermat(InputNum& input, Params& params, FastDC* fastdc, Logging& logging
 
     bool CheckGerbicz = true;// params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
 
-    if (fastdc == nullptr && !CheckGerbicz)
+    if (proof == nullptr && !CheckGerbicz)
     {
         FastExp* task;
         Giant exp;
@@ -131,13 +131,13 @@ Fermat::Fermat(InputNum& input, Params& params, FastDC* fastdc, Logging& logging
         logging.progress().add_stage(task->exp().bitlen());
         params.maxmulbyconst = _a;
     }
-    else if (fastdc == nullptr)
+    else if (proof == nullptr)
     {
         Giant& b = _input_base2 ? _input_base2->gb() : input.gb();
         int n = (_input_base2 ? _input_base2->n() : input.n()) - (Proth() ? 1 : 0);
-        int count = params.GerbiczCount ? params.GerbiczCount.value() : 16;
+        int checks = params.GerbiczCount ? params.GerbiczCount.value() : 16;
         GerbiczCheckExp* task;
-        _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(b, n, count, params.GerbiczL.value()) : new GerbiczCheckExp(b, n, count));
+        _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(b, n, checks, params.GerbiczL.value()) : new GerbiczCheckExp(b, n, checks));
         if (params.SlidingWindow)
             task->_W = params.SlidingWindow.value();
 
@@ -148,13 +148,40 @@ Fermat::Fermat(InputNum& input, Params& params, FastDC* fastdc, Logging& logging
             if (_input_k->k() != 1)
                 _task_ak_simple.reset(new SlowExp(_input_k->gk()));
             GerbiczCheckExp* task_ak;
-            _task_ak.reset(task_ak = params.GerbiczL ? new GerbiczCheckExp(_input_k->gb(), _input_k->n(), count, params.GerbiczL.value()) : new GerbiczCheckExp(_input_k->gb(), _input_k->n(), count));
+            _task_ak.reset(task_ak = params.GerbiczL ? new GerbiczCheckExp(_input_k->gb(), _input_k->n(), checks, params.GerbiczL.value()) : new GerbiczCheckExp(_input_k->gb(), _input_k->n(), checks));
             if (params.SlidingWindow)
                 task_ak->_W = params.SlidingWindow.value();
             logging.progress().add_stage(task_ak->cost());
         }
 
         logging.progress().add_stage(task->cost());
+    }
+    else
+    {
+        int n = input.n() - (Proth() ? 1 : 0);
+        proof->calc_points(n, input, params, logging);
+        CheckGerbicz = CheckGerbicz || params.ProofChecksPerPoint || params.ProofPointsPerCheck;
+        MultipointExp* task;
+        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), proof->points(), params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2)) : new MultipointExp(input.gb(), proof->points(), std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2)));
+        GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
+        if (CheckGerbicz && params.GerbiczL)
+        {
+            taskCheck->_L = params.GerbiczL.value();
+            if (params.GerbiczL2)
+                taskCheck->_L2 = params.GerbiczL2.value();
+            else
+            {
+                taskCheck->_L2 = proof->M()*(params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1)/(params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1);
+                taskCheck->_L2 -= taskCheck->_L2%taskCheck->_L;
+            }
+        }
+        if (params.SlidingWindow)
+            task->_W = params.SlidingWindow.value();
+        logging.progress().add_stage(task->cost());
+        logging.progress().add_stage(proof->cost());
+
+        if (input.k() != 1)
+            _task_ak_simple.reset(new SlowExp(input.gk()));
     }
 
     _task->set_error_check(!params.CheckNear || params.CheckNear.value(), params.Check && params.Check.value());
@@ -164,16 +191,17 @@ Fermat::Fermat(InputNum& input, Params& params, FastDC* fastdc, Logging& logging
         _task_ak_simple->set_error_check(false, true);
 }
 
-void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
     File* ak_checkpoint = nullptr;
     File* ak_recoverypoint = nullptr;
 
+    logging.info("Using %s.\n", gwstate.fft_description.data());
     if (Proth())
         logging.info("Proth test of %s, a = %d.\n", (_input_base2 ? *_input_base2 : input).display_text().data(), _a);
     else
         logging.info("Fermat probabilistic test of %s, a = %d.\n", input.display_text().data(), _a);
-    logging.info("Using %s.\n", gwstate.fft_description.data());
+    logging.report_param("a", _a);
 
     FastExp* taskFast = dynamic_cast<FastExp*>(_task.get());
     if (taskFast != nullptr)
@@ -187,11 +215,11 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     {
         GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(taskMultipoint);
         if (taskGerbiczCheck != nullptr)
-        {
             taskGerbiczCheck->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging);
-        }
         else
             taskMultipoint->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &logging);
+        if (proof != nullptr)
+            proof->init_state(taskMultipoint, gwstate, input, logging, _a);
         if (taskMultipoint->state() == nullptr)
         {
             Giant tmp;
@@ -228,6 +256,8 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
                 tmp = std::move(_task_ak_simple->state()->X());
             }
 
+            if (proof != nullptr)
+                proof->on_point(0, tmp);
             taskMultipoint->init_state(new BaseExp::State(0, std::move(tmp)));
         }
         else if (_input_k)
@@ -255,12 +285,15 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     }
     else
     {
-        std::string res64 = _task->state()->X().to_res64();
-        logging.result(_success, "%s is not prime. RES64: %s. Time: %.1f s.\n", input.display_text().data(), res64.data(), _task->timer());
-        logging.result_save(input.input_text() + " is not prime. RES64: " + res64 + ". Time: " + std::to_string((int)_task->timer()) + " s.\n");
+        _res64 = _task->state()->X().to_res64();
+        logging.result(_success, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
+        logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
 
     logging.progress().next_stage();
+    if (proof != nullptr)
+        proof->run(input, gwstate, logging);
+
     file_checkpoint.clear();
     file_recoverypoint.clear();
     if (ak_checkpoint != nullptr)

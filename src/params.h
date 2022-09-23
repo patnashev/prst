@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 class Params
 {
@@ -17,4 +18,10 @@ public:
 
     std::optional<int> FermatBase;
     int maxmulbyconst = 1;
+
+    std::string ProofPointFilename;
+    std::string ProofProductFilename;
+    std::optional<int> ProofPointsPerCheck;
+    std::optional<int> ProofChecksPerPoint;
+    std::string ProofSecuritySeed;
 };
