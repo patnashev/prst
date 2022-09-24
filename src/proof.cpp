@@ -239,7 +239,8 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging)
         logging.progress().next_stage();
 
         _res64 = taskSave->state()->X().to_res64();
-        logging.result(false, "%s compressed %d points to %d products, time: %.1f s.\n", input.display_text().data(), _count, _file_products.size(), _task->timer());
+        logging.info("%s compressed %d points to %d products, time: %.1f s.\n", input.display_text().data(), _count, _file_products.size(), _task->timer());
+        logging.result(false, "%s raw certificate RES64: %s.\n", input.display_text().data(), _res64.data());
         logging.result_save(input.input_text() + " raw certificate RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
     ProofBuild* taskBuild = dynamic_cast<ProofBuild*>(_task.get());
@@ -403,8 +404,8 @@ void ProofSave::execute()
         hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h[i]);
         make_prime(h[i]);
 
-        gw().fft(D, T);
-        exp_gw(gw(), h[i], D, T, GWMUL_STARTNEXTFFT);
+        gw().fft(D, D);
+        exp_gw(gw(), h[i], D, T = D, GWMUL_STARTNEXTFFT);
         gw().mul(D, Y, Y, 0);
     }
     tree.clear();
