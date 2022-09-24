@@ -294,7 +294,8 @@ int main(int argc, char *argv[])
 
     gwstate.maxmulbyconst = params.maxmulbyconst;
     input.setup(gwstate);
-    
+    logging.info("Using %s.\n", gwstate.fft_description.data());
+
     try
     {
         File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
@@ -310,7 +311,7 @@ int main(int argc, char *argv[])
         }
         else if (proof)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof_count) + "." + std::to_string(proof->points()[proof_count]));
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
             File file_proofpoint(!params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
             File file_proofproduct(!params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint);
             proof->init_files(&file_proofpoint, &file_proofproduct, &file_cert);

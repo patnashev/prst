@@ -123,7 +123,10 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
 
     if (op() == BUILD)
     {
-        logging.info("Building certificate from %d products.\n", depth());
+        if (_points.size() == count() + 2)
+            logging.info("Building certificate from %d products, %d iterations tail.\n", depth(), _points[count() + 1] - _points[count()]);
+        else
+            logging.info("Building certificate from %d products.\n", depth());
         logging.set_prefix(input.display_text() + " ");
 
         read_point(0, *state, logging);
@@ -183,8 +186,7 @@ void Proof::read_product(int index, TaskState& state, Logging& logging)
         logging.error("%s is missing or corrupt.\n", _file_products[index]->filename().data());
         throw TaskAbortException();
     }
-    if (!_cache_points)
-        _file_products[index]->free_buffer();
+    _file_products[index]->free_buffer();
 }
 
 void Proof::on_point(int index, arithmetic::Giant& X)
@@ -200,7 +202,6 @@ void Proof::on_point(int index, arithmetic::Giant& X)
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
-    logging.info("Using %s.\n", gwstate.fft_description.data());
     logging.info("Verifying certificate of %s, %d iterations.\n", input.display_text().data(), _points[0]);
 
     MultipointExp* taskMultipoint = dynamic_cast<MultipointExp*>(_task.get());
@@ -317,17 +318,26 @@ void make_prime(Giant& g, int limit = 1000)
     }
 }
 
+void exp_gw(GWArithmetic& gw, Giant& exp, GWNum& X, GWNum& X0, int options)
+{
+    int len = exp.bitlen() - 1;
+    for (int bit = 0; bit < len; bit++)
+    {
+        gw.square(X, X, options);
+        if (exp.bit(len - bit - 1))
+            gw.mul(X0, X, X, options);
+    }
+}
+
 void ProofSave::execute()
 {
     int t, i, j, k;
-    int bit, len;
     State state_d;
-    GWNum X(gw());
+    GWNum Y(gw());
     GWNum D(gw());
-    GWNum D0(gw());
+    GWNum T(gw());
     std::vector<GWNum> tree;
     std::vector<Giant> h;
-    Giant exp;
 
     t = _proof.depth();
     tree.reserve(t);
@@ -339,9 +349,9 @@ void ProofSave::execute()
         read_point(_proof.count(), *state());
         static_cast<TaskState*>(state())->set(0);
     }
-    X = state()->X();
+    Y = state()->X();
 
-    for (i = state()->iteration(); i < t; i++, commit_execute<State>(i, X))
+    for (i = state()->iteration(); i < t; i++, commit_execute<State>(i, Y))
     {
         if (_proof.file_products()[i]->read(state_d))
         {
@@ -377,16 +387,8 @@ void ProofSave::execute()
                         }
                         else
                         {
-                            D0 = tree[i - k];
-                            exp = h[i - k];
-                            len = exp.bitlen() - 1;
-                            for (bit = 0; bit < len; bit++)
-                            {
-                                gw().square(D0, D0, GWMUL_STARTNEXTFFT);
-                                if (exp.bit(len - bit - 1))
-                                    gw().mul(D0, tree[i - k], D0, GWMUL_STARTNEXTFFT);
-                            }
-                            gw().mul(D0, D, D, GWMUL_STARTNEXTFFT_IF(j + 1 != (1 << i) || k != i));
+                            exp_gw(gw(), h[i - k], T = tree[i - k], tree[i - k], GWMUL_STARTNEXTFFT);
+                            gw().mul(T, D, D, GWMUL_STARTNEXTFFT_IF(j + 1 != (1 << i) || k != i));
                         }
                     }
                 }
@@ -401,16 +403,9 @@ void ProofSave::execute()
         hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h[i]);
         make_prime(h[i]);
 
-        gw().fft(D, D0);
-        exp = h[i];
-        len = exp.bitlen() - 1;
-        for (bit = 0; bit < len; bit++)
-        {
-            gw().square(D, D, GWMUL_STARTNEXTFFT);
-            if (exp.bit(len - bit - 1))
-                gw().mul(D, D0, D, GWMUL_STARTNEXTFFT);
-        }
-        gw().mul(D, X, X, 0);
+        gw().fft(D, T);
+        exp_gw(gw(), h[i], D, T, GWMUL_STARTNEXTFFT);
+        gw().mul(D, Y, Y, 0);
     }
     tree.clear();
 
@@ -432,19 +427,14 @@ void ProofBuild::init(InputNum* input, arithmetic::GWState* gwstate, Logging* lo
     }
 }
 
-void ProofBuild::read_product(int index, TaskState& state)
-{
-    _proof.read_product(index, state, *_logging);
-}
-
 void ProofBuild::execute()
 {
-    int bit, i, len, M, t;
+    int i, M, t;
     State state_d;
     GWNum X(gw());
     GWNum Y(gw());
     GWNum D(gw());
-    GWNum D0(gw());
+    GWNum T(gw());
     Giant h(GiantsArithmetic::default_arithmetic(), 4);
     Giant exp;
 
@@ -458,36 +448,19 @@ void ProofBuild::execute()
     M = _proof.points()[_proof.count()];
     for (i = 0; i < t; i++, commit_execute<State>(i, Y), M >>= 1)
     {
-        read_product(i, state_d);
+        _proof.read_product(i, state_d, *_logging);
         D = state_d.X();
         hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h);
         make_prime(h);
 
-        D0 = X;
         exp = h;
         if (M%2 != 0)
             exp *= _input->gb();
-        len = exp.bitlen() - 1;
-        for (bit = 0; bit < len; bit++)
-        {
-            gw().carefully().square(X, X, 0);
-            if (exp.bit(len - bit - 1))
-                gw().carefully().mul(X, D0, X, 0);
-        }
+        exp_gw(gw().carefully(), exp, X, T = X, 0);
+        gw().carefully().mul(D, X, X, 0);
 
-        gw().carefully().mul(X, D, X, 0);
-
-        D0 = D;
-        exp = h;
-        len = exp.bitlen() - 1;
-        for (bit = 0; bit < len; bit++)
-        {
-            gw().carefully().square(D, D, 0);
-            if (exp.bit(len - bit - 1))
-                gw().carefully().mul(D, D0, D, 0);
-        }
-
-        gw().carefully().mul(Y, D, Y, 0);
+        exp_gw(gw().carefully(), h, D, T = D, 0);
+        gw().carefully().mul(D, Y, Y, 0);
     }
 
     if (!_rnd_seed.empty())
@@ -495,29 +468,11 @@ void ProofBuild::execute()
         _raw_res64 = state()->X().to_res64();
 
         exp.arithmetic().rnd_seed(_rnd_seed);
-        exp = 0;
-        while (exp == 0)
-        {
-            exp = Giant::rnd(64);
-            make_prime(exp, 1000000);
-        }
-        len = exp.bitlen() - 1;
+        exp.arithmetic().rnd(exp, 64);
+        make_prime(exp, 1000000);
 
-        D0 = X;
-        for (bit = 0; bit < len; bit++)
-        {
-            gw().carefully().square(X, X, 0);
-            if (exp.bit(len - bit - 1))
-                gw().carefully().mul(X, D0, X, 0);
-        }
-
-        D0 = Y;
-        for (bit = 0; bit < len; bit++)
-        {
-            gw().carefully().square(Y, Y, 0);
-            if (exp.bit(len - bit - 1))
-                gw().carefully().mul(Y, D0, Y, 0);
-        }
+        exp_gw(gw().carefully(), exp, X, T = X, 0);
+        exp_gw(gw().carefully(), exp, Y, T = Y, 0);
 
         commit_execute<State>(t + 1, Y);
     }

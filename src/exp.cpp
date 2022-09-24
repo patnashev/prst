@@ -194,13 +194,14 @@ void MultipointExp::sliding_window(const arithmetic::Giant& exp)
     int i, j;
     int len = exp.bitlen() - 1;
     int W;
-    for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + len*(1 + 1/(W + 1.0)) > (1 << (W - 0)) + len*(1 + 1/(W + 2.0)); W++);
+    for (W = 1; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + len*(1 + 1/(W + 1.0)) > (1 << (W - 0)) + len*(1 + 1/(W + 2.0)); W++);
 
     _U.reserve((size_t)1 << (W - 1));
     if (_U.size() <= 0)
         _U.emplace_back(gw());
     swap(_U[0], X());
-    gw().square(_U[0], X(), GWMUL_STARTNEXTFFT);
+    if (W > 1)
+        gw().square(_U[0], X(), GWMUL_STARTNEXTFFT);
     for (i = 1; i < (1 << (W - 1)); i++)
     {
         if (_U.size() <= i)
@@ -324,7 +325,7 @@ void GerbiczCheckMultipointExp::init_state(State* state)
     _state_recovery.reset(state);
     if (!_state || (state_check() != nullptr ? state_check()->recovery() : _state->iteration()) != _state_recovery->iteration() || _state->iteration() < _state_recovery->iteration() || _state->iteration() >= _state_recovery->iteration() + _L2)
     {
-        _state.reset(new TaskState(0));
+        _state.reset(new TaskState(4));
         _state->set(_state_recovery->iteration());
     }
     if (_state->iteration() > 0)
@@ -444,7 +445,7 @@ void GerbiczCheckMultipointExp::execute()
             throw TaskAbortException();
         }
 
-        _logging->debug("performing Gerbicz check at %d.\n", i);
+        _logging->debug("performing Gerbicz check at %d, L2 = %d*%d.\n", i, L, L2/L);
         GWNum T(D());
         gw().carefully().mul(X(), D(), D(), 0);
         swap(T, X());
@@ -472,7 +473,7 @@ void GerbiczCheckMultipointExp::execute()
         if (T != 0 || D() == 0)
         {
             _logging->error("Gerbicz check failed at %.1f%%.\n", 100.0*i/iterations());
-            _state.reset(new TaskState(0));
+            _state.reset(new TaskState(4));
             _state->set(_state_recovery->iteration());
             _restart_op = _recovery_op;
             throw TaskRestartException();
@@ -484,7 +485,7 @@ void GerbiczCheckMultipointExp::execute()
             Giant tmp;
             tmp = R();
             _state_recovery.reset(new State(i, tmp));
-            _state.reset(new TaskState(0));
+            _state.reset(new TaskState(4));
             _state->set(i);
             on_state();
             _recovery_op = _restart_op;

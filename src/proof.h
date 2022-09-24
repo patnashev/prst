@@ -106,7 +106,6 @@ public:
 
 protected:
     void execute() override;
-    void read_product(int index, TaskState& state);
 
 protected:
     Proof& _proof;

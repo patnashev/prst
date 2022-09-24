@@ -196,7 +196,6 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     File* ak_checkpoint = nullptr;
     File* ak_recoverypoint = nullptr;
 
-    logging.info("Using %s.\n", gwstate.fft_description.data());
     if (Proth())
         logging.info("Proth test of %s, a = %d.\n", (_input_base2 ? *_input_base2 : input).display_text().data(), _a);
     else
