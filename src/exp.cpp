@@ -312,6 +312,7 @@ void GerbiczCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fi
     BaseExp::init(input, gwstate, file, read_state<GerbiczCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE/log2(_b);
     _file_recovery = file_recovery;
+    _state_recovery.reset();
     State* state_recovery = read_state<State>(file_recovery);
     if (state_recovery != nullptr)
         init_state(state_recovery);

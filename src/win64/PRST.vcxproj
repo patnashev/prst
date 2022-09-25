@@ -170,6 +170,8 @@
     <ClCompile Include="..\..\framework\md5.c" />
     <ClCompile Include="..\..\framework\task.cpp" />
     <ClCompile Include="..\exp.cpp" />
+    <ClCompile Include="..\pocklington.cpp" />
+    <ClCompile Include="..\proof.cpp" />
     <ClCompile Include="..\prst.cpp" />
     <ClCompile Include="..\fermat.cpp" />
   </ItemGroup>
@@ -187,7 +189,8 @@
     <ClInclude Include="..\..\framework\md5.h" />
     <ClInclude Include="..\..\framework\task.h" />
     <ClInclude Include="..\exp.h" />
-    <ClInclude Include="..\fastdc.h" />
+    <ClInclude Include="..\pocklington.h" />
+    <ClInclude Include="..\proof.h" />
     <ClInclude Include="..\fermat.h" />
     <ClInclude Include="..\params.h" />
   </ItemGroup>

@@ -11,11 +11,18 @@
 class Fermat
 {
 public:
-    Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof);
+    static const int AUTO = 0;
+    static const int FERMAT = 1;
+    static const int PROTH = 2;
+    static const int POCKLINGTON = 3;
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof);
+public:
+    Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof);
+    virtual ~Fermat() { }
 
-    bool Proth() { return _Proth; }
+    virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof);
+
+    int type() { return _type; }
     int a() { return _a; }
     bool success() { return _success; }
     std::string& res64() { return _res64; }
@@ -26,9 +33,10 @@ public:
     BaseExp* task() { return _task.get(); }
 
 protected:
+    virtual void on_finish(InputNum& input, arithmetic::GWState& gwstate, Logging& logging) { }
 
 protected:
-    bool _Proth = false;
+    int _type;
     std::unique_ptr<InputNum> _input_k;
     std::unique_ptr<InputNum> _input_base2;
     int _a;

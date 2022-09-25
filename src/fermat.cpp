@@ -94,22 +94,26 @@ int genProthBase(Giant& k, uint32_t n) {
 }
 // END LLR code
 
-Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
+Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof)
 {
-    if (input.b() == 2 && input.c() == 1)
-        _Proth = true;
-    else if (input.is_base2() && input.c() == 1 && proof == nullptr)
+    if ((type == AUTO || type == PROTH) && input.b() == 2 && input.c() == 1)
+        _type = PROTH;
+    else if ((type == AUTO || type == PROTH) && input.is_base2() && input.c() == 1 && proof == nullptr)
     {
         _input_k.reset(new InputNum());
         _input_base2.reset(new InputNum());
         input.to_base2(*_input_k, *_input_base2);
-        _Proth = true;
+        _type = PROTH;
         logging.info("%s = %s\n", input.display_text().data(), _input_base2->display_text().data());
     }
+    else if (type == AUTO)
+        _type = FERMAT;
+    else
+        _type = type;
 
     _a = params.FermatBase ? params.FermatBase.value() : 3;
-    if (Proth())
-        _a = genProthBase(_input_base2 ? _input_base2->gk() : input.gk(), input.n());
+    if (_type == PROTH)
+        _a = _input_base2 ? genProthBase(_input_base2->gk(), _input_base2->n()) : genProthBase(input.gk(), input.n());
 
     bool CheckGerbicz = params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
 
@@ -122,9 +126,9 @@ Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
         else
         {
             if (input.b() == 2)
-                exp = input.gk() << (input.n() - (Proth() ? 1 : 0));
+                exp = input.gk() << (input.n() - (_type == PROTH ? 1 : 0));
             else
-                exp = input.gk()*power(input.gb(), input.n());
+                exp = input.gk()*power(input.gb(), input.n() - (_type == POCKLINGTON ? 1 : 0));
             exp += input.c() - 1;
         }
         _task.reset(task = new FastExp(std::move(exp)));
@@ -134,7 +138,7 @@ Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
     else if (proof == nullptr)
     {
         Giant& b = _input_base2 ? _input_base2->gb() : input.gb();
-        int n = (_input_base2 ? _input_base2->n() : input.n()) - (Proth() ? 1 : 0);
+        int n = (_input_base2 ? _input_base2->n() : input.n()) - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
         int checks = params.GerbiczCount ? params.GerbiczCount.value() : 16;
         GerbiczCheckExp* task;
         _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(b, n, checks, params.GerbiczL.value()) : new GerbiczCheckExp(b, n, checks));
@@ -160,7 +164,7 @@ Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
     }
     else
     {
-        int n = input.n() - (Proth() ? 1 : 0);
+        int n = input.n() - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
         proof->calc_points(n, input, params, logging);
         CheckGerbicz = CheckGerbicz || params.ProofChecksPerPoint || params.ProofPointsPerCheck;
         MultipointExp* task;
@@ -202,9 +206,9 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     Giant ak;
     ak = _a;
 
-    if (Proth())
+    if (type() == PROTH)
         logging.info("Proth test of %s, a = %d.\n", (_input_base2 ? *_input_base2 : input).display_text().data(), _a);
-    else
+    else if (type() == FERMAT)
         logging.info("Fermat probabilistic test of %s, a = %d.\n", input.display_text().data(), _a);
     logging.report_param("a", _a);
 
@@ -283,19 +287,22 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
 
         taskMultipoint->run();
     }
-    if (Proth())
+
+    on_finish(input, gwstate, logging);
+
+    if (type() == PROTH)
     {
         _task->state()->X() += 1;
         _task->state()->X() %= *gwstate.N;
     }
 
-    if (!Proth() && _task->state()->X() == 1)
+    if (type() != PROTH && _task->state()->X() == 1)
     {
         _success = true;
         logging.result(_success, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), _task->timer());
         logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
-    else if (Proth() && _task->state()->X() == 0)
+    else if (type() == PROTH && _task->state()->X() == 0)
     {
         _success = true;
         logging.result(_success, "%s is prime! Time: %.1f s.\n", input.display_text().data(), _task->timer());

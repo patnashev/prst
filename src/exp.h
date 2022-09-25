@@ -36,6 +36,7 @@ public:
     double timer() { return _timer; }
     int transforms() { return _transforms; }
     void set_error_check(bool near, bool check);
+    virtual double cost() { return 0; }
 
 protected:
     void setup() override { }
@@ -62,6 +63,7 @@ public:
 
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0);
     arithmetic::Giant& exp() { return _exp; }
+    double cost() override { return _exp.bitlen(); }
 
 protected:
     void execute() override;
@@ -87,6 +89,8 @@ public:
         init(input, gwstate, file, logging);
     }
     arithmetic::Giant& exp() { return _exp; }
+    arithmetic::Giant& X0() { return _X0; }
+    double cost() override { return _exp.bitlen()*1.5; }
 
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
@@ -115,7 +119,7 @@ public:
     arithmetic::GWNum& X() { return *_X; }
     int _W = 5;
     int _max_size = -1;
-    virtual double cost();
+    double cost() override;
 
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);

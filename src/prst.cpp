@@ -13,6 +13,7 @@
 #include "params.h"
 #include "fermat.h"
 #include "proof.h"
+#include "pocklington.h"
 
 using namespace arithmetic;
 
@@ -286,10 +287,21 @@ int main(int argc, char *argv[])
     if (proof_op == Proof::CERT)
     {
     }
-    else if (proof)
-        fermat.reset(new Fermat(input, params, logging, proof.get()));
+    else if (input.c() == 1 && input.b() != 2/* && (!input.is_base2() || proof)*/)
+    {
+        if (input.is_factorized_half())
+            fermat.reset(new Pocklington(input, params, logging, proof.get()));
+        else
+        {
+            std::string factors;
+            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) :  "");
+            logging.warning("Not enough factors of b for Pocklington test. Factorized part: %s.\n", factors.data());
+            fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
+        }
+    }
     else
-        fermat.reset(new Fermat(input, params, logging, nullptr));
+        fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
 
 
     gwstate.maxmulbyconst = params.maxmulbyconst;
