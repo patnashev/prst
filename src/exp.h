@@ -54,8 +54,11 @@ protected:
 class FastExp : public BaseExp
 {
 public:
-    FastExp(const arithmetic::Giant& exp) : BaseExp(), _exp(exp) { }
-    FastExp(arithmetic::Giant&& exp) : BaseExp(), _exp(std::move(exp)) { }
+    template<class T>
+    FastExp(T&& exp) : BaseExp()
+    {
+        _exp = std::forward<T>(exp);
+    }
 
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0);
     arithmetic::Giant& exp() { return _exp; }
@@ -71,13 +74,22 @@ protected:
 class SlowExp : public BaseExp
 {
 public:
-    SlowExp(const arithmetic::Giant& exp) : BaseExp(), _exp(exp) { }
-    SlowExp(arithmetic::Giant&& exp) : BaseExp(), _exp(std::move(exp)) { }
+    template<class T>
+    SlowExp(T&& exp) : BaseExp()
+    {
+        _exp = std::forward<T>(exp);
+    }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, const arithmetic::Giant& X0);
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& X0)
+    {
+        _X0 = std::forward<T>(X0);
+        init(input, gwstate, file, logging);
+    }
     arithmetic::Giant& exp() { return _exp; }
 
 protected:
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
     void execute() override;
 
 protected:
@@ -92,7 +104,12 @@ public:
     {
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& tail)
+    {
+        _tail = std::forward<T>(tail);
+        init(input, gwstate, file, logging);
+    }
     virtual void init_state(State* state);
 
     arithmetic::GWNum& X() { return *_X; }
@@ -101,6 +118,7 @@ public:
     virtual double cost();
 
 protected:
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
     void release() override;
     void execute() override;
     void sliding_window(const arithmetic::Giant& exp);
@@ -110,7 +128,7 @@ protected:
     const std::vector<int>& _points;
     std::function<void(int, arithmetic::Giant&)> _on_point;
 
-    arithmetic::Giant _X0;
+    arithmetic::Giant _tail;
     std::unique_ptr<arithmetic::GWNum> _X;
     std::vector<arithmetic::GWNum> _U;
 };
@@ -142,7 +160,12 @@ public:
         Gerbicz_params(points[points_per_check < points.size() ? points_per_check : points.size() - 1]/checks_per_point, log2(b), _L, _L2);
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging);
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail)
+    {
+        _tail = std::forward<T>(tail);
+        init(input, gwstate, file, file_recovery, logging);
+    }
     void init_state(State* state) override;
 
     State* state() override { return _state_recovery.get(); }
@@ -157,6 +180,7 @@ public:
     static void Gerbicz_params(int iters, double log2b, int& L, int &L2);
 
 protected:
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging);
     void write_state() override;
     void release() override;
     void setup() override;

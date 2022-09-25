@@ -20,6 +20,7 @@ public:
     bool success() { return _success; }
     std::string& res64() { return _res64; }
 
+    BaseExp* task_tail_simple() { return _task_tail_simple.get(); }
     BaseExp* task_ak_simple() { return _task_ak_simple.get(); }
     BaseExp* task_ak() { return _task_ak.get(); }
     BaseExp* task() { return _task.get(); }
@@ -32,6 +33,7 @@ protected:
     std::unique_ptr<InputNum> _input_base2;
     int _a;
 
+    std::unique_ptr<BaseExp> _task_tail_simple;
     std::unique_ptr<BaseExp> _task_ak_simple;
     std::unique_ptr<BaseExp> _task_ak;
     std::unique_ptr<BaseExp> _task;

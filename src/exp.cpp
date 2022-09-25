@@ -61,13 +61,14 @@ void FastExp::execute()
     {
         i = 0;
         X = _x0;
-        gwset_carefully_count(gw().gwdata(), 30);
     }
     else
     {
         i = state()->iteration();
         X = state()->X();
     }
+    if (i < 30)
+        gwset_carefully_count(gw().gwdata(), 30 - i);
     gw().setmulbyconst(_x0);
     len = iterations();
     for (; i < len; i++, commit_execute<State>(i, X))
@@ -76,14 +77,13 @@ void FastExp::execute()
     done();
 }
 
-void SlowExp::init(InputNum* input, GWState* gwstate, File* file, Logging* logging, const arithmetic::Giant& X0)
+void SlowExp::init(InputNum* input, GWState* gwstate, File* file, Logging* logging)
 {
     BaseExp::init(input, gwstate, file, read_state<State>(file), logging, _exp.bitlen() - 1);
     _state_update_period = MULS_PER_STATE_UPDATE/1.5;
     _logging->set_prefix(input->display_text() + " ");
     if (state() != nullptr)
         _logging->info("restarting at %.1f%%.\n", 100.0*state()->iteration()/iterations());
-    _X0 = X0;
 }
 
 void SlowExp::execute()
@@ -97,7 +97,6 @@ void SlowExp::execute()
     {
         i = 0;
         X = X0;
-        gwset_carefully_count(gw().gwdata(), 30);
     }
     else
     {
@@ -107,9 +106,9 @@ void SlowExp::execute()
     len = iterations();
     for (; i < len; i++, commit_execute<State>(i, X))
     {
-        gw().square(X, X, GWMUL_STARTNEXTFFT_IF(!is_last(i) || _exp.bit(len - i - 1)));
+        gw().carefully().square(X, X, 0);
         if (_exp.bit(len - i - 1))
-            gw().mul(X, X0, X, GWMUL_STARTNEXTFFT_IF(!is_last(i)));
+            gw().carefully().mul(X, X0, X, 0);
     }
 
     done();
@@ -117,7 +116,7 @@ void SlowExp::execute()
 
 void MultipointExp::init(InputNum* input, GWState* gwstate, File* file, Logging* logging)
 {
-    BaseExp::init(input, gwstate, file, nullptr, logging, _points.back());
+    BaseExp::init(input, gwstate, file, nullptr, logging, _points.back() + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE;
     State* state = read_state<State>(file);
     if (state != nullptr)
@@ -184,6 +183,14 @@ void MultipointExp::execute()
             _on_point(next_point, state()->X());
             _last_write = std::chrono::system_clock::now();
         }
+    }
+    if (i < iterations())
+    {
+        GWNum T(gw());
+        T = _tail;
+        gw().carefully().mul(T, X(), X(), 0);
+        i++;
+        commit_execute<State>(i, X());
     }
 
     done();
@@ -302,7 +309,7 @@ double GerbiczCheckMultipointExp::cost()
 
 void GerbiczCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* file, File* file_recovery, Logging* logging)
 {
-    BaseExp::init(input, gwstate, file, read_state<GerbiczCheckState>(file), logging, _points.back());
+    BaseExp::init(input, gwstate, file, read_state<GerbiczCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE/log2(_b);
     _file_recovery = file_recovery;
     State* state_recovery = read_state<State>(file_recovery);
@@ -484,7 +491,7 @@ void GerbiczCheckMultipointExp::execute()
             D() = X();
             Giant tmp;
             tmp = R();
-            _state_recovery.reset(new State(i, tmp));
+            _state_recovery.reset(new State(i, std::move(tmp)));
             _state.reset(new TaskState(4));
             _state->set(i);
             on_state();
@@ -500,6 +507,17 @@ void GerbiczCheckMultipointExp::execute()
             _last_write = std::chrono::system_clock::now();
         }
         next_point++;
+    }
+    if (i < iterations())
+    {
+        D() = _tail;
+        gw().carefully().mul(D(), R(), R(), 0);
+        i++;
+        Giant tmp;
+        tmp = R();
+        _state_recovery.reset(new State(i, std::move(tmp)));
+        _state->set(i);
+        on_state();
     }
 
     done();

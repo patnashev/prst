@@ -111,7 +111,7 @@ Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
     if (Proth())
         _a = genProthBase(_input_base2 ? _input_base2->gk() : input.gk(), input.n());
 
-    bool CheckGerbicz = true;// params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
+    bool CheckGerbicz = params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
 
     if (proof == nullptr && !CheckGerbicz)
     {
@@ -141,6 +141,8 @@ Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
         if (params.SlidingWindow)
             task->_W = params.SlidingWindow.value();
 
+        if (!_input_k && input.c() != 1)
+            _task_tail_simple.reset(new SlowExp(abs(input.c() - 1)));
         if (!_input_k && input.k() != 1)
             _task_ak_simple.reset(new SlowExp(input.gk()));
         else if (_input_k)
@@ -180,6 +182,8 @@ Fermat::Fermat(InputNum& input, Params& params, Logging& logging, Proof* proof)
         logging.progress().add_stage(task->cost());
         logging.progress().add_stage(proof->cost());
 
+        if (input.c() != 1)
+            _task_tail_simple.reset(new SlowExp(abs(input.c() - 1)));
         if (input.k() != 1)
             _task_ak_simple.reset(new SlowExp(input.gk()));
     }
@@ -195,12 +199,29 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
 {
     File* ak_checkpoint = nullptr;
     File* ak_recoverypoint = nullptr;
+    Giant ak;
+    ak = _a;
 
     if (Proth())
         logging.info("Proth test of %s, a = %d.\n", (_input_base2 ? *_input_base2 : input).display_text().data(), _a);
     else
         logging.info("Fermat probabilistic test of %s, a = %d.\n", input.display_text().data(), _a);
     logging.report_param("a", _a);
+
+    Giant tail;
+    if (_task_tail_simple)
+    {
+        if (input.c() == -1 && _a < 46341)
+            tail = _a*_a;
+        else
+        {
+            static_cast<SlowExp*>(_task_tail_simple.get())->init(&input, &gwstate, nullptr, &logging, ak);
+            _task_tail_simple->run();
+            tail = std::move(_task_tail_simple->state()->X());
+        }
+        if (input.c() < 0)
+            tail.inv(*gwstate.N);
+    }
 
     FastExp* taskFast = dynamic_cast<FastExp*>(_task.get());
     if (taskFast != nullptr)
@@ -214,15 +235,13 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     {
         GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(taskMultipoint);
         if (taskGerbiczCheck != nullptr)
-            taskGerbiczCheck->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging);
+            taskGerbiczCheck->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
         else
-            taskMultipoint->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &logging);
+            taskMultipoint->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &logging, std::move(tail));
         if (proof != nullptr)
             proof->init_state(taskMultipoint, gwstate, input, logging, _a);
         if (taskMultipoint->state() == nullptr)
         {
-            Giant tmp;
-            tmp = _a;
             if (_task_ak)
             {
                 logging.set_prefix("");
@@ -232,32 +251,32 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
                 {
                     ak_checkpoint = file_checkpoint.add_child("ak", File::unique_fingerprint(gwstate.fingerprint, "ak"));
                     ak_recoverypoint = file_recoverypoint.add_child("ak", File::unique_fingerprint(gwstate.fingerprint, "ak"));
-                    akGerbiczCheck->init(_input_k.get(), &gwstate, ak_checkpoint, ak_recoverypoint, &logging);
+                    akGerbiczCheck->init(_input_k.get(), &gwstate, ak_checkpoint, ak_recoverypoint, &logging, Giant());
                     if (akGerbiczCheck->state() == nullptr)
                     {
                         if (_task_ak_simple)
                         {
-                            static_cast<SlowExp*>(_task_ak_simple.get())->init(_input_k.get(), &gwstate, nullptr, &logging, tmp);
+                            static_cast<SlowExp*>(_task_ak_simple.get())->init(_input_k.get(), &gwstate, nullptr, &logging, std::move(ak));
                             _task_ak_simple->run();
-                            tmp = std::move(_task_ak_simple->state()->X());
+                            ak = std::move(_task_ak_simple->state()->X());
                         }
-                        akGerbiczCheck->init_state(new BaseExp::State(0, std::move(tmp)));
+                        akGerbiczCheck->init_state(new BaseExp::State(0, std::move(ak)));
                     }
                     akGerbiczCheck->run();
                     logging.progress().next_stage();
                 }
-                tmp = std::move(_task_ak->state()->X());
+                ak = std::move(_task_ak->state()->X());
             }
             else if (_task_ak_simple)
             {
-                static_cast<SlowExp*>(_task_ak_simple.get())->init(&input, &gwstate, nullptr, &logging, tmp);
+                static_cast<SlowExp*>(_task_ak_simple.get())->init(&input, &gwstate, nullptr, &logging, std::move(ak));
                 _task_ak_simple->run();
-                tmp = std::move(_task_ak_simple->state()->X());
+                ak = std::move(_task_ak_simple->state()->X());
             }
 
             if (proof != nullptr)
-                proof->on_point(0, tmp);
-            taskMultipoint->init_state(new BaseExp::State(0, std::move(tmp)));
+                proof->on_point(0, ak);
+            taskMultipoint->init_state(new BaseExp::State(0, std::move(ak)));
         }
         else if (_input_k)
             logging.progress().skip_stage();

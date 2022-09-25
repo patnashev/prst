@@ -60,7 +60,7 @@ int Proof::read_cert_power(File& file_cert)
 
 void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging& logging)
 {
-    if (input.b() != 2 && params.ProofPointsPerCheck)
+    if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck)
     {
         int i;
         int iters = iterations*params.ProofPointsPerCheck.value()/_count;
@@ -209,9 +209,9 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, 
     {
         GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(taskMultipoint);
         if (taskGerbiczCheck != nullptr)
-            taskGerbiczCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging);
+            taskGerbiczCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, Giant());
         else
-            taskMultipoint->init(&input, &gwstate, &file_checkpoint, &logging);
+            taskMultipoint->init(&input, &gwstate, &file_checkpoint, &logging, Giant());
         if (taskMultipoint->state() == nullptr)
         {
             std::unique_ptr<Certificate> cert(read_state<Certificate>(&file_cert));
