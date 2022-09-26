@@ -24,4 +24,7 @@ public:
     std::optional<int> ProofPointsPerCheck;
     std::optional<int> ProofChecksPerPoint;
     std::string ProofSecuritySeed;
+
+    std::optional<bool> RootOfUnityCheck;
+    std::optional<int> RootOfUnitySecurity;
 };

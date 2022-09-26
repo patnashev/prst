@@ -18,7 +18,38 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, Logging& loggin
     if (op == SAVE)
         _task.reset(new ProofSave(*this));
     if (op == BUILD)
+    {
         _task.reset(new ProofBuild(*this, params.ProofSecuritySeed));
+
+        if (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())
+        {
+            Giant exp;
+            if (input.c() == 1)
+            {
+                exp = input.gk();
+                int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 64;
+                for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+                    if (it->first == 2)
+                        exp <<= security;
+                    else
+                        for (double bitlen = 0, log2factor = log2(it->first); bitlen < security; bitlen += log2factor)
+                            exp *= it->first;
+            }
+            else
+            {
+                exp = 1;
+                int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 24;
+                logging.info("Factorizing N-1 for roots of unity check");
+                double timer = getHighResTimer();
+                std::vector<int> factors = input.factorize_minus1(security);
+                timer = (getHighResTimer() - timer)/getHighResTimerFrequency();
+                logging.info(", time: %.1f s.\n", timer);
+                for (auto it = factors.begin(); it != factors.end(); it++)
+                    exp *= *it;
+            }
+            _taskRoot.reset(new SlowExp(std::move(exp)));
+        }
+    }
     if (op == CERT)
     {
         _M = count;
@@ -229,8 +260,19 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, 
     file_recoverypoint.clear();
 }
 
-void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging)
+void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, Giant* X)
 {
+    SlowExp* taskRoot = dynamic_cast<SlowExp*>(_taskRoot.get());
+    if (taskRoot != nullptr && X != nullptr)
+    {
+        taskRoot->init(&input, &gwstate, nullptr, &logging, std::move(*X));
+        taskRoot->run();
+        if (taskRoot->state()->X() == 1)
+        {
+            logging.error("%s roots of unity check failed.\n", input.display_text().data());
+            throw TaskAbortException();
+        }
+    }
     ProofSave* taskSave = dynamic_cast<ProofSave*>(_task.get());
     if (taskSave != nullptr)
     {

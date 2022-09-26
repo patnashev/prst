@@ -42,7 +42,7 @@ public:
     void read_product(int index, TaskState& state, Logging& logging);
     void on_point(int index, arithmetic::Giant& X);
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
-    void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging);
+    void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
     double cost();
 
     int op() { return _op; }
@@ -72,6 +72,7 @@ protected:
     arithmetic::Giant _r_0;
     arithmetic::Giant _r_count;
     std::unique_ptr<BaseExp> _task;
+    std::unique_ptr<BaseExp> _taskRoot;
     std::string _res64;
 };
 

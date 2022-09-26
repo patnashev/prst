@@ -24,6 +24,9 @@ void sigterm_handler(int signo)
     signal(signo, sigterm_handler);
 }
 
+// stub for linking
+extern "C" double polymult_safety_margin(int invec1_size, int invec2_size) { return 0; }
+
 int main(int argc, char *argv[])
 {
     signal(SIGTERM, sigterm_handler);
