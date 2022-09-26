@@ -1,6 +1,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <string.h>
 
 #include "gwnum.h"
 #include "cpuid.h"

@@ -1,5 +1,7 @@
 
 #include <algorithm>
+#include <string.h>
+
 #include "gwnum.h"
 #include "cpuid.h"
 #include "pocklington.h"

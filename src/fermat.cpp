@@ -1,4 +1,7 @@
 
+#include <cmath>
+#include <string.h>
+
 #include "gwnum.h"
 #include "cpuid.h"
 #include "fermat.h"
@@ -9,7 +12,7 @@ using namespace arithmetic;
 // LLR code for compatibility
 uint32_t twopownmodm(uint32_t n, uint32_t m, uint32_t *order, uint32_t *nmodorder) {
     uint32_t tpnmodm, tp, i, work, mask = 1<<31;
-    unsigned __int64 ltp;
+    uint64_t ltp;
     tpnmodm = 0;				// This function computes 2^n modulo m
     if (!(m&1)||(m==1)) {		// It returns this value, and also :
         *order = 0;				// The order of 2 modulo m, and the remainder of n modulo this order.

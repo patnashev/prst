@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include "arithmetic.h"
 #include "group.h"
 #include "integer.h"

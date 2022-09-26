@@ -1,4 +1,7 @@
 
+#include <cmath>
+#include <string.h>
+
 #include "gwnum.h"
 #include "cpuid.h"
 #include "proof.h"

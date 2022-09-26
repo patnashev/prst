@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include "fermat.h"
 
 class Pocklington : public Fermat
