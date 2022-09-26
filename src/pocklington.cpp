@@ -57,6 +57,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     File* checkpoint = &file_checkpoint;
     File* recoverypoint = &file_recoverypoint;
 
+    Giant tmp;
     int total = _tasks.size();
     double timer = 0;
     std::vector<Giant> G;
@@ -66,14 +67,20 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
             SlowExp& task = it->first;
-            task.init(&input, &gwstate, nullptr, &logging, std::move(_Xm1));
-            task.run();
-            timer += task.timer();
-            _Xm1 = std::move(task.X0());
-            if (task.state()->X() != 1)
+            if (task.exp() == 1)
+                tmp = _Xm1;
+            else
             {
-                G.emplace_back(std::move(task.state()->X()));
-                G.back() -= 1;
+                task.init(&input, &gwstate, nullptr, &logging, std::move(_Xm1));
+                task.run();
+                timer += task.timer();
+                _Xm1 = std::move(task.X0());
+                tmp = std::move(task.state()->X());
+            }
+            if (tmp != 1)
+            {
+                tmp -= 1;
+                G.emplace_back(std::move(tmp));
                 it = _tasks.erase(it);
             }
             else
@@ -82,15 +89,18 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
 
         if (_tasks.size() > 0)
         {
-            logging.progress().add_stage(_task->cost());
-            logging.progress().update(0, (int)gwstate.handle.fft_count/2);
-            logging.progress_save();
-            BaseExp::State state(_task->state()->iteration(), std::move(_Xm1));
-            if (dynamic_cast<GerbiczCheckMultipointExp*>(_task.get()) != nullptr)
-                recoverypoint->write(state);
+            if (proof == nullptr)
+            {
+                logging.progress().add_stage(_task->cost());
+                logging.progress().update(0, (int)gwstate.handle.fft_count/2);
+                logging.progress_save();
+                BaseExp::State state(_task->state()->iteration(), std::move(_Xm1));
+                if (dynamic_cast<GerbiczCheckMultipointExp*>(_task.get()) != nullptr)
+                    recoverypoint->write(state);
+                else
+                    checkpoint->write(state);
+            }
             else
-                checkpoint->write(state);
-            if (proof != nullptr)
             {
                 logging.error("Pocklington test needs to restart, disable proofs to proceed.\n", input.display_text().data(), _a);
                 throw TaskAbortException();
@@ -120,7 +130,6 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     }
     GWASSERT(G.size() == total);
 
-    Giant tmp;
     if (G.size() > 1)
     {
         Product taskP(G.begin(), G.end());
