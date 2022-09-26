@@ -13,7 +13,7 @@ protected:
     void on_finish(InputNum& input, arithmetic::GWState& gwstate, Logging& logging) override;
 
 protected:
-    std::list<SlowExp> _tasks;
+    std::list<std::pair<SlowExp,int>> _tasks;
     std::unique_ptr<SlowExp> _task_fermat_simple;
     arithmetic::Giant _Xm1;
 };

@@ -209,9 +209,9 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, 
     {
         GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(taskMultipoint);
         if (taskGerbiczCheck != nullptr)
-            taskGerbiczCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, Giant());
+            taskGerbiczCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging);
         else
-            taskMultipoint->init(&input, &gwstate, &file_checkpoint, &logging, Giant());
+            taskMultipoint->init(&input, &gwstate, &file_checkpoint, &logging);
         if (taskMultipoint->state() == nullptr)
         {
             std::unique_ptr<Certificate> cert(read_state<Certificate>(&file_cert));

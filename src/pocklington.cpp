@@ -19,10 +19,10 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
     std::sort(factors.begin(), factors.end(), [](const std::pair<Giant, int>& a, const std::pair<Giant, int>& b) { return a.first > b.first; });
     Giant tmp;
     tmp = 1;
-    for (j = 0; j < factors.size()/* && tmp*tmp < input.gb()*/; j++)
+    for (j = 0; j < factors.size() && tmp*tmp < input.gb(); j++)
         tmp *= factors[j].first;
     for (i = 0; i < j; i++)
-        _tasks.emplace_back(input.gb()/input.b_factors()[factors[i].second].first);
+        _tasks.emplace_back(SlowExp(input.gb()/input.b_factors()[factors[i].second].first), factors[i].second);
 
     if (input.is_base2())
     {
@@ -47,7 +47,10 @@ void Pocklington::on_finish(InputNum& input, arithmetic::GWState& gwstate, Loggi
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
-    logging.info("Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
+    std::string factors;
+    for (auto it = _tasks.begin(); it != _tasks.end(); it++)
+        factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->second].first.to_string();
+    logging.info("Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
     if (!success())
         return;
@@ -62,13 +65,14 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     {
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
-            it->init(&input, &gwstate, nullptr, &logging, std::move(_Xm1));
-            it->run();
-            timer += it->timer();
-            _Xm1 = std::move(it->X0());
-            if (it->state()->X() != 1)
+            SlowExp& task = it->first;
+            task.init(&input, &gwstate, nullptr, &logging, std::move(_Xm1));
+            task.run();
+            timer += task.timer();
+            _Xm1 = std::move(task.X0());
+            if (task.state()->X() != 1)
             {
-                G.emplace_back(std::move(it->state()->X()));
+                G.emplace_back(std::move(task.state()->X()));
                 G.back() -= 1;
                 it = _tasks.erase(it);
             }
@@ -105,7 +109,10 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 gwstate.handle.fft_count = fft_count;
             }
 
-            logging.warning("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
+            factors = "";
+            for (auto it = _tasks.begin(); it != _tasks.end(); it++)
+                factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->second].first.to_string();
+            logging.warning("Restarting Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
             checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));
             recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
             Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, nullptr);
@@ -138,6 +145,13 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         logging.result(_success, "%s is not prime. Factor RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
         logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
     }
+
+    file_checkpoint.clear();
+    file_recoverypoint.clear();
+    for (auto it = file_checkpoint.children().begin(); it != file_checkpoint.children().end(); it++)
+        (*it)->clear();
+    for (auto it = file_recoverypoint.children().begin(); it != file_recoverypoint.children().end(); it++)
+        (*it)->clear();
 }
 
 template<class IT>

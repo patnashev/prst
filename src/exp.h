@@ -55,6 +55,10 @@ protected:
 class FastExp : public BaseExp
 {
 public:
+    FastExp(FastExp&& a)
+    {
+        _exp = std::move(a._exp);
+    }
     template<class T>
     FastExp(T&& exp) : BaseExp()
     {
@@ -76,6 +80,10 @@ protected:
 class SlowExp : public BaseExp
 {
 public:
+    SlowExp(SlowExp&& a)
+    {
+        _exp = std::move(a._exp);
+    }
     template<class T>
     SlowExp(T&& exp) : BaseExp()
     {
@@ -108,6 +116,7 @@ public:
     {
     }
 
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
     template<class T>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& tail)
     {
@@ -122,7 +131,6 @@ public:
     double cost() override;
 
 protected:
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
     void release() override;
     void execute() override;
     void sliding_window(const arithmetic::Giant& exp);
@@ -164,6 +172,7 @@ public:
         Gerbicz_params(points[points_per_check < points.size() ? points_per_check : points.size() - 1]/checks_per_point, log2(b), _L, _L2);
     }
 
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging);
     template<class T>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail)
     {
@@ -184,7 +193,6 @@ public:
     static void Gerbicz_params(int iters, double log2b, int& L, int &L2);
 
 protected:
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging);
     void write_state() override;
     void release() override;
     void setup() override;

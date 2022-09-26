@@ -255,7 +255,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
                 {
                     ak_checkpoint = file_checkpoint.add_child("ak", File::unique_fingerprint(gwstate.fingerprint, "ak"));
                     ak_recoverypoint = file_recoverypoint.add_child("ak", File::unique_fingerprint(gwstate.fingerprint, "ak"));
-                    akGerbiczCheck->init(_input_k.get(), &gwstate, ak_checkpoint, ak_recoverypoint, &logging, Giant());
+                    akGerbiczCheck->init(_input_k.get(), &gwstate, ak_checkpoint, ak_recoverypoint, &logging);
                     if (akGerbiczCheck->state() == nullptr)
                     {
                         if (_task_ak_simple)
