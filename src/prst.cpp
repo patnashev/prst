@@ -15,6 +15,7 @@
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
+#include "testing.h"
 
 using namespace arithmetic;
 
@@ -39,7 +40,6 @@ int main(int argc, char *argv[])
 
     int i, j;
     GWState gwstate;
-    GWArithmetic gw(gwstate);
     Params params;
     uint64_t maxMem = 0;
     int proof_op = Proof::NO_OP;
@@ -220,6 +220,8 @@ int main(int argc, char *argv[])
                     else
                         break;
             }
+            else if (strcmp(argv[i], "-test") == 0)
+                return testing_main(argc, argv);
 #ifdef NETPRST
             else if (strcmp(argv[i], "-net") == 0)
                 return net_main(argc, argv);
@@ -261,8 +263,10 @@ int main(int argc, char *argv[])
         }
     if (input.empty())
     {
-        printf("Usage: PRST options {\"K*B^N+C\" | file}\n");
-        printf("Options: [-t Threads] [-fft+1] -log {debug | info | warning | error}\n");
+        printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
+        printf("Options: [-t <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("\t-proof {save <count> [check <count>] | build <count> [check <count>] [security <seed>] | cert {<name> | default}} [name <proof> <product>]\n");
+        printf("\t-check [{near | always| never}] [Gerbicz [count <count>] [L <L>]] \n");
         return 0;
     }
     if (!toFile.empty())
