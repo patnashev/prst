@@ -117,8 +117,10 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
     _a = params.FermatBase ? params.FermatBase.value() : 3;
     if (_type == PROTH)
         _a = _input_base2 ? genProthBase(_input_base2->gk(), _input_base2->n()) : genProthBase(input.gk(), input.n());
+    Giant& b = _input_base2 ? _input_base2->gb() : input.gb();
 
     bool CheckGerbicz = params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
+    auto on_point = std::bind(&Fermat::on_point, this, std::placeholders::_1, std::placeholders::_2);
 
     if (proof == nullptr && !CheckGerbicz)
     {
@@ -137,14 +139,18 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         _task.reset(task = new FastExp(std::move(exp)));
         logging.progress().add_stage(task->exp().bitlen());
         params.maxmulbyconst = _a;
+        if (_type == PROTH || _type == POCKLINGTON)
+            _task_ak_simple.reset(new SlowExp(b));
     }
     else if (proof == nullptr)
     {
-        Giant& b = _input_base2 ? _input_base2->gb() : input.gb();
-        int n = (_input_base2 ? _input_base2->n() : input.n()) - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
+        _n = (_input_base2 ? _input_base2->n() : input.n()) - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
         int checks = params.GerbiczCount ? params.GerbiczCount.value() : 16;
         GerbiczCheckExp* task;
-        _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(b, n, checks, params.GerbiczL.value()) : new GerbiczCheckExp(b, n, checks));
+        _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(b, _n, checks, params.GerbiczL.value(), on_point) : new GerbiczCheckExp(b, _n, checks, on_point));
+        if (_type == PROTH || _type == POCKLINGTON)
+            task->recovery_points().push_back(_n + 1);
+        _points = task->recovery_points();
         if (params.SlidingWindow)
             task->_W = params.SlidingWindow.value();
 
@@ -167,11 +173,17 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
     }
     else
     {
-        int n = input.n() - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
-        proof->calc_points(n, input, params, logging);
+        _n = input.n() - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
+        proof->calc_points(_n, input, params, logging);
+        _points = proof->points();
+        if (_points.back() != _n)
+            _points.push_back(_n);
+        if (_type == PROTH || _type == POCKLINGTON)
+            _points.push_back(_n + 1);
+
         CheckGerbicz = CheckGerbicz || params.ProofChecksPerPoint || params.ProofPointsPerCheck;
         MultipointExp* task;
-        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), proof->points(), params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2)) : new MultipointExp(input.gb(), proof->points(), std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2)));
+        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, on_point) : new MultipointExp(input.gb(), _points, on_point));
         GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
         if (CheckGerbicz && params.GerbiczL)
         {
@@ -202,8 +214,21 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         _task_ak_simple->set_error_check(false, true);
 }
 
+void Fermat::on_point(int index, arithmetic::Giant& X)
+{
+    if (_proof != nullptr && index <= _proof->count())
+        _proof->on_point(index, X);
+    if (_points[index] == _n)
+        _Xm1 = X;
+}
+
 void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
+    _proof = proof;
+    _success = false;
+    _res64 = "";
+    _Xm1 = Giant();
+
     File* ak_checkpoint = nullptr;
     File* ak_recoverypoint = nullptr;
     Giant ak;
@@ -235,6 +260,13 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     {
         taskFast->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &logging, _a);
         taskFast->run();
+        if (_task_ak_simple)
+        {
+            _Xm1 = std::move(taskFast->state()->X());
+            static_cast<SlowExp*>(_task_ak_simple.get())->init(&input, &gwstate, nullptr, &logging, _Xm1);
+            _task_ak_simple->run();
+            taskFast->state()->X() = std::move(_task_ak_simple->state()->X());
+        }
     }
 
     MultipointExp* taskMultipoint = dynamic_cast<MultipointExp*>(_task.get());
@@ -247,7 +279,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             taskMultipoint->init(_input_base2 ? _input_base2.get() : &input, &gwstate, &file_checkpoint, &logging, std::move(tail));
         if (proof != nullptr)
             proof->init_state(taskMultipoint, gwstate, input, logging, _a);
-        if (taskMultipoint->state() == nullptr)
+        if (taskMultipoint->state() == nullptr || taskMultipoint->state()->iteration() > _n)
         {
             if (_task_ak)
             {
@@ -285,42 +317,48 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
                 proof->on_point(0, ak);
             taskMultipoint->init_state(new BaseExp::State(0, std::move(ak)));
         }
-        else if (_input_k)
-            logging.progress().skip_stage();
+        else
+        {
+            if ((_type == PROTH || _type == POCKLINGTON) && taskMultipoint->state()->iteration() == _n)
+                _Xm1 = taskMultipoint->state()->X();
+            if (_input_k)
+                logging.progress().skip_stage();
+        }
 
         taskMultipoint->run();
     }
 
-    on_finish(input, gwstate, logging);
-
     if (type() == PROTH)
-        _task->state()->X() += 1;
+        _Xm1 += 1;
 
-    if (type() != PROTH && _task->state()->X() == 1)
-    {
-        _success = true;
-        logging.result(_success, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), _task->timer());
-        logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)_task->timer()) + " s.\n");
-    }
-    else if (type() == PROTH && (_task->state()->X() == 0 || _task->state()->X() == *gwstate.N))
+    if (type() == PROTH && (_Xm1 == 0 || _Xm1 == *gwstate.N))
     {
         _success = true;
         logging.result(_success, "%s is prime! Time: %.1f s.\n", input.display_text().data(), _task->timer());
         logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
-    else
+    else if (type() == PROTH || _task->state()->X() != 1)
     {
-        _success = false;
-        _res64 = _task->state()->X().to_res64();
+        if (type() == PROTH)
+        {
+            _res64 = _Xm1.to_res64();
+            _Xm1 -= 1;
+        }
+        else
+            _res64 = _task->state()->X().to_res64();
         logging.result(_success, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
         logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
-        if (type() == PROTH)
-            _task->state()->X() -= 1;
+    }
+    if (!_success && _task->state()->X() == 1)
+    {
+        _success = type() != PROTH;
+        logging.result(type() != PROTH && type() != POCKLINGTON, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), _task->timer());
+        logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
 
     logging.progress().next_stage();
     if (proof != nullptr)
-        proof->run(input, gwstate, logging, !_success ? &_task->state()->X() : nullptr);
+        proof->run(input, gwstate, logging, _success ? nullptr : _Xm1.empty() ? &_task->state()->X() : &_Xm1);
 
     file_checkpoint.clear();
     file_recoverypoint.clear();

@@ -18,7 +18,8 @@ public:
         State() : TaskState(TYPE) { }
         State(int iteration, const arithmetic::Giant& X) : TaskState(1) { TaskState::set(iteration); _X = X; }
         State(int iteration, arithmetic::Giant&& X) : TaskState(1) { TaskState::set(iteration); _X = std::move(X); }
-        void set(int iteration, arithmetic::GWNum& X) { TaskState::set(iteration); _X = X; }
+        template<class T>
+        void set(int iteration, T& X) { TaskState::set(iteration); _X = X; }
         arithmetic::Giant& X() { return _X; }
         bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_X); }
         void write(Writer& writer) override { TaskState::write(writer); writer.write(_X); }
@@ -236,13 +237,13 @@ protected:
     std::vector<int> _recovery_points;
 };
 
-class GerbiczCheckExp : private GerbiczCheckPoints, public GerbiczCheckMultipointExp
+class GerbiczCheckExp : public GerbiczCheckPoints, public GerbiczCheckMultipointExp
 {
 public:
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count) : GerbiczCheckPoints(log2(b), n, count), GerbiczCheckMultipointExp(b, _recovery_points, 1, 1, nullptr)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(log2(b), n, count), GerbiczCheckMultipointExp(b, _recovery_points, 1, 1, on_point)
     {
     }
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, int L) : GerbiczCheckPoints(n, count, L), GerbiczCheckMultipointExp(b, _recovery_points, 1, 1, nullptr)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, int L, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(n, count, L), GerbiczCheckMultipointExp(b, _recovery_points, 1, 1, on_point)
     {
         _L = L;
         _L2 = n/count;

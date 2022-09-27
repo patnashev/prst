@@ -42,7 +42,7 @@ void BaseExp::reinit_gwstate()
 
 void FastExp::init(InputNum* input, GWState* gwstate, File* file, Logging* logging, uint32_t x0)
 {
-    GWASSERT(x0 <= gwstate->maxmulbyconst);
+    GWASSERT(x0 <= (uint32_t)gwstate->maxmulbyconst);
     BaseExp::init(input, gwstate, file, read_state<State>(file), logging, _exp.bitlen() - 1);
     _state_update_period = MULS_PER_STATE_UPDATE;
     _logging->set_prefix(input->display_text() + " ");
@@ -51,6 +51,8 @@ void FastExp::init(InputNum* input, GWState* gwstate, File* file, Logging* loggi
     if (_error_check)
         _logging->info("max roundoff check enabled.\n");
     _x0 = x0;
+    if (iterations() == 0)
+        set_state<State>(0, x0);
 }
 
 void FastExp::execute()
@@ -81,10 +83,12 @@ void FastExp::execute()
 void SlowExp::init(InputNum* input, GWState* gwstate, File* file, Logging* logging)
 {
     BaseExp::init(input, gwstate, file, read_state<State>(file), logging, _exp.bitlen() - 1);
-    _state_update_period = MULS_PER_STATE_UPDATE/1.5;
+    _state_update_period = MULS_PER_STATE_UPDATE*2/3;
     _logging->set_prefix(input->display_text() + " ");
     if (state() != nullptr)
         _logging->info("restarting at %.1f%%.\n", 100.0*state()->iteration()/iterations());
+    if (iterations() == 0)
+        set_state<State>(0, _X0);
 }
 
 void SlowExp::execute()
@@ -265,11 +269,14 @@ double MultipointExp::cost()
     {
         double log2b = log2(_b);
         int W;
-        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*_points[0]*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*_points[0]*(1 + 1/(W + 2.0)); W++);
-        double cost = ((1 << (W - 1)) + log2b*_points[0]*(1 + 1/(W + 1.0)));
-        if (_points.size() > 1)
+        int first = 0;
+        if (_points[0] == 0)
+            first = 1;
+        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*_points[first]*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*_points[first]*(1 + 1/(W + 2.0)); W++);
+        double cost = ((1 << (W - 1)) + log2b*_points[first]*(1 + 1/(W + 1.0)));
+        if (_points.size() > 1 + first)
         {
-            cost *= (_points.size() - 1);
+            cost *= (_points.size() - 1 - first);
             int last = _points[_points.size() - 1] - _points[_points.size() - 2];
             for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*last*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*last*(1 + 1/(W + 2.0)); W++);
             cost += ((1 << (W - 1)) + log2b*last*(1 + 1/(W + 1.0)));
@@ -311,7 +318,7 @@ double GerbiczCheckMultipointExp::cost()
 void GerbiczCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* file, File* file_recovery, Logging* logging)
 {
     BaseExp::init(input, gwstate, file, read_state<GerbiczCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
-    _state_update_period = MULS_PER_STATE_UPDATE/log2(_b);
+    _state_update_period = (int)(MULS_PER_STATE_UPDATE/log2(_b));
     _file_recovery = file_recovery;
     _state_recovery.reset();
     State* state_recovery = read_state<State>(file_recovery);
@@ -395,7 +402,7 @@ void GerbiczCheckMultipointExp::execute()
         next_check = next_point + _points_per_check - 1;
         next_check -= next_check%_points_per_check;
         if (next_check >= _points.size())
-            next_check = _points.size() - 1;
+            next_check = (int)_points.size() - 1;
         int L = _L;
         int L2 = _L2;
         while ((_points[next_check] - state()->iteration()) < L2 && L > 1)

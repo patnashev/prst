@@ -33,7 +33,7 @@ public:
     BaseExp* task() { return _task.get(); }
 
 protected:
-    virtual void on_finish(InputNum& input, arithmetic::GWState& gwstate, Logging& logging) { }
+    void on_point(int index, arithmetic::Giant& X);
 
 protected:
     int _type;
@@ -45,6 +45,12 @@ protected:
     std::unique_ptr<BaseExp> _task_ak_simple;
     std::unique_ptr<BaseExp> _task_ak;
     std::unique_ptr<BaseExp> _task;
+
+    Proof* _proof;
+    int _n;
+    std::vector<int> _points;
+    arithmetic::Giant _Xm1;
+
     bool _success = false;
     std::string _res64;
 };

@@ -35,16 +35,6 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
         if (dynamic_cast<FastExp*>(_task.get()) != nullptr)
             params.maxmulbyconst = _a;
     }
-
-    _task_fermat_simple.reset(new SlowExp(input.gb()));
-}
-
-void Pocklington::on_finish(InputNum& input, arithmetic::GWState& gwstate, Logging& logging)
-{
-    _Xm1 = _task->state()->X();
-    _task_fermat_simple->init(&input, &gwstate, nullptr, &logging, std::move(_task->state()->X()));
-    _task_fermat_simple->run();
-    _task->state()->X() = std::move(_task_fermat_simple->state()->X());
 }
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
@@ -54,18 +44,18 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->second].first.to_string();
     logging.info("Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
-    if (!success())
-        return;
+
     File* checkpoint = &file_checkpoint;
     File* recoverypoint = &file_recoverypoint;
-
     Giant tmp;
-    int total = _tasks.size();
+    int total = (int)_tasks.size();
     double timer = 0;
     std::vector<Giant> G;
     G.reserve(_tasks.size());
     while (_tasks.size() > 0)
     {
+        if (!success())
+            return;
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
             SlowExp& task = it->first;
@@ -157,18 +147,14 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
     }
 
-    file_checkpoint.clear();
-    file_recoverypoint.clear();
-    for (auto it = file_checkpoint.children().begin(); it != file_checkpoint.children().end(); it++)
-        (*it)->clear();
-    for (auto it = file_recoverypoint.children().begin(); it != file_recoverypoint.children().end(); it++)
-        (*it)->clear();
+    file_checkpoint.clear(true);
+    file_recoverypoint.clear(true);
 }
 
 template<class IT>
 void Product<IT>::init(InputNum* input, GWState* gwstate, File* file, Logging* logging)
 {
-    BaseExp::init(input, gwstate, file, read_state<State>(file), logging, (_last - _first));
+    BaseExp::init(input, gwstate, file, read_state<State>(file), logging, (int)(_last - _first));
     _state_update_period = MULS_PER_STATE_UPDATE;
 }
 

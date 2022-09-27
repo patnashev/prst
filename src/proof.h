@@ -48,7 +48,7 @@ public:
     int op() { return _op; }
     int count() { return _count; }
     int depth() { int t; for (t = 0; (1 << t) < _count; t++); return t; }
-    const std::vector<int>& points() { return _points; }
+    std::vector<int>& points() { return _points; }
     int M() { return _M; }
     BaseExp* task() { return _task.get(); }
     std::string& res64() { return _res64; }

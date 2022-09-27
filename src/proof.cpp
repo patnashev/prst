@@ -116,8 +116,6 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
         _points.reserve(_count + 2);
         for (i = 0; i <= _count; i++)
             _points.push_back(i*_M);
-        if (_points.back() != iterations)
-            _points.push_back(iterations);
     }
     else
     {
@@ -469,7 +467,7 @@ void ProofBuild::init(InputNum* input, arithmetic::GWState* gwstate, Logging* lo
         _rnd_seed.arithmetic().alloc(_rnd_seed, _rnd_seed.size() + 2);
         *(double *)(_rnd_seed.data() + _rnd_seed.size()) = getHighResTimer();
         _rnd_seed.arithmetic().init(_rnd_seed.data(), _rnd_seed.size() + 2, _rnd_seed);
-        _logging->warning("random seed: %s.\n", _rnd_seed.to_string().data());
+        _logging->info("random seed: %s.\n", _rnd_seed.to_string().data());
     }
 }
 
