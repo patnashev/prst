@@ -48,14 +48,14 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     File* checkpoint = &file_checkpoint;
     File* recoverypoint = &file_recoverypoint;
     Giant tmp;
-    int total = (int)_tasks.size();
     double timer = 0;
-    std::vector<Giant> G;
-    G.reserve(_tasks.size());
     while (_tasks.size() > 0)
     {
         if (!success())
             return;
+        std::vector<Giant> G;
+        G.reserve(_tasks.size());
+
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
             SlowExp& task = it->first;
@@ -77,6 +77,29 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
             else
                 it++;
+        }
+
+        if (G.size() > 0)
+        {
+            if (G.size() > 1)
+            {
+                Product taskP(G.begin(), G.end());
+                taskP.init(&input, &gwstate, nullptr, &logging);
+                taskP.run();
+                timer += taskP.timer();
+                tmp = std::move(taskP.state()->X());
+            }
+            else
+                tmp = std::move(G[0]);
+            tmp.gcd(*gwstate.N);
+            if (tmp != 1)
+            {
+                _success = false;
+                _res64 = tmp.to_res64();
+                logging.result(_success, "%s is not prime. Factor RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
+                logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
+                break;
+            }
         }
 
         if (_tasks.size() > 0)
@@ -120,31 +143,11 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, nullptr);
         }
     }
-    GWASSERT(G.size() == total);
 
-    if (G.size() > 1)
+    if (_success)
     {
-        Product taskP(G.begin(), G.end());
-        taskP.init(&input, &gwstate, nullptr, &logging);
-        taskP.run();
-        timer += taskP.timer();
-        tmp = std::move(taskP.state()->X());
-    }
-    else
-        tmp = std::move(G[0]);
-    tmp.gcd(*gwstate.N);
-    if (tmp == 1)
-    {
-        _success = true;
         logging.result(_success, "%s is prime! Time: %.1f s.\n", input.display_text().data(), timer);
         logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)timer) + " s.\n");
-    }
-    else
-    {
-        _success = false;
-        _res64 = tmp.to_res64();
-        logging.result(_success, "%s is not prime. Factor RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
-        logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
     }
 
     file_checkpoint.clear(true);
