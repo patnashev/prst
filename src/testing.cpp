@@ -274,9 +274,6 @@ void Test::run(Logging& logging, int thread_count, int spin_threads)
             res64 = fermat.success() ? 1 : std::stoull(fermat.res64(), nullptr, 16);
         if (cert64 == 0)
             cert64 = std::stoull(proof.res64(), nullptr, 16);
-        logging.error("{ \"%d\", \"%d\", %d, %d, 0x%sULL, 0x%sULL },\n", input.k(), input.b(), input.n(), input.c(), fermat.success() ? "1" : fermat.res64().data(), proof.res64().data());
-        if (input.c() != 1 || input.b() != 2)
-            cert64 = std::stoull(proof.res64(), nullptr, 16);
         if (fermat.success() != (res64 == 1))
         {
             logging.error("Primality mismatch.\n");
