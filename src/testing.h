@@ -2,10 +2,16 @@
 
 int testing_main(int argc, char *argv[]);
 
-struct KNTest
+struct NTest
 {
-    uint32_t k;
     uint32_t n;
+    uint64_t res64;
+    uint64_t cert64;
+};
+
+struct BTest
+{
+    uint32_t b;
     uint64_t res64;
     uint64_t cert64;
 };
@@ -32,9 +38,15 @@ struct KBNCTest
 class Test
 {
 public:
-    Test(KNTest& t, int b, int c)
+    Test(int k, BTest& t, int n, int c)
     {
-        input.init(t.k, b, t.n, c);
+        input.init(k, t.b, n, c);
+        res64 = t.res64;
+        cert64 = t.cert64;
+    }
+    Test(int k, int b, NTest& t, int c)
+    {
+        input.init(k, b, t.n, c);
         res64 = t.res64;
         cert64 = t.cert64;
     }
@@ -77,3 +89,5 @@ public:
 private:
     std::chrono::system_clock::time_point _last_progress = std::chrono::system_clock::now();
 };
+
+void RootsTest(Logging& logging, int thread_count);

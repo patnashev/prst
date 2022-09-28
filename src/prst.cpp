@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 
     File::FILE_APPID = 4;
 
-    int i, j;
+    int i;
     GWState gwstate;
     Params params;
     uint64_t maxMem = 0;
@@ -142,10 +142,16 @@ int main(int argc, char *argv[])
                         params.ProofPointFilename = argv[i];
                         i++;
                         params.ProofProductFilename = argv[i];
+                        if (proof_op == Proof::BUILD && i < argc - 1 && argv[i + 1][0] != '-')
+                        {
+                            i++;
+                            proof_cert = argv[i];
+                        }
                     }
                     else if (i < argc - 2 && strcmp(argv[i + 1], "check") == 0)
                     {
                         i += 2;
+                        params.CheckGerbicz = true;
                         int check = atoi(argv[i]);
                         if (check > proof_count)
                             params.ProofChecksPerPoint = check/proof_count;
@@ -265,7 +271,7 @@ int main(int argc, char *argv[])
     {
         printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
         printf("Options: [-t <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
-        printf("\t-proof {save <count> [check <count>] | build <count> [check <count>] [security <seed>] | cert {<name> | default}} [name <proof> <product>]\n");
+        printf("\t-proof {save <count> | build <count> [security <seed>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [Gerbicz [count <count>] [L <L>]] \n");
         return 0;
     }

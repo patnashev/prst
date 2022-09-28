@@ -26,6 +26,7 @@ public:
     int a() { return _a; }
     bool success() { return _success; }
     std::string& res64() { return _res64; }
+    arithmetic::Giant& result() { return _Xm1.empty() ? _task->state()->X() : _Xm1; }
 
     BaseExp* task_tail_simple() { return _task_tail_simple.get(); }
     BaseExp* task_ak_simple() { return _task_ak_simple.get(); }

@@ -113,36 +113,36 @@ int testing_main(int argc, char *argv[])
     if (subset == "all" || subset == "321plus")
     {
         auto& cont = add("321plus");
-        for (KNTest* knTest = Test321Plus; knTest->n != 0; knTest++)
-            cont.emplace_back(*knTest, 2, 1);
+        for (NTest* nTest = Test321Plus; nTest->n != 0; nTest++)
+            cont.emplace_back(3, 2, *nTest, 1);
     }
 
     if (subset == "all" || subset == "321minus")
     {
         auto& cont = add("321minus");
-        for (KNTest* knTest = Test321Minus; knTest->n != 0; knTest++)
-            cont.emplace_back(*knTest, 2, -1);
+        for (NTest* nTest = Test321Minus; nTest->n != 0; nTest++)
+            cont.emplace_back(3, 2, *nTest, -1);
     }
 
     if (subset == "all" || subset == "b5plus")
     {
         auto& cont = add("b5plus");
-        for (KBNTest* kbnTest = TestBase5Plus; kbnTest->n != 0; kbnTest++)
-            cont.emplace_back(*kbnTest, 1);
+        for (NTest* nTest = TestBase5Plus; nTest->n != 0; nTest++)
+            cont.emplace_back(2, 5, *nTest, 1);
     }
 
     if (subset == "all" || subset == "b5minus")
     {
         auto& cont = add("b5minus");
-        for (KBNTest* kbnTest = TestBase5Minus; kbnTest->n != 0; kbnTest++)
-            cont.emplace_back(*kbnTest, -1);
+        for (NTest* nTest = TestBase5Minus; nTest->n != 0; nTest++)
+            cont.emplace_back(2, 5, *nTest, -1);
     }
 
     if (subset == "all" || subset == "gfn13")
     {
         auto& cont = add("gfn13");
-        for (KBNTest* kbnTest = TestGFN13; kbnTest->n != 0; kbnTest++)
-            cont.emplace_back(*kbnTest, 1);
+        for (BTest* bTest = TestGFN13; bTest->b != 0; bTest++)
+            cont.emplace_back(1, *bTest, 8192, 1);
     }
 
     if (subset == "all" || subset == "special")
@@ -154,7 +154,7 @@ int testing_main(int argc, char *argv[])
 
     if (subset == "all" || subset == "error")
     {
-        //logging.error("Running tests with errors.\n");
+        auto& cont = add("error");
     }
     
     if (subset == "all" || subset == "prime")
@@ -167,7 +167,14 @@ int testing_main(int argc, char *argv[])
     if (subset == "slow" || subset == "gfn13more")
     {
         auto& cont = add("gfn13more");
-        for (KBNTest* kbnTest = TestGFN13More; kbnTest->n != 0; kbnTest++)
+        for (BTest* bTest = TestGFN13More; bTest->b != 0; bTest++)
+            cont.emplace_back(1, *bTest, 8192, 1);
+    }
+
+    if (subset == "slow" || subset == "109208b5plus")
+    {
+        auto& cont = add("109208b5plus");
+        for (KBNTest* kbnTest = Test109208Base5Plus; kbnTest->n != 0; kbnTest++)
             cont.emplace_back(*kbnTest, 1);
     }
 
@@ -176,13 +183,6 @@ int testing_main(int argc, char *argv[])
         auto& cont = add("100186b5minus");
         for (KBNTest* kbnTest = Test100186Base5Minus; kbnTest->n != 0; kbnTest++)
             cont.emplace_back(*kbnTest, -1);
-    }
-
-    if (subset == "slow" || subset == "109208b5plus")
-    {
-        auto& cont = add("109208b5plus");
-        for (KBNTest* kbnTest = Test109208Base5Plus; kbnTest->n != 0; kbnTest++)
-            cont.emplace_back(*kbnTest, 1);
     }
 
     for (auto& subsetTests : tests)
@@ -196,14 +196,21 @@ int testing_main(int argc, char *argv[])
     {
         for (auto& subsetTests : tests)
         {
+            logging.progress().update(0, 0);
             logging.error("Running %s tests.\n", std::get<0>(subsetTests).data());
-            for (auto& test : std::get<2>(subsetTests))
+            if (std::get<0>(subsetTests) == "error")
             {
-                std::get<1>(subsetTests).progress().update(0, 0);
-                SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                test.run(subLogging, thread_count);
-                std::get<1>(subsetTests).progress().next_stage();
+                RootsTest(std::get<1>(subsetTests), thread_count);
             }
+            else
+                for (auto& test : std::get<2>(subsetTests))
+                {
+                    std::get<1>(subsetTests).progress().update(0, 0);
+                    SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
+                    test.run(subLogging, thread_count);
+                    std::get<1>(subsetTests).progress().next_stage();
+                }
+            logging.progress().next_stage();
         }
         logging.error("All tests completed successfully.\n");
     }
@@ -222,8 +229,10 @@ void Test::run(Logging& logging, int thread_count)
 {
     Params params;
     int proof_count = 16;
-    params.ProofPointsPerCheck = 1;
+    if (input.b() <= 5) // tail mode
+        params.ProofPointsPerCheck = 1;
     params.ProofSecuritySeed = "12345";
+    params.RootOfUnityCheck = false;
 
     Proof proof(Proof::SAVE, proof_count, input, params, logging);
     Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
@@ -241,6 +250,15 @@ void Test::run(Logging& logging, int thread_count)
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
+    auto finally = [&]
+    {
+        file_cert.clear();
+        file_proofpoint.clear(true);
+        file_proofproduct.clear(true);
+        file_checkpoint.clear(true);
+        file_recoverypoint.clear(true);
+        gwstate.done();
+    };
     try
     {
         proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
@@ -248,6 +266,9 @@ void Test::run(Logging& logging, int thread_count)
         if (res64 == 0)
             res64 = fermat.success() ? 1 : std::stoull(fermat.res64(), nullptr, 16);
         if (cert64 == 0)
+            cert64 = std::stoull(proof.res64(), nullptr, 16);
+        logging.error("{ \"%d\", \"%d\", %d, %d, 0x%sULL, 0x%sULL },\n", input.k(), input.b(), input.n(), input.c(), fermat.success() ? "1" : fermat.res64().data(), proof.res64().data());
+        if (input.c() != 1 || input.b() != 2)
             cert64 = std::stoull(proof.res64(), nullptr, 16);
         if (fermat.success() != (res64 == 1))
         {
@@ -303,14 +324,262 @@ void Test::run(Logging& logging, int thread_count)
     }
     catch (const TaskAbortException&)
     {
+        finally();
+        throw;
+    }
+    finally();
+}
+
+void RootsTest(Logging& logging, int thread_count)
+{
+    InputNum input;
+    Params params;
+    int proof_count = 4;
+    params.RootOfUnityCheck = false;
+    Giant tmp, root;
+    BaseExp::State point1;
+    BaseExp::State point2;
+    BaseExp::State point3;
+    BaseExp::State point4;
+
+    input.parse("3*2^353+1");
+
+    Proof proof(Proof::SAVE, proof_count, input, params, logging);
+    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
+    Proof proof_build(Proof::BUILD, proof_count, input, params, logging);
+    proof_build.points() = proof.points();
+
+    uint32_t fingerprint = input.fingerprint();
+    File file_cert("prst_cert", fingerprint);
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count]));
+    File file_proofpoint("prst_proof", fingerprint);
+    File file_proofproduct("prst_prod", fingerprint);
+    File file_checkpoint("prst_c", fingerprint);
+    File file_recoverypoint("prst_r", fingerprint);
+
+    proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+    proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+
+    GWState gwstate;
+    gwstate.thread_count = thread_count;
+    gwstate.maxmulbyconst = fermat.a();
+    input.setup(gwstate);
+    logging.info("Using %s.\n", gwstate.fft_description.data());
+
+    auto finally = [&]
+    {
         file_cert.clear();
         file_proofpoint.clear(true);
         file_proofproduct.clear(true);
         file_checkpoint.clear(true);
         file_recoverypoint.clear(true);
         gwstate.done();
+    };
+    try
+    {
+        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+
+        file_proofpoint.children()[1]->read(point1);
+        tmp = std::move(point1.X());
+        point1.X() = Giant::rnd(gwstate.N->bitlen());
+        file_proofpoint.children()[1]->write(point1);
+        point1.X() = std::move(tmp);
+        file_proofproduct.clear(true);
+
+        proof.run(input, gwstate, logging, nullptr);
+        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
+
+        Proof proof_cert(Proof::CERT, Proof::read_cert_power(file_cert), input, params, logging);
+        proof_cert.run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+        if (proof_cert.res64() == proof_build.res64())
+        {
+            logging.error("Certificate failure.\n");
+            throw TaskAbortException();
+        }
+    }
+    catch (const TaskAbortException&)
+    {
+        finally();
         throw;
     }
 
-    gwstate.done();
+    auto test_attack = [&](Fermat& fermat)
+    {
+        proof.run(input, gwstate, logging, nullptr);
+        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
+        if (fermat.success())
+        {
+            logging.error("Attack failure.\n");
+            throw TaskAbortException();
+        }
+
+        Proof proof_cert(Proof::CERT, Proof::read_cert_power(file_cert), input, params, logging);
+        proof_cert.run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+        if (proof_cert.res64() != proof_build.res64())
+        {
+            logging.error("Attacking certificate mismatch.\n");
+            throw TaskAbortException();
+        }
+
+        Proof proof_root(Proof::ROOT, proof_count, input, params, logging);
+        try
+        {
+            proof_root.run(input, gwstate, logging, &fermat.result());
+        }
+        catch (const TaskAbortException&) {}
+        if (proof_root.taskRoot()->state()->X() != 1)
+        {
+            logging.error("Roots of unity check failed to detect the attack.\n");
+            throw TaskAbortException();
+        }
+    };
+
+    try
+    {
+        tmp = 1;
+        FastExp task(tmp << input.n());
+        task.init(&input, &gwstate, nullptr, &logging, fermat.a());
+        task.run();
+        root = std::move(task.state()->X());
+
+        file_proofpoint.children()[4]->read(point4);
+        tmp = std::move(point4.X());
+        point4.X() = tmp*root%*gwstate.N;
+        file_proofpoint.children()[4]->write(point4);
+        point4.X() = std::move(tmp);
+        root = square(std::move(root))%*gwstate.N;
+        tmp = std::move(point1.X());
+        point1.X() = tmp*root%*gwstate.N;
+        file_proofpoint.children()[1]->write(point1);
+        point1.X() = std::move(tmp);
+        file_proofproduct.clear(true);
+
+        test_attack(fermat);
+    }
+    catch (const TaskAbortException&)
+    {
+        finally();
+        throw;
+    }
+
+    try
+    {
+        FastExp task(input.gk() << (input.n() - 2));
+        task.init(&input, &gwstate, nullptr, &logging, fermat.a());
+        task.run();
+        root = std::move(task.state()->X());
+
+        point4.X() = std::move(point4.X())*root%*gwstate.N;
+        file_proofpoint.children()[4]->write(point4);
+        file_proofpoint.children()[2]->read(point2);
+        point2.X() = std::move(point2.X())*root%*gwstate.N;
+        file_proofpoint.children()[2]->write(point2);
+        file_proofpoint.children()[1]->write(point1);
+        file_proofproduct.clear(true);
+
+        test_attack(fermat);
+    }
+    catch (const TaskAbortException&)
+    {
+        finally();
+        throw;
+    }
+    finally();
+
+    input.parse("960^128+1");
+    input.setup(gwstate);
+    logging.info("Using %s.\n", gwstate.fft_description.data());
+
+    proof.points().clear();
+    Fermat fermat2(Fermat::AUTO, input, params, logging, &proof);
+    proof_build.points() = proof.points();
+
+    fingerprint = input.fingerprint();
+    file_cert = File("prst_cert", fingerprint);
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat2.a()) + "." + std::to_string(proof.points()[proof_count]));
+    file_proofpoint = File("prst_proof", fingerprint);
+    file_proofproduct = File("prst_prod", fingerprint);
+    file_checkpoint = File("prst_c", fingerprint);
+    file_recoverypoint = File("prst_r", fingerprint);
+
+    proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+    proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+
+    try
+    {
+        fermat2.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+
+        FastExp task(power(input.gb()/3, 3)*power(input.gb(), input.n() - 3));
+        task.init(&input, &gwstate, nullptr, &logging, fermat2.a());
+        task.run();
+        root = std::move(task.state()->X());
+
+        file_proofpoint.children()[4]->read(point4);
+        point4.X() = std::move(point4.X())*root%*gwstate.N;
+        file_proofpoint.children()[4]->write(point4);
+        root = square(std::move(root))%*gwstate.N;
+        root = square(std::move(root))%*gwstate.N;
+        file_proofpoint.children()[3]->read(point3);
+        point3.X() = std::move(point3.X())*root%*gwstate.N;
+        file_proofpoint.children()[3]->write(point3);
+        file_proofproduct.clear(true);
+
+        test_attack(fermat2);
+    }
+    catch (const TaskAbortException&)
+    {
+        finally();
+        throw;
+    }
+    finally();
+
+    input.parse("2*5^178-1");
+    input.setup(gwstate);
+    logging.info("Using %s.\n", gwstate.fft_description.data());
+
+    params.ProofPointsPerCheck = 1;
+    proof.points().clear();
+    Fermat fermat3(Fermat::AUTO, input, params, logging, &proof);
+    proof_build.points() = proof.points();
+
+    fingerprint = input.fingerprint();
+    file_cert = File("prst_cert", fingerprint);
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat3.a()) + "." + std::to_string(proof.points()[proof_count]));
+    file_proofpoint = File("prst_proof", fingerprint);
+    file_proofproduct = File("prst_prod", fingerprint);
+    file_checkpoint = File("prst_c", fingerprint);
+    file_recoverypoint = File("prst_r", fingerprint);
+
+    proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+    proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+
+    try
+    {
+        fermat3.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+
+        FastExp task((input.value() - 1)/3);
+        task.init(&input, &gwstate, nullptr, &logging, 2);
+        task.run();
+        root = std::move(task.state()->X());
+
+        file_proofpoint.children()[4]->read(point4);
+        point4.X() = std::move(point4.X())*root%*gwstate.N;
+        file_proofpoint.children()[4]->write(point4);
+        file_proofpoint.children()[3]->read(point3);
+        point3.X() = std::move(point3.X())*root%*gwstate.N;
+        file_proofpoint.children()[3]->write(point3);
+        root = square(std::move(root))%*gwstate.N;
+        file_proofpoint.children()[2]->read(point2);
+        point2.X() = std::move(point2.X())*root%*gwstate.N;
+        file_proofpoint.children()[2]->write(point2);
+        file_proofproduct.clear(true);
+
+        test_attack(fermat3);
+    }
+    catch (const TaskAbortException&)
+    {
+        finally();
+        throw;
+    }
+    finally();
 }

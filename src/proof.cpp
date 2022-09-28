@@ -21,38 +21,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, Logging& loggin
     if (op == SAVE)
         _task.reset(new ProofSave(*this));
     if (op == BUILD)
-    {
         _task.reset(new ProofBuild(*this, params.ProofSecuritySeed));
-
-        if (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())
-        {
-            Giant exp;
-            if (input.c() == 1)
-            {
-                exp = input.gk();
-                int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 64;
-                for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
-                    if (it->first == 2)
-                        exp <<= security;
-                    else
-                        for (double bitlen = 0, log2factor = log2(it->first); bitlen < security; bitlen += log2factor)
-                            exp *= it->first;
-            }
-            else
-            {
-                exp = 1;
-                int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 24;
-                logging.info("Factorizing N-1 for roots of unity check");
-                double timer = getHighResTimer();
-                std::vector<int> factors = input.factorize_minus1(security);
-                timer = (getHighResTimer() - timer)/getHighResTimerFrequency();
-                logging.info(", time: %.1f s.\n", timer);
-                for (auto it = factors.begin(); it != factors.end(); it++)
-                    exp *= *it;
-            }
-            _taskRoot.reset(new SlowExp(std::move(exp)));
-        }
-    }
     if (op == CERT)
     {
         _M = count;
@@ -77,7 +46,39 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, Logging& loggin
             logging.progress().add_stage(task->cost());
         }
     }
-    _task->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
+    if ((op == BUILD && (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())) || op == ROOT)
+    {
+        Giant exp;
+        if (input.c() == 1)
+        {
+            exp = input.gk();
+            int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 64;
+            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+                if (it->first == 2)
+                    exp <<= security;
+                else
+                    for (double bitlen = 0, log2factor = log2(it->first); bitlen < security; bitlen += log2factor)
+                        exp *= it->first;
+        }
+        else
+        {
+            exp = 1;
+            int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 24;
+            logging.info("Factorizing N-1 for roots of unity check");
+            double timer = getHighResTimer();
+            std::vector<int> factors = input.factorize_minus1(security);
+            timer = (getHighResTimer() - timer)/getHighResTimerFrequency();
+            logging.info(", time: %.1f s.\n", timer);
+            for (auto it = factors.begin(); it != factors.end(); it++)
+                exp *= *it;
+        }
+        _taskRoot.reset(new SlowExp(std::move(exp)));
+    }
+
+    if (_task)
+        _task->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
+    if (_taskRoot)
+        _taskRoot->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
 }
 
 int Proof::read_cert_power(File& file_cert)
@@ -94,6 +95,11 @@ int Proof::read_cert_power(File& file_cert)
 
 void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging& logging)
 {
+    if (params.GerbiczCount)
+        if (params.GerbiczCount.value() > _count)
+            params.ProofChecksPerPoint = params.GerbiczCount.value()/_count;
+        else
+            params.ProofPointsPerCheck = _count/params.GerbiczCount.value();
     if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck)
     {
         int i;
@@ -141,8 +147,11 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
 void Proof::init_files(File* file_point, File* file_product, File* file_cert)
 {
     int i;
+    _file_points.clear();
+    _file_points.reserve(_count + 1);
     for (i = 0; i <= _count; i++)
         _file_points.push_back(file_point->add_child(std::to_string(i), file_point->fingerprint()));
+    _file_products.clear();
     if (file_product != nullptr)
         for (i = 0; (1 << i) < _count; i++)
             _file_products.push_back(file_product->add_child(std::to_string(i), file_product->fingerprint()));
@@ -247,6 +256,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, 
         if (taskMultipoint->state() == nullptr)
         {
             std::unique_ptr<Certificate> cert(read_state<Certificate>(&file_cert));
+            file_cert.free_buffer();
             taskMultipoint->init_state(new BaseExp::State(0, std::move(cert->X())));
         }
     }

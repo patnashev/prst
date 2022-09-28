@@ -181,7 +181,6 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         if (_type == PROTH || _type == POCKLINGTON)
             _points.push_back(_n + 1);
 
-        CheckGerbicz = CheckGerbicz || params.ProofChecksPerPoint || params.ProofPointsPerCheck;
         MultipointExp* task;
         _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, on_point) : new MultipointExp(input.gb(), _points, on_point));
         GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
@@ -218,7 +217,7 @@ void Fermat::on_point(int index, arithmetic::Giant& X)
 {
     if (_proof != nullptr && index <= _proof->count())
         _proof->on_point(index, X);
-    if (_points[index] == _n)
+    if ((_type == PROTH || _type == POCKLINGTON) && _points[index] == _n)
         _Xm1 = X;
 }
 
@@ -358,7 +357,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
 
     logging.progress().next_stage();
     if (proof != nullptr)
-        proof->run(input, gwstate, logging, _success ? nullptr : _Xm1.empty() ? &_task->state()->X() : &_Xm1);
+        proof->run(input, gwstate, logging, _success ? nullptr : &result());
 
     file_checkpoint.clear();
     file_recoverypoint.clear();

@@ -14,6 +14,7 @@ public:
     static const int SAVE = 1;
     static const int BUILD = 2;
     static const int CERT = 3;
+    static const int ROOT = 4;
 
 public:
     class Certificate : public TaskState
@@ -51,6 +52,7 @@ public:
     std::vector<int>& points() { return _points; }
     int M() { return _M; }
     BaseExp* task() { return _task.get(); }
+    BaseExp* taskRoot() { return _taskRoot.get(); }
     std::string& res64() { return _res64; }
 
     std::vector<File*>& file_products() { return _file_products; }
