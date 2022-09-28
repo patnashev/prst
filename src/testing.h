@@ -64,7 +64,7 @@ public:
     }
 
     double cost() { return log2(input.gb())*input.n()*(input.b() != 2 ? 1.2 : 1.0); }
-    void run(Logging& logging, int thread_count);
+    void run(Logging& logging, int thread_count, int spin_threads);
 
 public:
     InputNum input;
@@ -90,4 +90,4 @@ private:
     std::chrono::system_clock::time_point _last_progress = std::chrono::system_clock::now();
 };
 
-void RootsTest(Logging& logging, int thread_count);
+void RootsTest(Logging& logging, int thread_count, int spin_threads);

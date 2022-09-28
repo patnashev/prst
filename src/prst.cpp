@@ -115,6 +115,11 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(argv[i], "-generic") == 0)
                 gwstate.force_general_mod = true;
+            else if (i < argc - 1 && strcmp(argv[i], "-spin") == 0)
+            {
+                i++;
+                gwstate.spin_threads = atoi(argv[i]);
+            }
             else if (i < argc - 2 && strcmp(argv[i], "-proof") == 0)
             {
                 while (true)
@@ -270,7 +275,7 @@ int main(int argc, char *argv[])
     if (input.empty())
     {
         printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
-        printf("Options: [-t <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("Options: [-t <threads>] [-spin <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
         printf("\t-proof {save <count> | build <count> [security <seed>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [Gerbicz [count <count>] [L <L>]] \n");
         return 0;

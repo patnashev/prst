@@ -25,6 +25,7 @@ int testing_main(int argc, char *argv[])
     Task::PROGRESS_TIME = 60;
     int log_level = Logging::LEVEL_WARNING;
     int thread_count = 1;
+    int spin_threads = 1;
     uint64_t maxMem = 0;
     std::string subset;
 
@@ -59,6 +60,11 @@ int testing_main(int argc, char *argv[])
             {
                 i++;
                 maxMem = InputNum::parse_numeral(argv[i]);
+            }
+            else if (i < argc - 1 && strcmp(argv[i], "-spin") == 0)
+            {
+                i++;
+                spin_threads = atoi(argv[i]);
             }
             else if (i < argc - 1 && strcmp(argv[i], "-test") == 0)
             {
@@ -97,7 +103,7 @@ int testing_main(int argc, char *argv[])
     if (subset.empty())
     {
         printf("Usage: PRST -test <subset> <options>\n");
-        printf("Options: [-t <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("Options: [-t <threads>] [-spin <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
         printf("Subsets:\n");
         printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
@@ -200,14 +206,14 @@ int testing_main(int argc, char *argv[])
             logging.error("Running %s tests.\n", std::get<0>(subsetTests).data());
             if (std::get<0>(subsetTests) == "error")
             {
-                RootsTest(std::get<1>(subsetTests), thread_count);
+                RootsTest(std::get<1>(subsetTests), thread_count, spin_threads);
             }
             else
                 for (auto& test : std::get<2>(subsetTests))
                 {
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                    test.run(subLogging, thread_count);
+                    test.run(subLogging, thread_count, spin_threads);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
@@ -225,7 +231,7 @@ int testing_main(int argc, char *argv[])
     return 0;
 }
 
-void Test::run(Logging& logging, int thread_count)
+void Test::run(Logging& logging, int thread_count, int spin_threads)
 {
     Params params;
     int proof_count = 16;
@@ -247,6 +253,7 @@ void Test::run(Logging& logging, int thread_count)
 
     GWState gwstate;
     gwstate.thread_count = thread_count;
+    gwstate.spin_threads = spin_threads;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -330,7 +337,7 @@ void Test::run(Logging& logging, int thread_count)
     finally();
 }
 
-void RootsTest(Logging& logging, int thread_count)
+void RootsTest(Logging& logging, int thread_count, int spin_threads)
 {
     InputNum input;
     Params params;
@@ -362,6 +369,7 @@ void RootsTest(Logging& logging, int thread_count)
 
     GWState gwstate;
     gwstate.thread_count = thread_count;
+    gwstate.spin_threads = spin_threads;
     gwstate.maxmulbyconst = fermat.a();
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
