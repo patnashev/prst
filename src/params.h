@@ -6,6 +6,10 @@
 class Params
 {
 public:
+    int maxmulbyconst = 1;
+    int thread_count = 1;
+    int spin_threads = 1;
+
     std::optional<bool> Check;
     std::optional<bool> CheckNear;
 
@@ -17,7 +21,6 @@ public:
     std::optional<int> SlidingWindow;
 
     std::optional<int> FermatBase;
-    int maxmulbyconst = 1;
 
     std::string ProofPointFilename;
     std::string ProofProductFilename;

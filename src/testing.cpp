@@ -24,8 +24,7 @@ int testing_main(int argc, char *argv[])
     int i;
     Task::PROGRESS_TIME = 60;
     int log_level = Logging::LEVEL_WARNING;
-    int thread_count = 1;
-    int spin_threads = 1;
+    Params params;
     uint64_t maxMem = 0;
     std::string subset;
 
@@ -36,16 +35,16 @@ int testing_main(int argc, char *argv[])
             {
             case 't':
                 if (argv[i][2] && isdigit(argv[i][2]))
-                    thread_count = atoi(argv[i] + 2);
+                    params.thread_count = atoi(argv[i] + 2);
                 else if (!argv[i][2] && i < argc - 1)
                 {
                     i++;
-                    thread_count = atoi(argv[i]);
+                    params.thread_count = atoi(argv[i]);
                 }
                 else
                     break;
-                if (thread_count == 0 || thread_count > 64)
-                    thread_count = 1;
+                if (params.thread_count == 0 || params.thread_count > 64)
+                    params.thread_count = 1;
                 continue;
 
             case 'd':
@@ -64,12 +63,41 @@ int testing_main(int argc, char *argv[])
             else if (i < argc - 1 && strcmp(argv[i], "-spin") == 0)
             {
                 i++;
-                spin_threads = atoi(argv[i]);
+                params.spin_threads = atoi(argv[i]);
             }
             else if (i < argc - 1 && strcmp(argv[i], "-test") == 0)
             {
                 i++;
                 subset = argv[i];
+            }
+            else if (i < argc - 1 && strcmp(argv[i], "-check") == 0)
+            {
+                while (true)
+                    if (i < argc - 1 && strcmp(argv[i + 1], "near") == 0)
+                    {
+                        i++;
+                        params.CheckNear = true;
+                        params.Check = false;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "always") == 0)
+                    {
+                        i++;
+                        params.CheckNear = false;
+                        params.Check = true;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "never") == 0)
+                    {
+                        i++;
+                        params.CheckNear = false;
+                        params.Check = false;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "Gerbicz") == 0)
+                    {
+                        i++;
+                        params.CheckGerbicz = true;
+                    }
+                    else
+                        break;
             }
             else if (strcmp(argv[i], "-time") == 0)
             {
@@ -104,6 +132,7 @@ int testing_main(int argc, char *argv[])
     {
         printf("Usage: PRST -test <subset> <options>\n");
         printf("Options: [-t <threads>] [-spin <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("\t-check [{near | always| never}] [Gerbicz] \n");
         printf("Subsets:\n");
         printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
@@ -206,14 +235,15 @@ int testing_main(int argc, char *argv[])
             logging.error("Running %s tests.\n", std::get<0>(subsetTests).data());
             if (std::get<0>(subsetTests) == "error")
             {
-                RootsTest(std::get<1>(subsetTests), thread_count, spin_threads);
+                SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR + 1 : log_level);
+                RootsTest(subLogging, params);
             }
             else
                 for (auto& test : std::get<2>(subsetTests))
                 {
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                    test.run(subLogging, thread_count, spin_threads);
+                    test.run(subLogging, params);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
@@ -231,14 +261,17 @@ int testing_main(int argc, char *argv[])
     return 0;
 }
 
-void Test::run(Logging& logging, int thread_count, int spin_threads)
+void Test::run(Logging& logging, Params& global)
 {
     Params params;
-    int proof_count = 16;
+    params.Check = global.Check;
+    params.CheckNear = global.CheckNear;
+    params.CheckGerbicz = global.CheckGerbicz;
     if (input.b() <= 5) // tail mode
         params.ProofPointsPerCheck = 1;
     params.ProofSecuritySeed = "12345";
     params.RootOfUnityCheck = false;
+    int proof_count = 16;
 
     Proof proof(Proof::SAVE, proof_count, input, params, logging);
     Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
@@ -252,8 +285,8 @@ void Test::run(Logging& logging, int thread_count, int spin_threads)
     File file_recoverypoint("prst_r", fingerprint);
 
     GWState gwstate;
-    gwstate.thread_count = thread_count;
-    gwstate.spin_threads = spin_threads;
+    gwstate.thread_count = global.thread_count;
+    gwstate.spin_threads = global.spin_threads;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -334,12 +367,15 @@ void Test::run(Logging& logging, int thread_count, int spin_threads)
     finally();
 }
 
-void RootsTest(Logging& logging, int thread_count, int spin_threads)
+void RootsTest(Logging& logging, Params& global)
 {
-    InputNum input;
     Params params;
-    int proof_count = 4;
+    params.Check = global.Check;
+    params.CheckNear = global.CheckNear;
+    params.CheckGerbicz = global.CheckGerbicz;
     params.RootOfUnityCheck = false;
+    InputNum input;
+    int proof_count = 4;
     Giant tmp, root;
     BaseExp::State point1;
     BaseExp::State point2;
@@ -365,8 +401,8 @@ void RootsTest(Logging& logging, int thread_count, int spin_threads)
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
     GWState gwstate;
-    gwstate.thread_count = thread_count;
-    gwstate.spin_threads = spin_threads;
+    gwstate.thread_count = global.thread_count;
+    gwstate.spin_threads = global.spin_threads;
     gwstate.maxmulbyconst = fermat.a();
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
