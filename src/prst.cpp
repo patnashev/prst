@@ -1,4 +1,4 @@
-#define PRST_VERSION "0.1.0"
+#define PRST_VERSION "0.5.0"
 
 #include <signal.h>
 #include <string.h>
@@ -38,6 +38,13 @@ int main(int argc, char *argv[])
     //CPU_FLAGS &= ~CPU_FMA3;
 
     File::FILE_APPID = 4;
+    // -1 test metadata
+    //  0 number
+    //  1 checkpoint
+    //  2 Gerbicz check checkpoint
+    //  3 proof product
+    //  4 certificate
+    //  5 Gerbicz check placeholder
 
     int i;
     GWState gwstate;
