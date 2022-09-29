@@ -386,7 +386,7 @@ void exp_gw(GWArithmetic& gw, Giant& exp, GWNum& X, GWNum& X0, int options)
 void ProofSave::execute()
 {
     int t, i, j, k;
-    State state_d;
+    Proof::Product state_d;
     GWNum Y(gw());
     GWNum D(gw());
     GWNum T(gw());
@@ -414,6 +414,7 @@ void ProofSave::execute()
         }
         else
         {
+            state_d.mimic_type(State::TYPE);
             if (i == 0)
             {
                 read_point(_proof.count()/2, state_d);
@@ -449,6 +450,7 @@ void ProofSave::execute()
                 state_d.set(i, D);
             }
 
+            state_d.mimic_type(Proof::Product::TYPE);
             _proof.file_products()[i]->write(state_d);
             _proof.file_products()[i]->free_buffer();
         }
@@ -484,7 +486,7 @@ void ProofBuild::init(InputNum* input, arithmetic::GWState* gwstate, Logging* lo
 void ProofBuild::execute()
 {
     int i, M, t;
-    State state_d;
+    Proof::Product state_d;
     GWNum X(gw());
     GWNum Y(gw());
     GWNum D(gw());

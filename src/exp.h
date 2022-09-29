@@ -14,7 +14,7 @@ public:
     class State : public TaskState
     {
     public:
-        static const int TYPE = 1;
+        static const char TYPE = 1;
         State() : TaskState(TYPE) { }
         State(int iteration, const arithmetic::Giant& X) : TaskState(1) { TaskState::set(iteration); _X = X; }
         State(int iteration, arithmetic::Giant&& X) : TaskState(1) { TaskState::set(iteration); _X = std::move(X); }

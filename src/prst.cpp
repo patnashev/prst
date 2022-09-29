@@ -16,6 +16,7 @@
 #include "proof.h"
 #include "pocklington.h"
 #include "testing.h"
+#include "support.h"
 
 using namespace arithmetic;
 
@@ -45,6 +46,7 @@ int main(int argc, char *argv[])
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
+    bool supportLLR2 = false;
     InputNum input;
     std::string toFile;
     int log_level = Logging::LEVEL_WARNING;
@@ -215,6 +217,12 @@ int main(int argc, char *argv[])
                     else
                         break;
             }
+            else if (i < argc - 1 && strcmp(argv[i], "-support") == 0)
+            {
+                i++;
+                if (strcmp(argv[i], "LLR2") == 0)
+                    supportLLR2 = true;
+            }
             else if (strcmp(argv[i], "-time") == 0)
             {
                 while (true)
@@ -286,14 +294,26 @@ int main(int argc, char *argv[])
         input.write(file);
     }
 
+    std::unique_ptr<File> file_proofpoint;
+    std::unique_ptr<File> file_proofproduct;
+    std::unique_ptr<File> file_cert;
+    auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::State::TYPE)
+    {
+        if (supportLLR2)
+            file.reset(new LLR2File(filename, gwstate.fingerprint, type));
+        else
+            file.reset(new File(filename, fingerprint));
+    };
+
     Logging logging(log_level);
 
     uint32_t fingerprint = input.fingerprint();
-    File file_cert(!proof_cert.empty() && proof_cert != "default" ? proof_cert : "prst_" + std::to_string(fingerprint) + ".cert", fingerprint);
+    gwstate.fingerprint = fingerprint;
+    newFile(file_cert, !proof_cert.empty() && proof_cert != "default" ? proof_cert : "prst_" + std::to_string(fingerprint) + ".cert", fingerprint, Proof::Certificate::TYPE);
     std::unique_ptr<Proof> proof;
     if (proof_op != Proof::NO_OP)
     {
-        if (proof_op == Proof::CERT && (proof_count = Proof::read_cert_power(file_cert)) == 0)
+        if (proof_op == Proof::CERT && (proof_count = Proof::read_cert_power(*file_cert)) == 0)
         {
             logging.error("Invalid certificate file.\n");
             return 0;
@@ -335,17 +355,17 @@ int main(int argc, char *argv[])
 
         if (proof_op == Proof::CERT)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, file_cert.filename());
+            fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.r", fingerprint);
-            proof->run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+            proof->run(input, gwstate, *file_cert, file_checkpoint, file_recoverypoint, logging);
         }
         else if (proof)
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
-            File file_proofpoint(!params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
-            File file_proofproduct(!params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint);
-            proof->init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+            newFile(file_proofpoint, !params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
+            newFile(file_proofproduct, !params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint, Proof::Product::TYPE);
+            proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
 
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);

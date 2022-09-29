@@ -341,7 +341,7 @@ void GerbiczCheckMultipointExp::init_state(State* state)
     _state_recovery.reset(state);
     if (!_state || (state_check() != nullptr ? state_check()->recovery() : _state->iteration()) != _state_recovery->iteration() || _state->iteration() < _state_recovery->iteration() || _state->iteration() >= _state_recovery->iteration() + _L2)
     {
-        _state.reset(new TaskState(4));
+        _state.reset(new TaskState(5));
         _state->set(_state_recovery->iteration());
     }
     if (_state->iteration() > 0)
@@ -489,7 +489,7 @@ void GerbiczCheckMultipointExp::execute()
         if (T != 0 || D() == 0)
         {
             _logging->error("Gerbicz check failed at %.1f%%.\n", 100.0*i/iterations());
-            _state.reset(new TaskState(4));
+            _state.reset(new TaskState(5));
             _state->set(_state_recovery->iteration());
             _restart_op = _recovery_op;
             throw TaskRestartException();
@@ -501,7 +501,7 @@ void GerbiczCheckMultipointExp::execute()
             Giant tmp;
             tmp = R();
             _state_recovery.reset(new State(i, std::move(tmp)));
-            _state.reset(new TaskState(4));
+            _state.reset(new TaskState(5));
             _state->set(i);
             on_state();
             _recovery_op = _restart_op;

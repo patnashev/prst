@@ -170,10 +170,12 @@
     <ClCompile Include="..\..\framework\md5.c" />
     <ClCompile Include="..\..\framework\task.cpp" />
     <ClCompile Include="..\exp.cpp" />
+    <ClCompile Include="..\fermat.cpp" />
     <ClCompile Include="..\pocklington.cpp" />
     <ClCompile Include="..\proof.cpp" />
     <ClCompile Include="..\prst.cpp" />
-    <ClCompile Include="..\fermat.cpp" />
+    <ClInclude Include="..\support.cpp" />
+    <ClInclude Include="..\testing.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\framework\arithmetic\arithmetic.h" />
@@ -189,10 +191,15 @@
     <ClInclude Include="..\..\framework\md5.h" />
     <ClInclude Include="..\..\framework\task.h" />
     <ClInclude Include="..\exp.h" />
-    <ClInclude Include="..\pocklington.h" />
-    <ClInclude Include="..\proof.h" />
     <ClInclude Include="..\fermat.h" />
     <ClInclude Include="..\params.h" />
+    <ClInclude Include="..\pocklington.h" />
+    <ClInclude Include="..\proof.h" />
+    <ClInclude Include="..\support.h" />
+    <ClInclude Include="..\testing.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\test.data" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

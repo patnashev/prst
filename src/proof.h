@@ -17,10 +17,25 @@ public:
     static const int ROOT = 4;
 
 public:
+    class Product : public TaskState
+    {
+    public:
+        static const char TYPE = 3;
+        Product() : TaskState(TYPE) { }
+        void mimic_type(int type) { _type = type; }
+        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; }
+        int depth() { return _iteration; }
+        arithmetic::Giant& X() { return _X; }
+        bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_X); }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_X); }
+
+    private:
+        arithmetic::Giant _X;
+    };
     class Certificate : public TaskState
     {
     public:
-        static const int TYPE = 3;
+        static const char TYPE = 4;
         Certificate() : TaskState(TYPE) { }
         void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; }
         int power() { return _iteration; }
