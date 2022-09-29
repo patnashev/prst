@@ -232,7 +232,7 @@ int testing_main(int argc, char *argv[])
         for (auto& subsetTests : tests)
         {
             logging.progress().update(0, 0);
-            logging.error("Running %s tests.\n", std::get<0>(subsetTests).data());
+            logging.warning("Running %s tests.\n", std::get<0>(subsetTests).data());
             if (std::get<0>(subsetTests) == "error")
             {
                 SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR + 1 : log_level);
@@ -248,7 +248,7 @@ int testing_main(int argc, char *argv[])
                 }
             logging.progress().next_stage();
         }
-        logging.error("All tests completed successfully.\n");
+        logging.warning("All tests completed successfully.\n");
     }
     catch (const TaskAbortException&)
     {
@@ -330,6 +330,8 @@ void Test::run(Logging& logging, Params& global)
         Proof proof_build(Proof::BUILD, proof_count, input, params, logging);
         proof_build.points() = std::move(proof.points());
         proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+        logging.progress().add_stage(1);
+        logging.progress().add_stage(proof_build.cost());
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
         if (std::stoull(dynamic_cast<ProofBuild*>(proof_build.task())->raw_res64(), nullptr, 16) != cert64)
         {

@@ -63,7 +63,7 @@ public:
         cert64 = t.cert64;
     }
 
-    double cost() { double len = log2(input.gb())*input.n(); return len*std::log2(len)*(input.b() != 2 ? 1.2 : 1.0); }
+    double cost() { double len = log2(input.gb())*input.n(); return len*std::sqrt(len)*(input.b() != 2 ? 1.2 : 1.0); }
     void run(Logging& logging, Params& global);
 
 public:
