@@ -16,15 +16,6 @@ struct BTest
     uint64_t cert64;
 };
 
-struct KBNTest
-{
-    uint32_t k;
-    uint32_t b;
-    uint32_t n;
-    uint64_t res64;
-    uint64_t cert64;
-};
-
 struct KBNCTest
 {
     const char *sk;
@@ -47,12 +38,6 @@ public:
     Test(int k, int b, NTest& t, int c)
     {
         input.init(k, b, t.n, c);
-        res64 = t.res64;
-        cert64 = t.cert64;
-    }
-    Test(KBNTest& t, int c)
-    {
-        input.init(t.k, t.b, t.n, c);
         res64 = t.res64;
         cert64 = t.cert64;
     }

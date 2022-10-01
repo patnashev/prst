@@ -209,15 +209,15 @@ int testing_main(int argc, char *argv[])
     if (subset == "slow" || subset == "109208b5plus")
     {
         auto& cont = add("109208b5plus");
-        for (KBNTest* kbnTest = Test109208Base5Plus; kbnTest->n != 0; kbnTest++)
-            cont.emplace_back(*kbnTest, 1);
+        for (NTest* nTest = Test109208Base5Plus; nTest->n != 0; nTest++)
+            cont.emplace_back(109208, 5, *nTest, 1);
     }
 
     if (subset == "slow" || subset == "100186b5minus")
     {
         auto& cont = add("100186b5minus");
-        for (KBNTest* kbnTest = Test100186Base5Minus; kbnTest->n != 0; kbnTest++)
-            cont.emplace_back(*kbnTest, -1);
+        for (NTest* nTest = Test100186Base5Minus; nTest->n != 0; nTest++)
+            cont.emplace_back(100186, 5, *nTest, -1);
     }
 
     for (auto& subsetTests : tests)
@@ -267,7 +267,7 @@ void Test::run(Logging& logging, Params& global)
     params.Check = global.Check;
     params.CheckNear = global.CheckNear;
     params.CheckGerbicz = global.CheckGerbicz;
-    if (input.b() <= 5) // tail mode
+    if (input.b() == 5) // tail mode
         params.ProofPointsPerCheck = 1;
     params.ProofSecuritySeed = "12345";
     params.RootOfUnityCheck = false;
