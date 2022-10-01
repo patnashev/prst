@@ -99,26 +99,29 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
         if (params.GerbiczCount.value() > _count)
             params.ProofChecksPerPoint = params.GerbiczCount.value()/_count;
         else
-            params.ProofPointsPerCheck = _count/params.GerbiczCount.value();
-    if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck)
+        {
+            _points_per_check = _count/params.GerbiczCount.value();
+            params.ProofPointsPerCheck = _points_per_check;
+        }
+    if ((input.b() != 2 || input.c() != 1) && _points_per_check > 1)
     {
         int i;
-        int iters = iterations*params.ProofPointsPerCheck.value()/_count;
+        int iters = iterations*_points_per_check/_count;
         if (!params.GerbiczL)
         {
-            int L = params.ProofPointsPerCheck.value()*(int)sqrt(iters);
+            int L = _points_per_check*(int)sqrt(iters);
             int L2 = iters - iters%L;
-            for (i = L + params.ProofPointsPerCheck.value(); i*i < 2*iters*params.ProofPointsPerCheck.value()*params.ProofPointsPerCheck.value(); i += params.ProofPointsPerCheck.value())
+            for (i = L + _points_per_check; i*i < 2*iters*_points_per_check*_points_per_check; i += _points_per_check)
                 if (L2 < iters - iters%i)
                 {
                     L = i;
                     L2 = iters - iters%i;
                 }
-            params.GerbiczL = L/params.ProofPointsPerCheck.value();
-            _M = L2/params.ProofPointsPerCheck.value();
+            params.GerbiczL = L/_points_per_check;
+            _M = L2/_points_per_check;
         }
         else
-            _M = (iters - iters%(params.GerbiczL.value()*params.ProofPointsPerCheck.value()))/params.ProofPointsPerCheck.value();
+            _M = (iters - iters%(params.GerbiczL.value()*_points_per_check))/_points_per_check;
         _points.reserve(_count + 2);
         for (i = 0; i <= _count; i++)
             _points.push_back(i*_M);
@@ -198,7 +201,7 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
     while (point >= 0)
     {
         if (taskGerbiczCheck != nullptr)
-            point -= point%taskGerbiczCheck->_points_per_check;
+            point -= point%_points_per_check;
         if (_file_points[point]->read(*state) && state->iteration() == _points[point])
         {
             if (task->state() == nullptr || task->state()->iteration() < state->iteration())

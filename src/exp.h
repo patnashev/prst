@@ -155,22 +155,25 @@ public:
     public:
         static const int TYPE = 2;
         GerbiczCheckState() : TaskState(TYPE) { }
-        GerbiczCheckState(arithmetic::GWArithmetic& gw) : TaskState(TYPE) { _X.reset(new arithmetic::GWNum(gw)); _D.reset(new arithmetic::GWNum(gw)); }
         void set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D);
         int recovery() { return _recovery; }
-        arithmetic::GWNum& X() { return *_X; }
-        arithmetic::GWNum& D() { return *_D; }
-        bool read(Reader& reader) override;
-        void write(Writer& writer) override;
+        arithmetic::Giant& X() { return _X; }
+        arithmetic::Giant& D() { return _D; }
+        std::unique_ptr<arithmetic::GWNum>& gwX() { return _gwX; }
+        std::unique_ptr<arithmetic::GWNum>& gwD() { return _gwD; }
+        bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_recovery) && reader.read(_X) && reader.read(_D); }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_recovery); writer.write(_X); writer.write(_D); }
 
     private:
         int _recovery;
-        std::unique_ptr<arithmetic::GWNum> _X;
-        std::unique_ptr<arithmetic::GWNum> _D;
+        arithmetic::Giant _X;
+        arithmetic::Giant _D;
+        std::unique_ptr<arithmetic::GWNum> _gwX;
+        std::unique_ptr<arithmetic::GWNum> _gwD;
     };
 
 public:
-    GerbiczCheckMultipointExp(arithmetic::Giant& b, const std::vector<int>& points, int L, int L2, int points_per_check, int checks_per_point, std::function<void(int, arithmetic::Giant&)> on_point) : MultipointExp(b, points, on_point), _L(L), _L2(L2), _points_per_check(points_per_check), _checks_per_point(checks_per_point)
+    GerbiczCheckMultipointExp(arithmetic::Giant& b, const std::vector<int>& points, int L, int L2, std::function<void(int, arithmetic::Giant&)> on_point) : MultipointExp(b, points, on_point), _L(L), _L2(L2)
     {
     }
 
@@ -189,15 +192,12 @@ public:
     arithmetic::GWNum& D() { return *_D; }
     int _L;
     int _L2;
-    int _points_per_check;
-    int _checks_per_point;
     double cost() override;
     static void Gerbicz_params(int iters, double log2b, int& L, int &L2);
 
 protected:
     void write_state() override;
     void release() override;
-    void reinit_gwstate() override;
     void setup() override;
     void execute() override;
 
@@ -242,10 +242,10 @@ protected:
 class GerbiczCheckExp : public GerbiczCheckPoints, public GerbiczCheckMultipointExp
 {
 public:
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(log2(b), n, count), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, 1, 1, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(log2(b), n, count), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, on_point)
     {
     }
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, int L, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(n, count, L), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, 1, 1, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, int L, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(n, count, L), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, on_point)
     {
     }
 };

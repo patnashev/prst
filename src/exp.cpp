@@ -321,50 +321,9 @@ double GerbiczCheckMultipointExp::cost()
     }
 }
 
-void GerbiczCheckMultipointExp::GerbiczCheckState::set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D)
-{
-    TaskState::set(iteration);
-    _recovery = recovery;
-    if (!_X)
-        _X.reset(new GWNum(X.arithmetic()));
-    *_X = X;
-    if (!_D)
-        _D.reset(new GWNum(D.arithmetic()));
-    *_D = D;
-}
-
-bool GerbiczCheckMultipointExp::GerbiczCheckState::read(Reader& reader)
-{
-    if (!_X || !_D)
-        return false;
-    Giant tmp;
-    if (!TaskState::read(reader))
-        return false;
-    if (!reader.read(_recovery))
-        return false;
-    if (!reader.read(tmp))
-        return false;
-    *_X = tmp;
-    if (!reader.read(tmp))
-        return false;
-    *_D = tmp;
-    return true;
-}
-
-void GerbiczCheckMultipointExp::GerbiczCheckState::write(Writer& writer)
-{
-    Giant tmp;
-    TaskState::write(writer);
-    writer.write(_recovery);
-    tmp = *_X;
-    writer.write(tmp);
-    tmp = *_D;
-    writer.write(tmp);
-}
-
 void GerbiczCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* file, File* file_recovery, Logging* logging)
 {
-    BaseExp::init(input, gwstate, file, nullptr, logging, _points.back() + (!_tail.empty() ? 1 : 0));
+    BaseExp::init(input, gwstate, file, read_state<GerbiczCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
     _state_update_period = (int)(MULS_PER_STATE_UPDATE/log2(_b));
     _file_recovery = file_recovery;
     _state_recovery.reset();
@@ -396,10 +355,38 @@ void GerbiczCheckMultipointExp::init_state(State* state)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
 }
 
+void GerbiczCheckMultipointExp::GerbiczCheckState::set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D)
+{
+    TaskState::set(iteration);
+    _recovery = recovery;
+    if (!_gwX)
+        _gwX.reset(new GWNum(X.arithmetic()));
+    *_gwX = X;
+    if (!_gwD)
+        _gwD.reset(new GWNum(D.arithmetic()));
+    *_gwD = D;
+}
+
 void GerbiczCheckMultipointExp::write_state()
 {
     if (_file_recovery != nullptr && _state_recovery && !_state_recovery->is_written())
         _file_recovery->write(*_state_recovery);
+    if (state_check() != nullptr)
+    {
+        try
+        {
+            if (state_check()->gwX())
+                state_check()->X() = *state_check()->gwX();
+            if (state_check()->gwD())
+                state_check()->D() = *state_check()->gwD();
+        }
+        catch (const ArithmeticException&)
+        {
+            _state.reset(new TaskState(5));
+            _state->set(_state_recovery->iteration());
+            throw;
+        }
+    }
     Task::write_state();
 }
 
@@ -408,18 +395,24 @@ void GerbiczCheckMultipointExp::release()
     _recovery_op = 0;
     _R.reset();
     _D.reset();
-    MultipointExp::release();
-}
-
-void GerbiczCheckMultipointExp::reinit_gwstate()
-{
-    BaseExp::reinit_gwstate();
     if (state_check() != nullptr)
     {
-        _state.reset(new TaskState(5));
-        _state->set(_state_recovery->iteration());
-        _restart_op = _recovery_op;
+        try
+        {
+            if (state_check()->gwX())
+                state_check()->X() = *state_check()->gwX();
+            state_check()->gwX().reset();
+            if (state_check()->gwD())
+                state_check()->D() = *state_check()->gwD();
+            state_check()->gwD().reset();
+        }
+        catch (const ArithmeticException&)
+        {
+            _state.reset(new TaskState(5));
+            _state->set(_state_recovery->iteration());
+        }
     }
+    MultipointExp::release();
 }
 
 void GerbiczCheckMultipointExp::setup()
@@ -430,12 +423,18 @@ void GerbiczCheckMultipointExp::setup()
         GWASSERT(state() != nullptr);
         R() = state()->X();
     }
-    if (state_check() == nullptr && _file != nullptr)
+    if (state_check() != nullptr)
     {
-        if (!_tmp_state)
-            _tmp_state.reset(new GerbiczCheckState(gw()));
-        if (_file->read(*_tmp_state) && static_cast<GerbiczCheckState*>(_tmp_state.get())->recovery() == state()->iteration())
-            _tmp_state.swap(_state);
+        if (!state_check()->gwX())
+        {
+            state_check()->gwX().reset(new GWNum(gw()));
+            *state_check()->gwX() = state_check()->X();
+        }
+        if (!state_check()->gwD())
+        {
+            state_check()->gwD().reset(new GWNum(gw()));
+            *state_check()->gwD() = state_check()->D();
+        }
     }
 }
 
@@ -457,30 +456,24 @@ void GerbiczCheckMultipointExp::execute()
     else
     {
         i = state_check()->iteration();
-        X() = state_check()->X();
-        D() = state_check()->D();
+        X() = *state_check()->gwX();
+        D() = *state_check()->gwD();
     }
     for (next_point = 0; next_point < _points.size() && state()->iteration() >= _points[next_point]; next_point++);
-    if (_points_per_check > 1)
-    {
-        next_check = next_point + _points_per_check - 1;
-        next_check -= next_check%_points_per_check;
-        for (; next_point < _points.size() && next_point < next_check && i >= _points[next_point]; next_point++);
-    }
     if (i < 30)
         gwset_carefully_count(gw().gwdata(), 30 - i);
 
     while (next_point < _points.size())
     {
-        next_check = next_point + _points_per_check - 1;
-        next_check -= next_check%_points_per_check;
-        if (next_check >= _points.size())
-            next_check = (int)_points.size() - 1;
+        for (next_check = next_point; next_check < _points.size() - 1 && _points[next_check + 1] - state()->iteration() <= _L2 && (_b == 2 || (_points[next_check] - state()->iteration())%_L == 0); next_check++);
         int L = _L;
         int L2 = _L2;
         while ((_points[next_check] - state()->iteration()) < L2 && L > 1)
         {
-            L /= 2;
+            if (L == 3)
+                L = 2;
+            else
+                L /= 2;
             L2 = L*L;
             last_power = -1;
         }
@@ -492,6 +485,8 @@ void GerbiczCheckMultipointExp::execute()
             _state.reset(new TaskState(5));
             _state->set(i);
         }
+        else
+            for (; next_point < next_check && i >= _points[next_point]; next_point++);
 
         if (_b == 2)
         {
@@ -571,6 +566,8 @@ void GerbiczCheckMultipointExp::execute()
         if (T != 0 || D() == 0)
         {
             _logging->error("Gerbicz check failed at %.1f%%.\n", 100.0*i/iterations());
+            if (_file != nullptr)
+                _file->clear();
             _state.reset(new TaskState(5));
             _state->set(_state_recovery->iteration());
             _restart_op = _recovery_op;

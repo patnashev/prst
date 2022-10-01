@@ -81,6 +81,7 @@ protected:
     int _op = 0;
     int _count = 0;
     std::vector<int> _points;
+    int _points_per_check = 1;
     int _M = 0;
     bool _cache_points = false;
     std::vector<File*> _file_points;

@@ -198,7 +198,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         }
 
         MultipointExp* task;
-        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, L, L2, params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, on_point) : new MultipointExp(input.gb(), _points, on_point));
+        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, L, L2, on_point) : new MultipointExp(input.gb(), _points, on_point));
         GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
         if (params.SlidingWindow)
             task->_W = params.SlidingWindow.value();
