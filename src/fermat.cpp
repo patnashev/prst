@@ -181,20 +181,25 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         if (_type == PROTH || _type == POCKLINGTON)
             _points.push_back(_n + 1);
 
-        MultipointExp* task;
-        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, on_point) : new MultipointExp(input.gb(), _points, on_point));
-        GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
-        if (CheckGerbicz && params.GerbiczL)
+        int L = 0, L2 = 0;
+        if (CheckGerbicz)
         {
-            taskCheck->_L = params.GerbiczL.value();
-            if (params.GerbiczL2)
-                taskCheck->_L2 = params.GerbiczL2.value();
-            else
+            L2 = proof->M()*(params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1)/(params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1);
+            if (params.GerbiczL)
             {
-                taskCheck->_L2 = proof->M()*(params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1)/(params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1);
-                taskCheck->_L2 -= taskCheck->_L2%taskCheck->_L;
+                L = params.GerbiczL.value();
+                if (params.GerbiczL2)
+                    L2 = params.GerbiczL2.value();
+                else
+                    L2 -= L2%L;
             }
+            else
+                GerbiczCheckMultipointExp::Gerbicz_params(L2, log2(input.gb()), L, L2);
         }
+
+        MultipointExp* task;
+        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, L, L2, params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1, params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1, on_point) : new MultipointExp(input.gb(), _points, on_point));
+        GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
         if (params.SlidingWindow)
             task->_W = params.SlidingWindow.value();
         logging.progress().add_stage(task->cost());
@@ -315,6 +320,8 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             if (proof != nullptr)
                 proof->on_point(0, ak);
             taskMultipoint->init_state(new BaseExp::State(0, std::move(ak)));
+            if (proof != nullptr)
+                taskMultipoint->state()->set_written();
         }
         else
         {

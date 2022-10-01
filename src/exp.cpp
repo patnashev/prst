@@ -163,8 +163,12 @@ void MultipointExp::execute()
     {
         if (_b == 2)
         {
-            for (; i < _points[next_point]; i++, commit_execute<State>(i, X()))
+            for (; i < _points[next_point]; i++)
+            {
                 gw().square(X(), X(), GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point]));
+                if (i + 1 != _points[next_point])
+                    commit_execute<State>(i, X());
+            }
         }
         else
         {
@@ -178,16 +182,18 @@ void MultipointExp::execute()
             i = _points[next_point];
         }
 
-        if (state() == nullptr || state()->iteration() != i)
-        {
-            check();
-            set_state<State>(i, X());
-        }
+        check();
+        if (!_tmp_state)
+            _tmp_state.reset(new State());
+        static_cast<State*>(_tmp_state.get())->set(i, X());
         if (_on_point != nullptr)
         {
-            _on_point(next_point, state()->X());
+            _on_point(next_point, static_cast<State*>(_tmp_state.get())->X());
+            static_cast<State*>(_tmp_state.get())->set_written();
             _last_write = std::chrono::system_clock::now();
         }
+        _tmp_state.swap(_state);
+        on_state();
     }
     if (i < iterations())
     {
@@ -315,9 +321,50 @@ double GerbiczCheckMultipointExp::cost()
     }
 }
 
+void GerbiczCheckMultipointExp::GerbiczCheckState::set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D)
+{
+    TaskState::set(iteration);
+    _recovery = recovery;
+    if (!_X)
+        _X.reset(new GWNum(X.arithmetic()));
+    *_X = X;
+    if (!_D)
+        _D.reset(new GWNum(D.arithmetic()));
+    *_D = D;
+}
+
+bool GerbiczCheckMultipointExp::GerbiczCheckState::read(Reader& reader)
+{
+    if (!_X || !_D)
+        return false;
+    Giant tmp;
+    if (!TaskState::read(reader))
+        return false;
+    if (!reader.read(_recovery))
+        return false;
+    if (!reader.read(tmp))
+        return false;
+    *_X = tmp;
+    if (!reader.read(tmp))
+        return false;
+    *_D = tmp;
+    return true;
+}
+
+void GerbiczCheckMultipointExp::GerbiczCheckState::write(Writer& writer)
+{
+    Giant tmp;
+    TaskState::write(writer);
+    writer.write(_recovery);
+    tmp = *_X;
+    writer.write(tmp);
+    tmp = *_D;
+    writer.write(tmp);
+}
+
 void GerbiczCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* file, File* file_recovery, Logging* logging)
 {
-    BaseExp::init(input, gwstate, file, read_state<GerbiczCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
+    BaseExp::init(input, gwstate, file, nullptr, logging, _points.back() + (!_tail.empty() ? 1 : 0));
     _state_update_period = (int)(MULS_PER_STATE_UPDATE/log2(_b));
     _file_recovery = file_recovery;
     _state_recovery.reset();
@@ -339,7 +386,8 @@ void GerbiczCheckMultipointExp::init_state(State* state)
             _logging->info("max roundoff check enabled.\n");
     }
     _state_recovery.reset(state);
-    if (!_state || (state_check() != nullptr ? state_check()->recovery() : _state->iteration()) != _state_recovery->iteration() || _state->iteration() < _state_recovery->iteration() || _state->iteration() >= _state_recovery->iteration() + _L2)
+    _recovery_op = 0;
+    if (!_state || (state_check() != nullptr ? state_check()->recovery() : _state->iteration()) != _state_recovery->iteration())
     {
         _state.reset(new TaskState(5));
         _state->set(_state_recovery->iteration());
@@ -363,6 +411,17 @@ void GerbiczCheckMultipointExp::release()
     MultipointExp::release();
 }
 
+void GerbiczCheckMultipointExp::reinit_gwstate()
+{
+    BaseExp::reinit_gwstate();
+    if (state_check() != nullptr)
+    {
+        _state.reset(new TaskState(5));
+        _state->set(_state_recovery->iteration());
+        _restart_op = _recovery_op;
+    }
+}
+
 void GerbiczCheckMultipointExp::setup()
 {
     if (!_R)
@@ -371,6 +430,13 @@ void GerbiczCheckMultipointExp::setup()
         GWASSERT(state() != nullptr);
         R() = state()->X();
     }
+    if (state_check() == nullptr && _file != nullptr)
+    {
+        if (!_tmp_state)
+            _tmp_state.reset(new GerbiczCheckState(gw()));
+        if (_file->read(*_tmp_state) && static_cast<GerbiczCheckState*>(_tmp_state.get())->recovery() == state()->iteration())
+            _tmp_state.swap(_state);
+    }
 }
 
 void GerbiczCheckMultipointExp::execute()
@@ -378,6 +444,7 @@ void GerbiczCheckMultipointExp::execute()
     int i, j, next_point, next_check;
     Giant exp;
     int last_power = -1;
+    Giant tmp;
 
     _X.reset(new GWNum(gw()));
     _D.reset(new GWNum(gw()));
@@ -393,7 +460,13 @@ void GerbiczCheckMultipointExp::execute()
         X() = state_check()->X();
         D() = state_check()->D();
     }
-    for (next_point = 0; next_point < _points.size() && i >= _points[next_point]; next_point++);
+    for (next_point = 0; next_point < _points.size() && state()->iteration() >= _points[next_point]; next_point++);
+    if (_points_per_check > 1)
+    {
+        next_check = next_point + _points_per_check - 1;
+        next_check -= next_check%_points_per_check;
+        for (; next_point < _points.size() && next_point < next_check && i >= _points[next_point]; next_point++);
+    }
     if (i < 30)
         gwset_carefully_count(gw().gwdata(), 30 - i);
 
@@ -411,7 +484,14 @@ void GerbiczCheckMultipointExp::execute()
             L2 = L*L;
             last_power = -1;
         }
-        GWASSERT(i - state()->iteration() <= L2);
+        if (i - state()->iteration() > L2)
+        {
+            i = state()->iteration();
+            X() = R();
+            D() = R();
+            _state.reset(new TaskState(5));
+            _state->set(i);
+        }
 
         if (_b == 2)
         {
@@ -421,13 +501,14 @@ void GerbiczCheckMultipointExp::execute()
                 if (j + 1 != L2 && i + 1 == _points[next_point])
                 {
                     check();
-                    set_state<GerbiczCheckState>(i + 1, state()->iteration(), X(), D());
+                    tmp = X();
                     if (_on_point != nullptr)
-                        _on_point(next_point, state_check()->X());
+                        _on_point(next_point, tmp);
                     next_point++;
+                    set_state<GerbiczCheckState>(i + 1, state()->iteration(), X(), D());
                 }
                 if (j + 1 != L2 && (j + 1)%L == 0)
-                    gw().mul(X(), D(), D(), GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + 1 + L != L2));
+                    gw().mul(X(), D(), D(), is_last(i) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + 1 + L != L2));
             }
         }
         else
@@ -445,13 +526,14 @@ void GerbiczCheckMultipointExp::execute()
                 if (j + L != L2 && i + L == _points[next_point])
                 {
                     check();
-                    set_state<GerbiczCheckState>(i + L, state()->iteration(), X(), D());
+                    tmp = X();
                     if (_on_point != nullptr)
-                        _on_point(next_point, state_check()->X());
+                        _on_point(next_point, tmp);
                     next_point++;
+                    set_state<GerbiczCheckState>(i + L, state()->iteration(), X(), D());
                 }
                 if (j + L != L2)
-                    gw().mul(X(), D(), D(), GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2));
+                    gw().mul(X(), D(), D(), is_last(i + L - 1) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2));
             }
         }
         check();
@@ -494,35 +576,34 @@ void GerbiczCheckMultipointExp::execute()
             _restart_op = _recovery_op;
             throw TaskRestartException();
         }
-        else
-        {
-            R() = X();
-            D() = X();
-            Giant tmp;
-            tmp = R();
-            _state_recovery.reset(new State(i, std::move(tmp)));
-            _state.reset(new TaskState(5));
-            _state->set(i);
-            on_state();
-            _recovery_op = _restart_op;
-            _restart_count = 0;
-            if (i != _points[next_check])
-                continue;
-        }
 
-        if (_on_point != nullptr)
+        R() = X();
+        D() = X();
+        if (!_tmp_state_recovery)
+            _tmp_state_recovery.reset(new State());
+        _tmp_state_recovery->set(i, R());
+        if (i == _points[next_check])
         {
-            _on_point(next_check, state()->X());
-            _last_write = std::chrono::system_clock::now();
+            if (_on_point != nullptr)
+            {
+                _on_point(next_check, _tmp_state_recovery->X());
+                _tmp_state_recovery->set_written();
+                _last_write = std::chrono::system_clock::now();
+            }
+            next_point++;
         }
-        next_point++;
+        _tmp_state_recovery.swap(_state_recovery);
+        _state.reset(new TaskState(5));
+        _state->set(i);
+        on_state();
+        _recovery_op = _restart_op;
+        _restart_count = 0;
     }
     if (i < iterations())
     {
         D() = _tail;
         gw().carefully().mul(D(), R(), R(), 0);
         i++;
-        Giant tmp;
         tmp = R();
         _state_recovery.reset(new State(i, std::move(tmp)));
         _state->set(i);
