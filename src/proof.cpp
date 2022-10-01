@@ -99,13 +99,12 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
         if (params.GerbiczCount.value() > _count)
             params.ProofChecksPerPoint = params.GerbiczCount.value()/_count;
         else
-        {
-            _points_per_check = _count/params.GerbiczCount.value();
-            params.ProofPointsPerCheck = _points_per_check;
-        }
-    if ((input.b() != 2 || input.c() != 1) && _points_per_check > 1)
+            params.ProofPointsPerCheck = _count/params.GerbiczCount.value();
+    _points_per_check = 1;
+    if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck)
     {
         int i;
+        _points_per_check = params.ProofPointsPerCheck.value();
         int iters = iterations*_points_per_check/_count;
         if (!params.GerbiczL)
         {

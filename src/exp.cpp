@@ -465,9 +465,10 @@ void GerbiczCheckMultipointExp::execute()
 
     while (next_point < _points.size())
     {
-        for (next_check = next_point; next_check < _points.size() - 1 && _points[next_check + 1] - state()->iteration() <= _L2 && (_b == 2 || (_points[next_check] - state()->iteration())%_L == 0); next_check++);
+        for (next_check = next_point; next_check < _points.size() - 1 && _points[next_check] - state()->iteration() < _L2 && (_b == 2 || (_points[next_check] - state()->iteration())%_L == 0); next_check++);
         int L = _L;
         int L2 = _L2;
+        int max_next_check = next_check;
         while ((_points[next_check] - state()->iteration()) < L2 && L > 1)
         {
             if (L == 3)
@@ -476,6 +477,7 @@ void GerbiczCheckMultipointExp::execute()
                 L /= 2;
             L2 = L*L;
             last_power = -1;
+            for (next_check = next_point; next_check < max_next_check && _points[next_check] - state()->iteration() < L2 && (_b == 2 || (_points[next_check] - state()->iteration())%L == 0); next_check++);
         }
         if (i - state()->iteration() > L2)
         {
@@ -538,7 +540,7 @@ void GerbiczCheckMultipointExp::execute()
             throw TaskAbortException();
         }
 
-        _logging->debug("performing Gerbicz check at %d, L2 = %d*%d.\n", i, L, L2/L);
+        _logging->debug("performing Gerbicz check at %d,%d, L2 = %d*%d.\n", next_check, i, L, L2/L);
         GWNum T(D());
         gw().carefully().mul(X(), D(), D(), 0);
         swap(T, X());
