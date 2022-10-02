@@ -28,10 +28,10 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
 
     if (input.is_base2())
     {
-        InputNum input_k;
-        InputNum input_base2;
-        input.to_base2(input_k, input_base2);
-        _a = genProthBase(input_base2.gk(), input_base2.n());
+        _input_k.reset(new InputNum());
+        _input_base2.reset(new InputNum());
+        input.to_base2(*_input_k, *_input_base2);
+        _a = genProthBase(_input_base2->gk(), _input_base2->n());
         if (dynamic_cast<FastExp*>(_task.get()) != nullptr)
             params.maxmulbyconst = _a;
     }
@@ -39,10 +39,15 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
-    std::string factors;
-    for (auto it = _tasks.begin(); it != _tasks.end(); it++)
-        factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->second].first.to_string();
-    logging.info("Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
+    if (_input_base2)
+        logging.info("Proth test of %s = %s, a = %d.\n", input.display_text().data(), _input_base2->display_text().data(), _a);
+    else
+    {
+        std::string factors;
+        for (auto it = _tasks.begin(); it != _tasks.end(); it++)
+            factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->second].first.to_string();
+        logging.info("Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
+    }
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
 
     File* checkpoint = &file_checkpoint;
@@ -69,6 +74,18 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 _Xm1 = std::move(task.X0());
                 tmp = std::move(task.state()->X());
             }
+            if (_input_base2)
+            {
+                tmp += 1;
+                if (tmp != 0 && tmp != *gwstate.N)
+                {
+                    _success = false;
+                    _res64 = tmp.to_res64();
+                    logging.result(_success, "%s is not prime. Proth RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
+                    logging.result_save(input.input_text() + " is not prime. Proth RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
+                }
+                break;
+            }
             if (tmp != 1)
             {
                 tmp -= 1;
@@ -78,6 +95,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             else
                 it++;
         }
+        if (_input_base2)
+            break;
 
         if (G.size() > 0)
         {
@@ -109,7 +128,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 logging.progress().add_stage(_task->cost());
                 logging.progress().update(0, (int)gwstate.handle.fft_count/2);
                 logging.progress_save();
-                BaseExp::State state(_task->state()->iteration(), std::move(_Xm1));
+                BaseExp::State state(_n, std::move(_Xm1));
                 if (dynamic_cast<GerbiczCheckMultipointExp*>(_task.get()) != nullptr)
                     recoverypoint->write(state);
                 else
@@ -134,7 +153,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 gwstate.handle.fft_count = fft_count;
             }
 
-            factors = "";
+            std::string factors;
             for (auto it = _tasks.begin(); it != _tasks.end(); it++)
                 factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->second].first.to_string();
             logging.warning("Restarting Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());

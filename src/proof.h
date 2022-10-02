@@ -56,7 +56,7 @@ public:
     void init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputNum& input, Logging& logging, int a);
     void read_point(int index, TaskState& state, Logging& logging);
     void read_product(int index, TaskState& state, Logging& logging);
-    void on_point(int index, arithmetic::Giant& X);
+    bool on_point(int index, arithmetic::Giant& X);
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
     void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
     double cost();

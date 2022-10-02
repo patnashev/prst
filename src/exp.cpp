@@ -186,9 +186,8 @@ void MultipointExp::execute()
         if (!_tmp_state)
             _tmp_state.reset(new State());
         static_cast<State*>(_tmp_state.get())->set(i, X());
-        if (_on_point != nullptr)
+        if (_on_point != nullptr && _on_point(next_point, static_cast<State*>(_tmp_state.get())->X()))
         {
-            _on_point(next_point, static_cast<State*>(_tmp_state.get())->X());
             static_cast<State*>(_tmp_state.get())->set_written();
             _last_write = std::chrono::system_clock::now();
         }
@@ -299,6 +298,7 @@ void GerbiczCheckMultipointExp::Gerbicz_params(int iters, double log2b, int& L, 
     log2b = 1;
     L = (int)sqrt(iters/log2b);
     L2 = iters - iters%L;
+    L = L2/L;
     for (i = L + 1; i*i < 2*iters/log2b; i++)
         if (L2 < iters - iters%i)
         {
@@ -334,6 +334,11 @@ void GerbiczCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fi
 
 void GerbiczCheckMultipointExp::init_state(State* state)
 {
+    if (state == nullptr)
+    {
+        _state_recovery.reset();
+        return;
+    }
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
     _logging->set_prefix(_input->display_text() + " ");
     if (!_state_recovery)
@@ -412,6 +417,7 @@ void GerbiczCheckMultipointExp::release()
             _state->set(_state_recovery->iteration());
         }
     }
+    _tmp_state.reset();
     MultipointExp::release();
 }
 
@@ -583,9 +589,8 @@ void GerbiczCheckMultipointExp::execute()
         _tmp_state_recovery->set(i, R());
         if (i == _points[next_check])
         {
-            if (_on_point != nullptr)
+            if (_on_point != nullptr && _on_point(next_check, _tmp_state_recovery->X()))
             {
-                _on_point(next_check, _tmp_state_recovery->X());
                 _tmp_state_recovery->set_written();
                 _last_write = std::chrono::system_clock::now();
             }

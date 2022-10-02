@@ -326,6 +326,7 @@ void Test::run(Logging& logging, Params& global)
         gwstate.done();
         gwstate.next_fft_count = 1;
         input.setup(gwstate);
+        logging.info("Using %s.\n", gwstate.fft_description.data());
 
         Proof proof_build(Proof::BUILD, proof_count, input, params, logging);
         proof_build.points() = std::move(proof.points());
@@ -352,6 +353,7 @@ void Test::run(Logging& logging, Params& global)
         gwstate.done();
         gwstate.next_fft_count = 0;
         input.setup(gwstate);
+        logging.info("Using %s.\n", gwstate.fft_description.data());
 
         Proof proof_cert(Proof::CERT, Proof::read_cert_power(file_cert), input, params, logging);
         proof_cert.run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);

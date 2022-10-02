@@ -114,7 +114,7 @@ protected:
 class MultipointExp : public BaseExp
 {
 public:
-    MultipointExp(arithmetic::Giant& b, const std::vector<int>& points, std::function<void(int, arithmetic::Giant&)> on_point) : BaseExp(), _b(b), _points(points), _on_point(on_point)
+    MultipointExp(arithmetic::Giant& b, const std::vector<int>& points, std::function<bool(int, arithmetic::Giant&)> on_point) : BaseExp(), _b(b), _points(points), _on_point(on_point)
     {
     }
 
@@ -140,7 +140,7 @@ protected:
 protected:
     arithmetic::Giant& _b;
     const std::vector<int>& _points;
-    std::function<void(int, arithmetic::Giant&)> _on_point;
+    std::function<bool(int, arithmetic::Giant&)> _on_point;
 
     arithmetic::Giant _tail;
     std::unique_ptr<arithmetic::GWNum> _X;
@@ -173,7 +173,7 @@ public:
     };
 
 public:
-    GerbiczCheckMultipointExp(arithmetic::Giant& b, const std::vector<int>& points, int L, int L2, std::function<void(int, arithmetic::Giant&)> on_point) : MultipointExp(b, points, on_point), _L(L), _L2(L2)
+    GerbiczCheckMultipointExp(arithmetic::Giant& b, const std::vector<int>& points, int L, int L2, std::function<bool(int, arithmetic::Giant&)> on_point) : MultipointExp(b, points, on_point), _L(L), _L2(L2)
     {
     }
 
@@ -242,10 +242,10 @@ protected:
 class GerbiczCheckExp : public GerbiczCheckPoints, public GerbiczCheckMultipointExp
 {
 public:
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(log2(b), n, count), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(log2(b), n, count), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, on_point)
     {
     }
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, int L, std::function<void(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(n, count, L), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, int L, std::function<bool(int, arithmetic::Giant&)> on_point = nullptr) : GerbiczCheckPoints(n, count, L), GerbiczCheckMultipointExp(b, _recovery_points, GerbiczCheckPoints::_L, GerbiczCheckPoints::_L2, on_point)
     {
     }
 };

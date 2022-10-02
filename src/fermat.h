@@ -34,23 +34,20 @@ public:
     BaseExp* task() { return _task.get(); }
 
 protected:
-    void on_point(int index, arithmetic::Giant& X);
+    bool on_point(int index, arithmetic::Giant& X);
 
 protected:
     int _type;
-    std::unique_ptr<InputNum> _input_k;
-    std::unique_ptr<InputNum> _input_base2;
     int _a;
+    int _n;
+    Proof* _proof;
+    std::vector<int> _points;
+    arithmetic::Giant _Xm1;
 
     std::unique_ptr<BaseExp> _task_tail_simple;
     std::unique_ptr<BaseExp> _task_ak_simple;
     std::unique_ptr<BaseExp> _task_ak;
     std::unique_ptr<BaseExp> _task;
-
-    Proof* _proof;
-    int _n;
-    std::vector<int> _points;
-    arithmetic::Giant _Xm1;
 
     bool _success = false;
     std::string _res64;

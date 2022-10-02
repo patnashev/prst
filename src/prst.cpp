@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
     if (proof_op == Proof::CERT)
     {
     }
-    else if (input.c() == 1 && input.b() != 2 && (!input.is_base2() || proof))
+    else if (input.c() == 1 && input.b() != 2)
     {
         if (input.is_factorized_half())
             fermat.reset(new Pocklington(input, params, logging, proof.get()));

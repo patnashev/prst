@@ -11,6 +11,8 @@ public:
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof) override;
 
 protected:
+    std::unique_ptr<InputNum> _input_k;
+    std::unique_ptr<InputNum> _input_base2;
     std::list<std::pair<SlowExp,int>> _tasks;
 };
 

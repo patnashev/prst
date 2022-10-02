@@ -195,20 +195,20 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
     }
 
     logging.info("Saving %d proof points.\n", count());
-    GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
     int point = _count;
     while (point >= 0)
     {
-        if (taskGerbiczCheck != nullptr)
-            point -= point%_points_per_check;
+        point -= point%_points_per_check;
         if (_file_points[point]->read(*state) && state->iteration() == _points[point])
         {
-            if (task->state() == nullptr || task->state()->iteration() < state->iteration())
+            if (task->state() == nullptr || task->state()->iteration() < state->iteration() || (point < _count && task->state()->iteration() >= _points[point + 1]))
                 task->init_state(state.release());
             return;
         }
         point--;
     }
+    if (task->state() != nullptr)
+        task->init_state(nullptr);
 }
 
 void Proof::read_point(int index, TaskState& state, Logging& logging)
@@ -232,15 +232,16 @@ void Proof::read_product(int index, TaskState& state, Logging& logging)
     _file_products[index]->free_buffer();
 }
 
-void Proof::on_point(int index, arithmetic::Giant& X)
+bool Proof::on_point(int index, arithmetic::Giant& X)
 {
     if (index > _count)
-        return;
+        return false;
     BaseExp::State state(_points[index], std::move(X));
     _file_points[index]->write(state);
     if (!_cache_points)
         _file_points[index]->free_buffer();
     X = std::move(state.X());
+    return true;
 }
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
