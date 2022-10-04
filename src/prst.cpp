@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
     int proof_count = 0;
     std::string proof_cert;
     bool supportLLR2 = false;
+    bool force_fermat = false;
     InputNum input;
     std::string toFile;
     int log_level = Logging::LEVEL_WARNING;
@@ -220,6 +221,15 @@ int main(int argc, char *argv[])
                 if (strcmp(argv[i], "LLR2") == 0)
                     supportLLR2 = true;
             }
+            else if (strcmp(argv[i], "-fermat") == 0)
+            {
+                force_fermat = true;
+                if (i < argc - 2 && strcmp(argv[i + 1], "a") == 0)
+                {
+                    i += 2;
+                    params.FermatBase = atoi(argv[i]);
+                }
+            }
             else if (strcmp(argv[i], "-time") == 0)
             {
                 while (true)
@@ -281,6 +291,7 @@ int main(int argc, char *argv[])
     {
         printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
         printf("Options: [-t <threads>] [-spin <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("\t-fermat [a <a>] \n");
         printf("\t-proof {save <count> | build <count> [security <seed>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
         return 0;
@@ -316,7 +327,7 @@ int main(int argc, char *argv[])
     if (proof_op == Proof::CERT)
     {
     }
-    else if (input.c() == 1 && input.b() != 2)
+    else if (input.c() == 1 && input.b() != 2 && !force_fermat)
     {
         if (input.is_factorized_half())
             fermat.reset(new Pocklington(input, params, logging, proof.get()));
