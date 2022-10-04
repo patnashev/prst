@@ -111,79 +111,105 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         _a = genProthBase(input.gk(), input.n());
     _n = input.n() - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
 
-    bool CheckGerbicz = params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
     auto on_point = std::bind(&Fermat::on_point, this, std::placeholders::_1, std::placeholders::_2);
-
-    if (proof == nullptr && !CheckGerbicz)
+    Giant exp;
+    if ((proof == nullptr && (!CheckStrong || input.b() != 2)) || (proof != nullptr && proof->Li()))
     {
-        FastExp* task;
-        Giant exp;
         if (input.b() == 2)
             exp = input.gk() << _n;
         else
             exp = input.gk()*power(input.gb(), _n);
         exp += input.c() - 1;
-        _task.reset(task = new FastExp(std::move(exp)));
-        logging.progress().add_stage(task->exp().bitlen());
+    }
+
+    if (proof == nullptr && !CheckStrong)
+    {
+        _task.reset(new FastExp(std::move(exp)));
+        logging.progress().add_stage(_task->exp().bitlen());
         params.maxmulbyconst = _a;
         if (_type == PROTH || _type == POCKLINGTON)
-            _task_ak_simple.reset(new SlowExp(input.gb()));
+            _task_b_simple.reset(new CarefulExp(input.gb()));
     }
     else if (proof == nullptr)
     {
-        int checks = params.GerbiczCount ? params.GerbiczCount.value() : 16;
-        GerbiczCheckExp* task;
-        _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(input.gb(), _n, checks, params.GerbiczL.value(), on_point) : new GerbiczCheckExp(input.gb(), _n, checks, on_point));
-        if (_type == PROTH || _type == POCKLINGTON)
-            task->recovery_points().push_back(_n + 1);
-        _points = task->recovery_points();
-        if (params.SlidingWindow)
-            task->_W = params.SlidingWindow.value();
-        logging.progress().add_stage(task->cost());
+        int checks = params.StrongCount ? params.StrongCount.value() : 16;
+        if (input.b() == 2)
+        {
+            _task.reset(new GerbiczCheckExp(input.gb(), _n, checks, on_point, params.StrongL ? params.StrongL.value() : 0));
+            if (_type == PROTH || _type == POCKLINGTON)
+                _task->points().push_back(_n + 1);
+            _points = _task->points();
 
-        if (input.c() != 1)
-            _task_tail_simple.reset(new SlowExp(abs(input.c() - 1)));
-        if (input.k() != 1)
-            _task_ak_simple.reset(new SlowExp(input.gk()));
+            if (input.c() != 1)
+                _task_tail_simple.reset(new CarefulExp(abs(input.c() - 1)));
+            if (input.k() != 1)
+                _task_ak_simple.reset(new CarefulExp(input.gk()));
+        }
+        else
+        {
+            _task.reset(new LiCheckExp(std::move(exp), checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+            params.maxmulbyconst = _a;
+            if (_type == PROTH || _type == POCKLINGTON)
+                _task_b_simple.reset(new CarefulExp(input.gb()));
+        }
+        logging.progress().add_stage(_task->cost());
     }
     else
     {
-        _n = input.n() - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
-        proof->calc_points(_n, input, params, logging);
-        _points = proof->points();
-        if (_points.back() != _n)
-            _points.push_back(_n);
-        if (_type == PROTH || _type == POCKLINGTON)
-            _points.push_back(_n + 1);
-
+        if (proof->Li())
+            proof->calc_points(exp.bitlen() - 1, input, params, logging);
+        else
+            proof->calc_points(_n, input, params, logging);
         int L = 0, L2 = 0;
-        if (CheckGerbicz)
+        if (CheckStrong)
         {
             L2 = proof->M()*(params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1)/(params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1);
-            if (params.GerbiczL)
+            if (params.StrongL)
             {
-                L = params.GerbiczL.value();
-                if (params.GerbiczL2)
-                    L2 = params.GerbiczL2.value();
+                L = params.StrongL.value();
+                if (params.StrongL2)
+                    L2 = params.StrongL2.value();
                 else
                     L2 -= L2%L;
             }
             else
-                GerbiczCheckMultipointExp::Gerbicz_params(L2, log2(input.gb()), L, L2);
+                StrongCheckMultipointExp::Gerbicz_params(L2, 1.0, L, L2);
         }
 
-        MultipointExp* task;
-        _task.reset(task = CheckGerbicz ? new GerbiczCheckMultipointExp(input.gb(), _points, L, L2, on_point) : new MultipointExp(input.gb(), _points, on_point));
-        GerbiczCheckMultipointExp* taskCheck = dynamic_cast<GerbiczCheckMultipointExp*>(task);
-        if (params.SlidingWindow)
-            task->_W = params.SlidingWindow.value();
-        logging.progress().add_stage(task->cost());
-        logging.progress().add_stage(proof->cost());
+        if (proof->Li())
+        {
+            auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2);
+            if (!CheckStrong)
+                _task.reset(new MultipointExp(std::move(exp), false, proof->points(), on_point));
+            else
+                _task.reset(new StrongCheckMultipointExp(std::move(exp), false, proof->points(), L, L2, on_point));
+            params.maxmulbyconst = _a;
+            if (_type == PROTH || _type == POCKLINGTON)
+                _task_b_simple.reset(new CarefulExp(input.gb()));
+        }
+        else
+        {
+            _points = proof->points();
+            if (_points.back() != _n)
+                _points.push_back(_n);
+            if (_type == PROTH || _type == POCKLINGTON)
+                _points.push_back(_n + 1);
 
-        if (input.c() != 1)
-            _task_tail_simple.reset(new SlowExp(abs(input.c() - 1)));
-        if (input.k() != 1)
-            _task_ak_simple.reset(new SlowExp(input.gk()));
+            if (!CheckStrong)
+                _task.reset(new MultipointExp(input.gb(), true, _points, on_point));
+            else
+                _task.reset(new StrongCheckMultipointExp(input.gb(), true, _points, L, L2, on_point));
+            if (params.SlidingWindow)
+                _task->_W = params.SlidingWindow.value();
+
+            if (input.c() != 1)
+                _task_tail_simple.reset(new CarefulExp(abs(input.c() - 1)));
+            if (input.k() != 1)
+                _task_ak_simple.reset(new CarefulExp(input.gk()));
+        }
+        logging.progress().add_stage(_task->cost());
+        logging.progress().add_stage(proof->cost());
     }
 
     _task->set_error_check(!params.CheckNear || params.CheckNear.value(), params.Check && params.Check.value());
@@ -191,6 +217,8 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         _task_tail_simple->set_error_check(false, true);
     if (_task_ak_simple)
         _task_ak_simple->set_error_check(false, true);
+    if (_task_b_simple)
+        _task_b_simple->set_error_check(false, true);
 }
 
 bool Fermat::on_point(int index, arithmetic::Giant& X)
@@ -225,7 +253,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             tail = _a*_a;
         else
         {
-            static_cast<SlowExp*>(_task_tail_simple.get())->init(&input, &gwstate, nullptr, &logging, ak);
+            _task_tail_simple->init(&input, &gwstate, nullptr, &logging, ak);
             _task_tail_simple->run();
             tail = std::move(_task_tail_simple->state()->X());
         }
@@ -233,49 +261,43 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             tail.inv(*gwstate.N);
     }
 
-    FastExp* taskFast = dynamic_cast<FastExp*>(_task.get());
-    if (taskFast != nullptr)
+    StrongCheckMultipointExp* taskCheck = dynamic_cast<StrongCheckMultipointExp*>(_task.get());
+    if (taskCheck != nullptr && taskCheck->smooth())
+        taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::true_type(), std::move(tail));
+    else if (taskCheck != nullptr)
+        taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, _a, std::move(tail));
+    else if (_task->smooth())
+        _task->init(&input, &gwstate, &file_checkpoint, &logging, std::true_type(), std::move(tail));
+    else
+        _task->init(&input, &gwstate, &file_checkpoint, &logging, _a, std::move(tail));
+    if (proof != nullptr)
+        proof->init_state(_task.get(), gwstate, input, logging, _a);
+    if (_task->smooth() && (_task->state() == nullptr || _task->state()->iteration() > _n))
     {
-        taskFast->init(&input, &gwstate, &file_checkpoint, &logging, _a);
-        taskFast->run();
         if (_task_ak_simple)
         {
-            _Xm1 = std::move(taskFast->state()->X());
-            static_cast<SlowExp*>(_task_ak_simple.get())->init(&input, &gwstate, nullptr, &logging, _Xm1);
+            _task_ak_simple->init(&input, &gwstate, nullptr, &logging, std::move(ak));
             _task_ak_simple->run();
-            taskFast->state()->X() = std::move(_task_ak_simple->state()->X());
+            ak = std::move(_task_ak_simple->state()->X());
         }
-    }
 
-    MultipointExp* taskMultipoint = dynamic_cast<MultipointExp*>(_task.get());
-    if (taskMultipoint != nullptr)
-    {
-        GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(taskMultipoint);
-        if (taskGerbiczCheck != nullptr)
-            taskGerbiczCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
-        else
-            taskMultipoint->init(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
         if (proof != nullptr)
-            proof->init_state(taskMultipoint, gwstate, input, logging, _a);
-        if (taskMultipoint->state() == nullptr || taskMultipoint->state()->iteration() > _n)
-        {
-            if (_task_ak_simple)
-            {
-                static_cast<SlowExp*>(_task_ak_simple.get())->init(&input, &gwstate, nullptr, &logging, std::move(ak));
-                _task_ak_simple->run();
-                ak = std::move(_task_ak_simple->state()->X());
-            }
+            proof->on_point(0, ak);
+        _task->init_state(new BaseExp::State(0, std::move(ak)));
+        if (proof != nullptr)
+            _task->state()->set_written();
+    }
+    if (_task->smooth() && (_type == PROTH || _type == POCKLINGTON) && _task->state()->iteration() == _n)
+        _Xm1 = _task->state()->X();
 
-            if (proof != nullptr)
-                proof->on_point(0, ak);
-            taskMultipoint->init_state(new BaseExp::State(0, std::move(ak)));
-            if (proof != nullptr)
-                taskMultipoint->state()->set_written();
-        }
-        else if ((_type == PROTH || _type == POCKLINGTON) && taskMultipoint->state()->iteration() == _n)
-            _Xm1 = taskMultipoint->state()->X();
+    _task->run();
 
-        taskMultipoint->run();
+    if (_task_b_simple)
+    {
+        _Xm1 = std::move(_task->state()->X());
+        _task_b_simple->init(&input, &gwstate, nullptr, &logging, _Xm1);
+        _task_b_simple->run();
+        _task->state()->X() = std::move(_task_b_simple->state()->X());
     }
 
     if (type() == PROTH)

@@ -30,7 +30,7 @@ public:
 
     BaseExp* task_tail_simple() { return _task_tail_simple.get(); }
     BaseExp* task_ak_simple() { return _task_ak_simple.get(); }
-    BaseExp* task_ak() { return _task_ak.get(); }
+    BaseExp* task_b_simple() { return _task_b_simple.get(); }
     BaseExp* task() { return _task.get(); }
 
 protected:
@@ -38,16 +38,16 @@ protected:
 
 protected:
     int _type;
-    int _a;
+    uint32_t _a;
     int _n;
     Proof* _proof;
     std::vector<int> _points;
     arithmetic::Giant _Xm1;
 
-    std::unique_ptr<BaseExp> _task_tail_simple;
-    std::unique_ptr<BaseExp> _task_ak_simple;
-    std::unique_ptr<BaseExp> _task_ak;
-    std::unique_ptr<BaseExp> _task;
+    std::unique_ptr<CarefulExp> _task_tail_simple;
+    std::unique_ptr<CarefulExp> _task_ak_simple;
+    std::unique_ptr<CarefulExp> _task_b_simple;
+    std::unique_ptr<MultipointExp> _task;
 
     bool _success = false;
     std::string _res64;

@@ -10,7 +10,7 @@
 
 using namespace arithmetic;
 
-Proof::Proof(int op, int count, InputNum& input, Params& params, Logging& logging) : _op(op), _count(count)
+Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging, std::optional<bool> forceLi) : _op(op), _count(count)
 {
     if ((op == SAVE || op == BUILD) && (count & (count - 1)) != 0)
     {
@@ -18,33 +18,50 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, Logging& loggin
         exit(0);
     }
 
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
+    _Li = forceLi ? forceLi.value() : input.b() != 2;
+
     if (op == SAVE)
         _task.reset(new ProofSave(*this));
     if (op == BUILD)
         _task.reset(new ProofBuild(*this, params.ProofSecuritySeed));
     if (op == CERT)
     {
-        _M = count;
-        _points.push_back(count);
-        bool CheckGerbicz = params.CheckGerbicz ? params.CheckGerbicz.value() : input.b() == 2;
+        Certificate cert;
+        if (!file_cert.read(cert) || (Li() && cert.a_power() == 0))
+        {
+            logging.error("Invalid certificate file.\n");
+            exit(0);
+        }
+        file_cert.free_buffer();
+        _M = cert.power();
+        _r_count = std::move(cert.X());
+        _r_0 = std::move(cert.a_base());
+        Giant b = input.gb();
+        if (Li())
+            b = 2;
+        _points.push_back(_M);
+        int checks = params.StrongCount ? params.StrongCount.value() : 1;
 
-        if (!CheckGerbicz)
-        {
-            MultipointExp* task;
-            _task.reset(task = new MultipointExp(input.gb(), _points, nullptr));
-            if (params.SlidingWindow)
-                task->_W = params.SlidingWindow.value();
-            logging.progress().add_stage(task->cost());
-        }
+        MultipointExp* task;
+        if (!CheckStrong)
+            _task.reset(task = new MultipointExp(b, true, _points, nullptr));
         else
+            _task.reset(task = new GerbiczCheckExp(b, _M, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+        if (params.SlidingWindow)
+            task->_W = params.SlidingWindow.value();
+
+        if (Li())
         {
-            int checks = params.GerbiczCount ? params.GerbiczCount.value() : 1;
-            GerbiczCheckExp* task;
-            _task.reset(task = params.GerbiczL ? new GerbiczCheckExp(input.gb(), _points[0], checks, params.GerbiczL.value()) : new GerbiczCheckExp(input.gb(), _points[0], checks));
+            if (!CheckStrong)
+                _taskA.reset(task = new SlidingWindowExp(std::move(cert.a_power())));
+            else
+                _taskA.reset(task = new LiCheckExp(std::move(cert.a_power()), checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
             if (params.SlidingWindow)
                 task->_W = params.SlidingWindow.value();
-            logging.progress().add_stage(task->cost());
+            logging.progress().add_stage(_taskA->cost());
         }
+        logging.progress().add_stage(_task->cost());
     }
     if ((op == BUILD && (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())) || op == ROOT)
     {
@@ -72,41 +89,31 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, Logging& loggin
             for (auto it = factors.begin(); it != factors.end(); it++)
                 exp *= *it;
         }
-        _taskRoot.reset(new SlowExp(std::move(exp)));
+        _taskRoot.reset(new CarefulExp(std::move(exp)));
     }
 
     if (_task)
         _task->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
+    if (_taskA)
+        _taskA->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
     if (_taskRoot)
         _taskRoot->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
 }
 
-int Proof::read_cert_power(File& file_cert)
-{
-    std::unique_ptr<Reader> reader(file_cert.get_reader());
-    if (!reader)
-        return 0;
-    if (reader->type() != Certificate::TYPE)
-        return 0;
-    int power = 0;
-    reader->read(power);
-    return power;
-}
-
 void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging& logging)
 {
-    if (params.GerbiczCount)
-        if (params.GerbiczCount.value() > _count)
-            params.ProofChecksPerPoint = params.GerbiczCount.value()/_count;
+    if (params.StrongCount)
+        if (params.StrongCount.value() > _count)
+            params.ProofChecksPerPoint = params.StrongCount.value()/_count;
         else
-            params.ProofPointsPerCheck = _count/params.GerbiczCount.value();
+            params.ProofPointsPerCheck = _count/params.StrongCount.value();
     _points_per_check = 1;
-    if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck)
+    if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck && !Li())
     {
         int i;
         _points_per_check = params.ProofPointsPerCheck.value();
         int iters = iterations*_points_per_check/_count;
-        if (!params.GerbiczL)
+        if (!params.StrongL)
         {
             int L = _points_per_check*(int)sqrt(iters);
             int L2 = iters - iters%L;
@@ -116,11 +123,11 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
                     L = i;
                     L2 = iters - iters%i;
                 }
-            params.GerbiczL = L/_points_per_check;
+            params.StrongL = L/_points_per_check;
             _M = L2/_points_per_check;
         }
         else
-            _M = (iters - iters%(params.GerbiczL.value()*_points_per_check))/_points_per_check;
+            _M = (iters - iters%(params.StrongL.value()*_points_per_check))/_points_per_check;
         _points.reserve(_count + 2);
         for (i = 0; i <= _count; i++)
             _points.push_back(i*_M);
@@ -172,19 +179,27 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
             logging.info("Building certificate from %d products.\n", depth());
         logging.set_prefix(input.display_text() + " ");
 
-        read_point(0, *state, logging);
-        double timer = getHighResTimer();
-        Giant tmp;
-        tmp = a;
-        tmp.arithmetic().powermod(tmp, input.gk(), *gwstate.N, tmp);
-        if (tmp != state->X())
+        if (!Li())
         {
-            logging.error("invalid a^k.\n");
-            throw TaskAbortException();
+            read_point(0, *state, logging);
+            double timer = getHighResTimer();
+            Giant tmp;
+            tmp = a;
+            tmp.arithmetic().powermod(tmp, input.gk(), *gwstate.N, tmp);
+            if (tmp != state->X())
+            {
+                logging.error("invalid a^k.\n");
+                throw TaskAbortException();
+            }
+            timer = (getHighResTimer() - timer)/getHighResTimerFrequency();
+            logging.info("a^k is correct. Time: %.1f s.\n", timer);
+            _r_0 = std::move(state->X());
         }
-        timer = (getHighResTimer() - timer)/getHighResTimerFrequency();
-        logging.info("a^k is correct. Time: %.1f s.\n", timer);
-        _r_0 = std::move(state->X());
+        else
+        {
+            _r_0 = a;
+            _r_exp = &task->exp();
+        }
 
         read_point(_count, *state, logging);
         _r_count = state->X();
@@ -244,24 +259,41 @@ bool Proof::on_point(int index, arithmetic::Giant& X)
     return true;
 }
 
-void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
-    logging.info("Verifying certificate of %s, %d iterations.\n", input.display_text().data(), _points[0]);
-
-    MultipointExp* taskMultipoint = dynamic_cast<MultipointExp*>(_task.get());
-    if (taskMultipoint != nullptr)
+    Giant tail;
+    if (Li())
     {
-        GerbiczCheckMultipointExp* taskGerbiczCheck = dynamic_cast<GerbiczCheckMultipointExp*>(taskMultipoint);
-        if (taskGerbiczCheck != nullptr)
-            taskGerbiczCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging);
+        File* file_checkpoint_a(file_checkpoint.add_child("a", file_checkpoint.fingerprint()));
+        File* file_recoverypoint_a(file_recoverypoint.add_child("a", file_recoverypoint.fingerprint()));
+        logging.info("Verifying certificate of %s, %d+%d iterations.\n", input.display_text().data(), _taskA->exp().bitlen() - 1, _M);
+
+        MultipointExp* taskA = dynamic_cast<MultipointExp*>(_taskA.get());
+        StrongCheckMultipointExp* taskACheck = dynamic_cast<StrongCheckMultipointExp*>(_taskA.get());
+        if (taskACheck != nullptr)
+            taskACheck->init(&input, &gwstate, file_checkpoint_a, file_recoverypoint_a, &logging, std::move(_r_0));
         else
-            taskMultipoint->init(&input, &gwstate, &file_checkpoint, &logging);
-        if (taskMultipoint->state() == nullptr)
-        {
-            std::unique_ptr<Certificate> cert(read_state<Certificate>(&file_cert));
-            file_cert.free_buffer();
-            taskMultipoint->init_state(new BaseExp::State(0, std::move(cert->X())));
-        }
+            taskA->init(&input, &gwstate, file_checkpoint_a, &logging, std::move(_r_0));
+        _taskA->run();
+        tail = std::move(_taskA->state()->X());
+
+        logging.progress().next_stage();
+        file_checkpoint_a->clear();
+        file_recoverypoint_a->clear();
+    }
+    else
+        logging.info("Verifying certificate of %s, %d iterations.\n", input.display_text().data(), _points[0]);
+
+    MultipointExp* task = dynamic_cast<MultipointExp*>(_task.get());
+    if (task != nullptr)
+    {
+        StrongCheckMultipointExp* taskCheck = dynamic_cast<StrongCheckMultipointExp*>(_task.get());
+        if (taskCheck != nullptr)
+            taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::true_type(), tail);
+        else
+            task->init(&input, &gwstate, &file_checkpoint, &logging, std::true_type(), tail);
+        if (task->state() == nullptr)
+            task->init_state(new BaseExp::State(0, std::move(_r_count)));
     }
     _task->run();
 
@@ -276,7 +308,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, 
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, Giant* X)
 {
-    SlowExp* taskRoot = dynamic_cast<SlowExp*>(_taskRoot.get());
+    CarefulExp* taskRoot = dynamic_cast<CarefulExp*>(_taskRoot.get());
     if (taskRoot != nullptr && X != nullptr)
     {
         taskRoot->init(&input, &gwstate, nullptr, &logging, std::move(*X));
@@ -488,17 +520,25 @@ void ProofBuild::init(InputNum* input, arithmetic::GWState* gwstate, Logging* lo
 
 void ProofBuild::execute()
 {
-    int i, M, t;
+    int M, t, i, j, k;
     Proof::Product state_d;
     GWNum X(gw());
     GWNum Y(gw());
     GWNum D(gw());
     GWNum T(gw());
-    Giant h(GiantsArithmetic::default_arithmetic(), 4);
     Giant exp;
+    int len;
+    Giant a_power;
+    std::vector<Giant> tree;
+    std::vector<Giant> h;
 
     t = _proof.depth();
     X = _proof.r_0();
+    if (_proof.Li())
+    {
+        len = _proof.r_exp().bitlen() - 1;
+        _proof.r_exp().arithmetic().substr(_proof.r_exp(), len - _proof.points()[1], _proof.points()[1], a_power);
+    }
 
     if (state() == nullptr)
         _state.reset(new State(0, std::move(_proof.r_count())));
@@ -509,19 +549,44 @@ void ProofBuild::execute()
     {
         _proof.read_product(i, state_d, *_logging);
         D = state_d.X();
-        hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h);
-        make_prime(h);
+        h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
+        hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h[i]);
+        make_prime(h[i]);
 
-        exp = h;
-        if (M%2 != 0)
+        if (_proof.Li())
+        {
+            a_power *= h[i];
+            while (tree.size() < i)
+                tree.emplace_back();
+            for (j = 0; j < (1 << i); j++)
+            {
+                k = (1 + j*2) << (t - i - 1);
+                _proof.r_exp().arithmetic().substr(_proof.r_exp(), len - _proof.points()[k + 1], _proof.points()[k + 1] - _proof.points()[k], exp);
+                for (k = 1; k <= i; k++)
+                    if ((j & (1 << (k - 1))) == 0)
+                    {
+                        tree[i - k] = exp;
+                        break;
+                    }
+                    else
+                        exp += tree[i - k]*h[i - k];
+            }
+            a_power += exp;
+        }
+
+        exp = h[i];
+        if (M%2 != 0 && !_proof.Li())
             exp *= _input->gb();
+        if (M%2 != 0 && _proof.Li())
+            exp *= 2;
         exp_gw(gw().carefully(), exp, X, T = X, 0);
         gw().carefully().mul(D, X, X, 0);
 
-        exp_gw(gw().carefully(), h, D, T = D, 0);
+        exp_gw(gw().carefully(), h[i], D, T = D, 0);
         gw().carefully().mul(D, Y, Y, 0);
     }
 
+    D = _proof.r_0();
     if (!_rnd_seed.empty())
     {
         _raw_res64 = state()->X().to_res64();
@@ -532,6 +597,8 @@ void ProofBuild::execute()
 
         exp_gw(gw().carefully(), exp, X, T = X, 0);
         exp_gw(gw().carefully(), exp, Y, T = Y, 0);
+        if (_proof.Li())
+            exp_gw(gw().carefully(), exp, D, T = D, 0);
 
         commit_execute<State>(t + 1, Y);
     }
@@ -543,7 +610,10 @@ void ProofBuild::execute()
     }
 
     Proof::Certificate cert;
-    cert.set(M, X);
+    if (!_proof.Li())
+        cert.set(M, X);
+    else
+        cert.set(M, X, a_power, D);
     _proof.file_cert()->write(cert);
     _proof.file_cert()->free_buffer();
 

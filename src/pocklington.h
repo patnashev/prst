@@ -13,7 +13,7 @@ public:
 protected:
     std::unique_ptr<InputNum> _input_k;
     std::unique_ptr<InputNum> _input_base2;
-    std::list<std::pair<SlowExp,int>> _tasks;
+    std::list<std::pair<CarefulExp,int>> _tasks;
 };
 
 template<class IT>

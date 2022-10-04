@@ -13,10 +13,10 @@ public:
     std::optional<bool> Check;
     std::optional<bool> CheckNear;
 
-    std::optional<bool> CheckGerbicz;
-    std::optional<int> GerbiczCount;
-    std::optional<int> GerbiczL;
-    std::optional<int> GerbiczL2;
+    std::optional<bool> CheckStrong;
+    std::optional<int> StrongCount;
+    std::optional<int> StrongL;
+    std::optional<int> StrongL2;
 
     std::optional<int> SlidingWindow;
 

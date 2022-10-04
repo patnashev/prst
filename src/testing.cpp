@@ -94,7 +94,7 @@ int testing_main(int argc, char *argv[])
                     else if (i < argc - 1 && strcmp(argv[i + 1], "Gerbicz") == 0)
                     {
                         i++;
-                        params.CheckGerbicz = true;
+                        params.CheckStrong = true;
                     }
                     else
                         break;
@@ -266,18 +266,16 @@ void Test::run(Logging& logging, Params& global)
     Params params;
     params.Check = global.Check;
     params.CheckNear = global.CheckNear;
-    params.CheckGerbicz = global.CheckGerbicz;
-    if (input.b() == 5) // tail mode
-        params.ProofPointsPerCheck = 1;
+    params.CheckStrong = global.CheckStrong;
     params.ProofSecuritySeed = "12345";
     params.RootOfUnityCheck = false;
     int proof_count = 16;
 
-    Proof proof(Proof::SAVE, proof_count, input, params, logging);
-    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
-
     uint32_t fingerprint = input.fingerprint();
     File file_cert("prst_cert", fingerprint);
+    Proof proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
+    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
+
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count]));
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
@@ -305,6 +303,8 @@ void Test::run(Logging& logging, Params& global)
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
         if (res64 == 0)
             res64 = fermat.success() ? 1 : std::stoull(fermat.res64(), nullptr, 16);
+        if (input.b() != 2)
+            cert64 = 0;
         if (cert64 == 0)
             cert64 = std::stoull(proof.res64(), nullptr, 16);
         if (fermat.success() != (res64 == 1))
@@ -328,7 +328,7 @@ void Test::run(Logging& logging, Params& global)
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
 
-        Proof proof_build(Proof::BUILD, proof_count, input, params, logging);
+        Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
         proof_build.points() = std::move(proof.points());
         proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
         logging.progress().add_stage(1);
@@ -355,8 +355,8 @@ void Test::run(Logging& logging, Params& global)
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
 
-        Proof proof_cert(Proof::CERT, Proof::read_cert_power(file_cert), input, params, logging);
-        proof_cert.run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging);
+        proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
             logging.error("Certificate mismatch.\n");
@@ -376,7 +376,7 @@ void RootsTest(Logging& logging, Params& global)
     Params params;
     params.Check = global.Check;
     params.CheckNear = global.CheckNear;
-    params.CheckGerbicz = global.CheckGerbicz;
+    params.CheckStrong = global.CheckStrong;
     params.RootOfUnityCheck = false;
     InputNum input;
     int proof_count = 4;
@@ -388,13 +388,13 @@ void RootsTest(Logging& logging, Params& global)
 
     input.parse("3*2^353+1");
 
-    Proof proof(Proof::SAVE, proof_count, input, params, logging);
-    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
-    Proof proof_build(Proof::BUILD, proof_count, input, params, logging);
-    proof_build.points() = proof.points();
-
     uint32_t fingerprint = input.fingerprint();
     File file_cert("prst_cert", fingerprint);
+    Proof proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
+    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
+    Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
+    proof_build.points() = proof.points();
+
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count]));
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
@@ -434,8 +434,8 @@ void RootsTest(Logging& logging, Params& global)
         proof.run(input, gwstate, logging, nullptr);
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
 
-        Proof proof_cert(Proof::CERT, Proof::read_cert_power(file_cert), input, params, logging);
-        proof_cert.run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging);
+        proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() == proof_build.res64())
         {
             logging.error("Certificate failure.\n");
@@ -458,15 +458,15 @@ void RootsTest(Logging& logging, Params& global)
             throw TaskAbortException();
         }
 
-        Proof proof_cert(Proof::CERT, Proof::read_cert_power(file_cert), input, params, logging);
-        proof_cert.run(input, gwstate, file_cert, file_checkpoint, file_recoverypoint, logging);
+        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging, false);
+        proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
             logging.error("Attacking certificate mismatch.\n");
             throw TaskAbortException();
         }
 
-        Proof proof_root(Proof::ROOT, proof_count, input, params, logging);
+        Proof proof_root(Proof::ROOT, proof_count, input, params, file_cert, logging);
         try
         {
             proof_root.run(input, gwstate, logging, &fermat.result());

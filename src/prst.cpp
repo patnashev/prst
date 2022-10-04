@@ -41,10 +41,10 @@ int main(int argc, char *argv[])
     // -1 test metadata
     //  0 number
     //  1 checkpoint
-    //  2 Gerbicz check checkpoint
+    //  2 strong check checkpoint
     //  3 proof product
     //  4 certificate
-    //  5 Gerbicz check placeholder
+    //  5 strong check placeholder
 
     int i;
     GWState gwstate;
@@ -162,16 +162,6 @@ int main(int argc, char *argv[])
                             proof_cert = argv[i];
                         }
                     }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "check") == 0)
-                    {
-                        i += 2;
-                        params.CheckGerbicz = true;
-                        int check = atoi(argv[i]);
-                        if (check > proof_count)
-                            params.ProofChecksPerPoint = check/proof_count;
-                        else
-                            params.ProofPointsPerCheck = proof_count/check;
-                    }
                     else if (i < argc - 2 && strcmp(argv[i + 1], "security") == 0)
                     {
                         i += 2;
@@ -201,24 +191,24 @@ int main(int argc, char *argv[])
                         params.CheckNear = false;
                         params.Check = false;
                     }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "Gerbicz") == 0)
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "strong") == 0)
                     {
                         i++;
-                        params.CheckGerbicz = true;
+                        params.CheckStrong = true;
                         if (i < argc - 2 && strcmp(argv[i + 1], "count") == 0)
                         {
                             i += 2;
-                            params.GerbiczCount = atoi(argv[i]);
+                            params.StrongCount = atoi(argv[i]);
                         }
                         if (i < argc - 2 && strcmp(argv[i + 1], "L") == 0)
                         {
                             i += 2;
-                            params.GerbiczL = atoi(argv[i]);
+                            params.StrongL = atoi(argv[i]);
                         }
                         if (i < argc - 2 && strcmp(argv[i + 1], "L2") == 0)
                         {
                             i += 2;
-                            params.GerbiczL2 = atoi(argv[i]);
+                            params.StrongL2 = atoi(argv[i]);
                         }
                     }
                     else
@@ -292,7 +282,7 @@ int main(int argc, char *argv[])
         printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
         printf("Options: [-t <threads>] [-spin <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
         printf("\t-proof {save <count> | build <count> [security <seed>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
-        printf("\t-check [{near | always| never}] [Gerbicz [count <count>] [L <L>]] \n");
+        printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
         return 0;
     }
     if (!toFile.empty())
@@ -319,14 +309,7 @@ int main(int argc, char *argv[])
     newFile(file_cert, !proof_cert.empty() && proof_cert != "default" ? proof_cert : "prst_" + std::to_string(fingerprint) + ".cert", fingerprint, Proof::Certificate::TYPE);
     std::unique_ptr<Proof> proof;
     if (proof_op != Proof::NO_OP)
-    {
-        if (proof_op == Proof::CERT && (proof_count = Proof::read_cert_power(*file_cert)) == 0)
-        {
-            logging.error("Invalid certificate file.\n");
-            return 0;
-        }
-        proof.reset(new Proof(proof_op, proof_count, input, params, logging));
-    }
+        proof.reset(new Proof(proof_op, proof_count, input, params, *file_cert, logging));
 
     std::unique_ptr<Fermat> fermat;
     
@@ -365,7 +348,7 @@ int main(int argc, char *argv[])
             fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.r", fingerprint);
-            proof->run(input, gwstate, *file_cert, file_checkpoint, file_recoverypoint, logging);
+            proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
         else if (proof)
         {

@@ -24,7 +24,7 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
     for (j = 0; j < factors.size() && tmp*tmp < input.gb(); j++)
         tmp *= factors[j].first;
     for (i = 0; i < j; i++)
-        _tasks.emplace_back(SlowExp(input.gb()/input.b_factors()[factors[i].second].first), factors[i].second);
+        _tasks.emplace_back(CarefulExp(input.gb()/input.b_factors()[factors[i].second].first), factors[i].second);
 
     if (input.is_base2())
     {
@@ -32,7 +32,7 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
         _input_base2.reset(new InputNum());
         input.to_base2(*_input_k, *_input_base2);
         _a = genProthBase(_input_base2->gk(), _input_base2->n());
-        if (dynamic_cast<FastExp*>(_task.get()) != nullptr)
+        if (!_task->smooth())
             params.maxmulbyconst = _a;
     }
 }
@@ -63,7 +63,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
 
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
-            SlowExp& task = it->first;
+            CarefulExp& task = it->first;
             if (task.exp() == 1)
                 tmp = _Xm1;
             else
@@ -128,8 +128,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 logging.progress().add_stage(_task->cost());
                 logging.progress().update(0, (int)gwstate.handle.fft_count/2);
                 logging.progress_save();
-                BaseExp::State state(_n, std::move(_Xm1));
-                if (dynamic_cast<GerbiczCheckMultipointExp*>(_task.get()) != nullptr)
+                BaseExp::State state(_task->smooth() ? _n : _task->exp().bitlen() - 1, std::move(_Xm1));
+                if (dynamic_cast<StrongCheckMultipointExp*>(_task.get()) != nullptr)
                     recoverypoint->write(state);
                 else
                     checkpoint->write(state);
@@ -141,7 +141,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
 
             PrimeIterator primes = PrimeIterator::get();
-            for (; *primes <= _a; primes++);
+            for (; (uint32_t)*primes <= _a; primes++);
             _a = *primes;
             std::string sa = std::to_string(_a);
             if (dynamic_cast<FastExp*>(_task.get()) != nullptr)

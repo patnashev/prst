@@ -37,32 +37,37 @@ public:
     public:
         static const char TYPE = 4;
         Certificate() : TaskState(TYPE) { }
-        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; }
+        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; _a_power = 0; _a_base = 0; }
+        void set(int power, arithmetic::GWNum& X, arithmetic::Giant& a_power, arithmetic::GWNum& A) { TaskState::set(power); _X = X; _a_power = a_power; _a_base = A; }
         int power() { return _iteration; }
         arithmetic::Giant& X() { return _X; }
-        bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_X); }
-        void write(Writer& writer) override { TaskState::write(writer); writer.write(_X); }
+        arithmetic::Giant& a_power() { return _a_power; }
+        arithmetic::Giant& a_base() { return _a_base; }
+        bool read(Reader& reader) override { _a_power = 0; _a_base = 0; return TaskState::read(reader) && reader.read(_X) && ((reader.read(_a_power) && reader.read(_a_base)) || true); }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_X); writer.write(_a_power); writer.write(_a_base); }
 
     private:
         arithmetic::Giant _X;
+        arithmetic::Giant _a_power;
+        arithmetic::Giant _a_base;
     };
 
 public:
-    Proof(int op, int count, InputNum& input, Params& params, Logging& logging);
+    Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging, std::optional<bool> Li = std::optional<bool>());
 
-    static int read_cert_power(File& file_cert);
     void calc_points(int iterations, InputNum& input, Params& params, Logging& logging);
     void init_files(File* file_point, File* file_product, File* file_cert);
     void init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputNum& input, Logging& logging, int a);
     void read_point(int index, TaskState& state, Logging& logging);
     void read_product(int index, TaskState& state, Logging& logging);
     bool on_point(int index, arithmetic::Giant& X);
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_cert, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
+    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
     void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
     double cost();
 
     int op() { return _op; }
     int count() { return _count; }
+    bool Li() { return _Li; }
     int depth() { int t; for (t = 0; (1 << t) < _count; t++); return t; }
     std::vector<int>& points() { return _points; }
     int M() { return _M; }
@@ -74,12 +79,14 @@ public:
     File* file_cert() { return _file_cert; }
     arithmetic::Giant& r_0() { return _r_0; }
     arithmetic::Giant& r_count() { return _r_count; }
+    arithmetic::Giant& r_exp() { return *_r_exp; }
 
 protected:
 
 protected:
     int _op = 0;
     int _count = 0;
+    bool _Li = false;
     std::vector<int> _points;
     int _points_per_check = 1;
     int _M = 0;
@@ -89,7 +96,9 @@ protected:
     File* _file_cert = nullptr;
     arithmetic::Giant _r_0;
     arithmetic::Giant _r_count;
+    arithmetic::Giant* _r_exp;
     std::unique_ptr<BaseExp> _task;
+    std::unique_ptr<BaseExp> _taskA;
     std::unique_ptr<BaseExp> _taskRoot;
     std::string _res64;
 };
