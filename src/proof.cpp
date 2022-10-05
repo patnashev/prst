@@ -529,7 +529,7 @@ void ProofBuild::execute()
     GWNum D(gw());
     GWNum T(gw());
     Giant exp;
-    int len;
+    int len = 0;
     Giant a_power;
     std::vector<Giant> tree;
     std::vector<Giant> h;
