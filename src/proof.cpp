@@ -55,7 +55,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
             if (!CheckStrong)
                 _taskA.reset(task = new SlidingWindowExp(std::move(cert.a_power())));
             else
-                _taskA.reset(task = new LiCheckExp(std::move(cert.a_power()), checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+                _taskA.reset(task = new LiCheckExp(std::move(cert.a_power()), checks, params.StrongL ? params.StrongL.value() : 0));
             if (params.SlidingWindow)
                 task->_W = params.SlidingWindow.value();
             logging.progress().add_stage(_taskA->cost());
@@ -114,7 +114,7 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
         int iters = iterations*_points_per_check/_count;
         if (!params.StrongL)
         {
-            int L = _points_per_check*(int)sqrt(iters);
+            int L = _points_per_check*(int)std::sqrt(iters);
             int L2 = iters - iters%L;
             for (i = L + _points_per_check; i*i < 2*iters*_points_per_check*_points_per_check; i += _points_per_check)
                 if (L2 < iters - iters%i)
@@ -260,6 +260,7 @@ bool Proof::on_point(int index, arithmetic::Giant& X)
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
+    double timer = 0;
     Giant tail;
     if (Li())
     {
@@ -268,12 +269,13 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
         logging.info("Verifying certificate of %s, %d+%d iterations.\n", input.display_text().data(), _taskA->exp().bitlen() - 1, _M);
 
         MultipointExp* taskA = dynamic_cast<MultipointExp*>(_taskA.get());
-        StrongCheckMultipointExp* taskACheck = dynamic_cast<StrongCheckMultipointExp*>(_taskA.get());
+        LiCheckExp* taskACheck = dynamic_cast<LiCheckExp*>(_taskA.get());
         if (taskACheck != nullptr)
             taskACheck->init(&input, &gwstate, file_checkpoint_a, file_recoverypoint_a, &logging, std::move(_r_0));
         else
             taskA->init(&input, &gwstate, file_checkpoint_a, &logging, std::move(_r_0));
         _taskA->run();
+        timer = _taskA->timer();
         tail = std::move(_taskA->state()->X());
 
         logging.progress().next_stage();
@@ -295,10 +297,11 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
             task->init_state(new BaseExp::State(0, std::move(_r_count)));
     }
     _task->run();
+    timer += _task->timer();
 
     _res64 = _task->state()->X().to_res64();
-    logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
-    logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
+    logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
+    logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
 
     logging.progress().next_stage();
     file_checkpoint.clear();

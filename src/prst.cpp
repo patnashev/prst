@@ -1,7 +1,8 @@
-#define PRST_VERSION "0.5.0"
+#define PRST_VERSION "0.7.0"
 
-#include <signal.h>
+#include <cmath>
 #include <string.h>
+#include <signal.h>
 
 #include "gwnum.h"
 #include "cpuid.h"

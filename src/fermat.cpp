@@ -148,7 +148,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         }
         else
         {
-            _task.reset(new LiCheckExp(std::move(exp), checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+            _task.reset(new FastLiCheckExp(std::move(exp), checks, params.StrongL ? params.StrongL.value() : 0));
             params.maxmulbyconst = _a;
             if (_type == PROTH || _type == POCKLINGTON)
                 _task_b_simple.reset(new CarefulExp(input.gb()));

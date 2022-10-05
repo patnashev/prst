@@ -1,6 +1,9 @@
 
 #include <deque>
 #include <tuple>
+#include <cmath>
+#include <string.h>
+
 #include "gwnum.h"
 #include "cpuid.h"
 #include "arithmetic.h"

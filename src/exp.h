@@ -397,7 +397,7 @@ class LiCheckExp : public StrongCheckMultipointExp
 {
 public:
     template<class T>
-    LiCheckExp(T&& exp, int count, std::function<bool(int, arithmetic::Giant&)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(std::forward<T>(exp), false, std::vector<int>(), 0, 0, on_point)
+    LiCheckExp(T&& exp, int count, int L = 0) : StrongCheckMultipointExp(std::forward<T>(exp), false, std::vector<int>(), 0, 0, nullptr)
     {
         int n = _exp.bitlen() - 1;
         if (L == 0)
@@ -416,4 +416,26 @@ public:
 
     using StrongCheckMultipointExp::init_small;
     using StrongCheckMultipointExp::init;
+};
+
+class FastLiCheckExp : public LiCheckExp
+{
+public:
+    template<class T>
+    FastLiCheckExp(T&& exp, int count, int L = 0) : LiCheckExp(std::forward<T>(exp), count, L)
+    {
+    }
+
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0)
+    {
+        _x0 = x0;
+        StrongCheckMultipointExp::init(input, gwstate, file, file_recovery, logging);
+    }
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0, T&& tail)
+    {
+        _x0 = x0;
+        _tail = std::forward<T>(tail);
+        StrongCheckMultipointExp::init(input, gwstate, file, file_recovery, logging);
+    }
 };

@@ -311,8 +311,9 @@ void MultipointExp::sliding_window(const arithmetic::Giant& exp)
 
 double MultipointExp::cost()
 {
-    if (smooth() && b() == 2)
-        return _points[_points.size() - 1];
+    bool simple = dynamic_cast<SlidingWindowExp*>(this) == nullptr;
+    if ((smooth() && b() == 2) || (!smooth() && simple))
+        return _points.back();
     else if (smooth())
     {
         double log2b = log2(b());
@@ -333,7 +334,10 @@ double MultipointExp::cost()
     }
     else
     {
-        return _points[_points.size() - 1]*1.5;
+        int len = _exp.bitlen() - 1;
+        int W;
+        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + len*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + len*(1 + 1/(W + 2.0)); W++);
+        return (1 << (W - 1)) + _points.back()*(1 + 1/(W + 1.0));
     }
 }
 
@@ -343,7 +347,7 @@ void StrongCheckMultipointExp::Gerbicz_params(int iters, double log2b, int& L, i
     //if (log2b > 1.5)
     //    log2b /= 2;
     log2b = 1;
-    L = (int)sqrt(iters/log2b);
+    L = (int)std::sqrt(iters/log2b);
     L2 = iters - iters%L;
     L = L2/L;
     for (i = L + 1; i*i < 2*iters/log2b; i++)
@@ -357,23 +361,22 @@ void StrongCheckMultipointExp::Gerbicz_params(int iters, double log2b, int& L, i
 double StrongCheckMultipointExp::cost()
 {
     int n = _points.back();
-    if (smooth() && b() == 2)
-        return n;
+    bool simple = dynamic_cast<LiCheckExp*>(this) == nullptr || dynamic_cast<FastLiCheckExp*>(this) != nullptr;
+    if ((smooth() && b() == 2) || (!smooth() && simple))
+        return n + n/_L + n/_L2*(_L + (!smooth() ? (_L + std::log2(_L2/_L)) : 0));
     else if (smooth())
     {
-        if (b() == 2)
-            return n + n/_L + n/_L2*_L;
-        else
-        {
-            double log2b = log2(b());
-            int W;
-            for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*_L*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*_L*(1 + 1/(W + 2.0)); W++);
-            return n/_L + (n/_L + n/_L2)*((1 << (W - 1)) + log2b*_L*(1 + 1/(W + 1.0)));
-        }
+        double log2b = log2(b());
+        int W;
+        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*_L*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*_L*(1 + 1/(W + 2.0)); W++);
+        return n/_L + (n/_L + n/_L2)*((1 << (W - 1)) + log2b*_L*(1 + 1/(W + 1.0)));
     }
     else
     {
-        return n;
+        int len = _exp.bitlen() - 1;
+        int W;
+        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + len*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + len*(1 + 1/(W + 2.0)); W++);
+        return (1 << (W - 1)) + n*(1 + 1/(W + 1.0)) + n/_L + n/_L2*(_L + (_L + std::log2(_L2/_L))*(1 + 1/(W + 1.0)));
     }
 }
 
