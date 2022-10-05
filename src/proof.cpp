@@ -37,15 +37,14 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         _M = cert.power();
         _r_count = std::move(cert.X());
         _r_0 = std::move(cert.a_base());
+        int checks = params.StrongCount ? params.StrongCount.value() : 1;
+
         Giant b = input.gb();
         if (Li())
             b = 2;
-        _points.push_back(_M);
-        int checks = params.StrongCount ? params.StrongCount.value() : 1;
-
         MultipointExp* task;
         if (!CheckStrong)
-            _task.reset(task = new MultipointExp(b, true, _points, nullptr));
+            _task.reset(task = new SmoothExp(b, _M));
         else
             _task.reset(task = new GerbiczCheckExp(b, _M, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
         if (params.SlidingWindow)
@@ -282,23 +281,23 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
         file_recoverypoint_a->clear();
     }
     else
-        logging.info("Verifying certificate of %s, %d iterations.\n", input.display_text().data(), _points[0]);
+        logging.info("Verifying certificate of %s, %d iterations.\n", input.display_text().data(), _M);
 
     MultipointExp* task = dynamic_cast<MultipointExp*>(_task.get());
     if (task != nullptr)
     {
-        StrongCheckMultipointExp* taskCheck = dynamic_cast<StrongCheckMultipointExp*>(_task.get());
+        GerbiczCheckExp* taskCheck = dynamic_cast<GerbiczCheckExp*>(_task.get());
         if (taskCheck != nullptr)
-            taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::true_type(), tail);
+            taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
         else
-            task->init(&input, &gwstate, &file_checkpoint, &logging, std::true_type(), tail);
+            task->init_smooth(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
         if (task->state() == nullptr)
             task->init_state(new BaseExp::State(0, std::move(_r_count)));
     }
     _task->run();
 
     _res64 = _task->state()->X().to_res64();
-    logging.result(false, "%s certificate RES64: : %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
+    logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
     logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
 
     logging.progress().next_stage();

@@ -263,13 +263,13 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
 
     StrongCheckMultipointExp* taskCheck = dynamic_cast<StrongCheckMultipointExp*>(_task.get());
     if (taskCheck != nullptr && taskCheck->smooth())
-        taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::true_type(), std::move(tail));
+        taskCheck->init_smooth(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
     else if (taskCheck != nullptr)
-        taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, _a, std::move(tail));
+        taskCheck->init_small(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, _a, std::move(tail));
     else if (_task->smooth())
-        _task->init(&input, &gwstate, &file_checkpoint, &logging, std::true_type(), std::move(tail));
+        _task->init_smooth(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
     else
-        _task->init(&input, &gwstate, &file_checkpoint, &logging, _a, std::move(tail));
+        _task->init_small(&input, &gwstate, &file_checkpoint, &logging, _a, std::move(tail));
     if (proof != nullptr)
         proof->init_state(_task.get(), gwstate, input, logging, _a);
     if (_task->smooth() && (_task->state() == nullptr || _task->state()->iteration() > _n))

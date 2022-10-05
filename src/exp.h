@@ -82,13 +82,13 @@ public:
         _exp = std::forward<T>(exp);
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0)
     {
         _x0 = x0;
         init(input, gwstate, file, logging);
     }
     template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0, T&& tail)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0, T&& tail)
     {
         _x0 = x0;
         _tail = std::forward<T>(tail);
@@ -125,26 +125,30 @@ public:
         _smooth = smooth;
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, std::true_type smooth)
+    void init_smooth(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging)
     {
+        GWASSERT(smooth());
         init(input, gwstate, file, logging);
     }
     template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, std::true_type smooth, T&& tail)
+    void init_smooth(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& tail)
     {
+        GWASSERT(smooth());
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, logging);
     }
     virtual void init_state(State* state);
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0)
     {
+        GWASSERT(!smooth());
         _x0 = x0;
         init(input, gwstate, file, logging);
     }
     template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0, T&& tail)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0, T&& tail)
     {
+        GWASSERT(!smooth());
         _x0 = x0;
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, logging);
@@ -152,12 +156,14 @@ public:
     template<class T>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& X0)
     {
+        GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
         init(input, gwstate, file, logging);
     }
     template<class T, class S>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& X0, S&& tail)
     {
+        GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, logging);
@@ -186,6 +192,26 @@ protected:
 
     std::unique_ptr<arithmetic::GWNum> _X;
     std::vector<arithmetic::GWNum> _U;
+};
+
+class SmoothExp : public MultipointExp
+{
+public:
+    SmoothExp(arithmetic::Giant& b, int n) : MultipointExp(b, true, std::vector<int>(), nullptr)
+    {
+        _points.push_back(n);
+    }
+
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging)
+    {
+        MultipointExp::init(input, gwstate, file, logging);
+    }
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& tail)
+    {
+        _tail = std::forward<T>(tail);
+        MultipointExp::init(input, gwstate, file, logging);
+    }
 };
 
 class FastExp : public MultipointExp
@@ -266,26 +292,30 @@ public:
     {
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, std::true_type smooth)
+    void init_smooth(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging)
     {
+        GWASSERT(smooth());
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, std::true_type smooth, T&& tail)
+    void init_smooth(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail)
     {
+        GWASSERT(smooth());
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, file_recovery, logging);
     }
     virtual void init_state(State* state);
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0)
     {
+        GWASSERT(!smooth());
         _x0 = x0;
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0, T&& tail)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0, T&& tail)
     {
+        GWASSERT(!smooth());
         _x0 = x0;
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, file_recovery, logging);
@@ -293,12 +323,14 @@ public:
     template<class T>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& X0)
     {
+        GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T, class S>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& X0, S&& tail)
     {
+        GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, file_recovery, logging);
@@ -330,31 +362,6 @@ protected:
     std::unique_ptr<arithmetic::GWNum> _D;
 };
 
-class GerbiczCheckPoints
-{
-public:
-    GerbiczCheckPoints(double log2b, int n, int count)
-    {
-    }
-    GerbiczCheckPoints(int n, int count, int L) : _L(L)
-    {
-        _L2 = n/count;
-        _L2 -= _L2%L;
-        for (int i = 0; i <= count; i++)
-            _recovery_points.push_back(_L2*i);
-        if (_recovery_points.back() != n)
-            _recovery_points.push_back(n);
-    }
-
-    std::vector<int>& recovery_points() { return _recovery_points; }
-    int L() { return _L; }
-    int L2() { return _L2; }
-
-protected:
-    int _L, _L2;
-    std::vector<int> _recovery_points;
-};
-
 class GerbiczCheckExp : public StrongCheckMultipointExp
 {
 public:
@@ -372,6 +379,17 @@ public:
             _points.push_back(_L2*i);
         if (_points.back() != n)
             _points.push_back(n);
+    }
+
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging)
+    {
+        StrongCheckMultipointExp::init(input, gwstate, file, file_recovery, logging);
+    }
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail)
+    {
+        _tail = std::forward<T>(tail);
+        StrongCheckMultipointExp::init(input, gwstate, file, file_recovery, logging);
     }
 };
 
@@ -395,4 +413,7 @@ public:
         if (_points.back() != n)
             _points.push_back(n);
     }
+
+    using StrongCheckMultipointExp::init_small;
+    using StrongCheckMultipointExp::init;
 };
