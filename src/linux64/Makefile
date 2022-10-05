@@ -13,7 +13,7 @@ VPATH     = ..:../../framework:../../framework/arithmetic
 # insert proper dummy file to get _GWDATA data segment aligned
 # on a 32 byte boundary.  Use proper dummyNN.o to do the alignment
 
-DUMMY2 = ../gwnum/linux64/gwnum.ld
+DUMMY2 = ../../framework/gwnum/linux64/gwnum.ld
 LIBS2  = -lm -lpthread -lstdc++ -static
 
 CC  = gcc
