@@ -113,6 +113,8 @@ public:
     void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
 
 protected:
+    void setup() override { }
+    void release() override { }
     void execute() override;
     void read_point(int index, TaskState& state);
 
@@ -133,6 +135,8 @@ public:
     std::string& raw_res64() { return _raw_res64; }
 
 protected:
+    void setup() override { }
+    void release() override { }
     void execute() override;
 
 protected:

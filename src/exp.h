@@ -35,9 +35,6 @@ public:
     virtual ~BaseExp() { }
 
     virtual State* state() { return static_cast<State*>(Task::state()); }
-    double timer() { return _timer; }
-    int transforms() { return _transforms; }
-    void set_error_check(bool near, bool check);
     virtual double cost() { return _exp.bitlen(); }
 
     bool smooth() { return _smooth; }
@@ -48,18 +45,9 @@ public:
     uint32_t x0() { return !_smooth ? _x0 : 0; }
 
 protected:
-    void setup() override { }
-    void release() override { }
-    void reinit_gwstate() override;
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
-    void done();
+    void done() override;
 
 protected:
-    double _timer = 0;
-    int _transforms = 0;
-    bool _error_check_near = true;
-    bool _error_check_forced = false;
-
     bool _smooth;
     arithmetic::Giant _exp;
     arithmetic::Giant _tail;
@@ -70,11 +58,6 @@ protected:
 class CarefulExp : public BaseExp
 {
 public:
-    CarefulExp(CarefulExp&& a) : BaseExp()
-    {
-        _smooth = false;
-        _exp = std::move(a._exp);
-    }
     template<class T>
     CarefulExp(T&& exp) : BaseExp()
     {
@@ -82,37 +65,39 @@ public:
         _exp = std::forward<T>(exp);
     }
 
-    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, Logging* logging, uint32_t x0)
     {
         _x0 = x0;
-        init(input, gwstate, file, logging);
+        init(input, gwstate, logging);
     }
     template<class T>
-    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0, T&& tail)
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, Logging* logging, uint32_t x0, T&& tail)
     {
         _x0 = x0;
         _tail = std::forward<T>(tail);
-        init(input, gwstate, file, logging);
+        init(input, gwstate, logging);
     }
     template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& X0)
+    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging, T&& X0)
     {
         _X0 = std::forward<T>(X0);
-        init(input, gwstate, file, logging);
+        init(input, gwstate, logging);
     }
     template<class T, class S>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, T&& X0, S&& tail)
+    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging, T&& X0, S&& tail)
     {
         _X0 = std::forward<T>(X0);
         _tail = std::forward<T>(tail);
-        init(input, gwstate, file, logging);
+        init(input, gwstate, logging);
     }
 
     double cost() override { return _exp.bitlen()*1.5; }
 
 protected:
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
+    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
     void execute() override;
+    void setup() override { }
+    void release() override { }
 };
 
 class MultipointExp : public BaseExp

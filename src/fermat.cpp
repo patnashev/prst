@@ -253,7 +253,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             tail = _a*_a;
         else
         {
-            _task_tail_simple->init(&input, &gwstate, nullptr, &logging, ak);
+            _task_tail_simple->init(&input, &gwstate, &logging, ak);
             _task_tail_simple->run();
             tail = std::move(_task_tail_simple->state()->X());
         }
@@ -276,7 +276,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     {
         if (_task_ak_simple)
         {
-            _task_ak_simple->init(&input, &gwstate, nullptr, &logging, std::move(ak));
+            _task_ak_simple->init(&input, &gwstate, &logging, std::move(ak));
             _task_ak_simple->run();
             ak = std::move(_task_ak_simple->state()->X());
         }
@@ -295,7 +295,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     if (_task_b_simple)
     {
         _Xm1 = std::move(_task->state()->X());
-        _task_b_simple->init(&input, &gwstate, nullptr, &logging, _Xm1);
+        _task_b_simple->init(&input, &gwstate, &logging, _Xm1);
         _task_b_simple->run();
         _task->state()->X() = std::move(_task_b_simple->state()->X());
     }

@@ -28,10 +28,10 @@ public:
     std::string& res64() { return _res64; }
     arithmetic::Giant& result() { return _Xm1.empty() ? _task->state()->X() : _Xm1; }
 
-    BaseExp* task_tail_simple() { return _task_tail_simple.get(); }
-    BaseExp* task_ak_simple() { return _task_ak_simple.get(); }
-    BaseExp* task_b_simple() { return _task_b_simple.get(); }
-    BaseExp* task() { return _task.get(); }
+    CarefulExp* task_tail_simple() { return _task_tail_simple.get(); }
+    CarefulExp* task_ak_simple() { return _task_ak_simple.get(); }
+    CarefulExp* task_b_simple() { return _task_b_simple.get(); }
+    MultipointExp* task() { return _task.get(); }
 
 protected:
     bool on_point(int index, arithmetic::Giant& X);

@@ -313,7 +313,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging,
     CarefulExp* taskRoot = dynamic_cast<CarefulExp*>(_taskRoot.get());
     if (taskRoot != nullptr && X != nullptr)
     {
-        taskRoot->init(&input, &gwstate, nullptr, &logging, std::move(*X));
+        taskRoot->init(&input, &gwstate, &logging, std::move(*X));
         taskRoot->run();
         if (taskRoot->state()->X() == 1)
         {

@@ -10,42 +10,18 @@
 
 using namespace arithmetic;
 
-void BaseExp::set_error_check(bool near, bool check)
-{
-    _error_check_near = near;
-    _error_check_forced = check;
-    if (_gwstate != nullptr)
-        _error_check = _error_check_near ? gwnear_fft_limit(_gwstate->gwdata(), 1) == TRUE : _error_check_forced;
-}
-
-void BaseExp::init(InputNum* input, GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations)
-{
-    InputTask::init(input, gwstate, file, state, logging, iterations);
-    _timer = getHighResTimer();
-    _transforms = -(int)gwstate->handle.fft_count;
-    _error_check = _error_check_near ? gwnear_fft_limit(gwstate->gwdata(), 1) == TRUE : _error_check_forced;
-}
-
 void BaseExp::done()
 {
-    _timer = (getHighResTimer() - _timer)/getHighResTimerFrequency();
-    _transforms += (int)_gwstate->handle.fft_count;
-    _logging->progress().update(1, (int)_gwstate->handle.fft_count/2);
+    InputTask::done();
     _logging->set_prefix("");
 }
 
-void BaseExp::reinit_gwstate()
-{
-    InputTask::reinit_gwstate();
-    _error_check = _error_check_near ? gwnear_fft_limit(_gwstate->gwdata(), 1) == TRUE : _error_check_forced;
-}
-
-void CarefulExp::init(InputNum* input, GWState* gwstate, File* file, Logging* logging)
+void CarefulExp::init(InputNum* input, GWState* gwstate, Logging* logging)
 {
     GWASSERT(!smooth());
     GWASSERT(_x0 != 0 || !_X0.empty());
     GWASSERT(_x0 <= (uint32_t)gwstate->maxmulbyconst);
-    BaseExp::init(input, gwstate, file, read_state<State>(file), logging, _exp.bitlen() - 1 + (!_tail.empty() ? 1 : 0));
+    BaseExp::init(input, gwstate, nullptr, nullptr, logging, _exp.bitlen() - 1 + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE*2/3;
     _logging->set_prefix(input->display_text() + " ");
     if (state() != nullptr)
