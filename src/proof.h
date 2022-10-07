@@ -71,8 +71,8 @@ public:
     int depth() { int t; for (t = 0; (1 << t) < _count; t++); return t; }
     std::vector<int>& points() { return _points; }
     int M() { return _M; }
-    BaseExp* task() { return _task.get(); }
-    BaseExp* taskRoot() { return _taskRoot.get(); }
+    InputTask* task() { return _task.get(); }
+    CarefulExp* taskRoot() { return _taskRoot.get(); }
     std::string& res64() { return _res64; }
 
     std::vector<File*>& file_products() { return _file_products; }
@@ -97,13 +97,13 @@ protected:
     arithmetic::Giant _r_0;
     arithmetic::Giant _r_count;
     arithmetic::Giant* _r_exp;
-    std::unique_ptr<BaseExp> _task;
-    std::unique_ptr<BaseExp> _taskA;
-    std::unique_ptr<BaseExp> _taskRoot;
+    std::unique_ptr<InputTask> _task;
+    std::unique_ptr<MultipointExp> _taskA;
+    std::unique_ptr<CarefulExp> _taskRoot;
     std::string _res64;
 };
 
-class ProofSave : public BaseExp
+class ProofSave : public InputTask
 {
 public:
     ProofSave(Proof& proof) : _proof(proof)
@@ -112,17 +112,20 @@ public:
 
     void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
 
+    BaseExp::State* state() { return static_cast<BaseExp::State*>(Task::state()); }
+
 protected:
     void setup() override { }
     void release() override { }
     void execute() override;
+    void done() override;
     void read_point(int index, TaskState& state);
 
 protected:
     Proof& _proof;
 };
 
-class ProofBuild : public BaseExp
+class ProofBuild : public InputTask
 {
 public:
     ProofBuild(Proof& proof, const std::string& security_seed) : _proof(proof), _security_seed(security_seed)
@@ -131,6 +134,7 @@ public:
 
     void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
 
+    BaseExp::State* state() { return static_cast<BaseExp::State*>(Task::state()); }
     bool security() { return !_security_seed.empty(); }
     std::string& raw_res64() { return _raw_res64; }
 
@@ -138,6 +142,7 @@ protected:
     void setup() override { }
     void release() override { }
     void execute() override;
+    void done() override;
 
 protected:
     Proof& _proof;

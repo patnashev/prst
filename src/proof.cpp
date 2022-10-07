@@ -60,7 +60,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
                 task->_W = params.SlidingWindow.value();
             logging.progress().add_stage(_taskA->cost());
         }
-        logging.progress().add_stage(_task->cost());
+        logging.progress().add_stage(task->cost());
     }
     if ((op == BUILD && (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())) || op == ROOT)
     {
@@ -268,12 +268,11 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
         File* file_recoverypoint_a(file_recoverypoint.add_child("a", file_recoverypoint.fingerprint()));
         logging.info("Verifying certificate of %s, %d+%d iterations.\n", input.display_text().data(), _taskA->exp().bitlen() - 1, _M);
 
-        MultipointExp* taskA = dynamic_cast<MultipointExp*>(_taskA.get());
         LiCheckExp* taskACheck = dynamic_cast<LiCheckExp*>(_taskA.get());
         if (taskACheck != nullptr)
             taskACheck->init(&input, &gwstate, file_checkpoint_a, file_recoverypoint_a, &logging, std::move(_r_0));
         else
-            taskA->init(&input, &gwstate, file_checkpoint_a, &logging, std::move(_r_0));
+            _taskA->init(&input, &gwstate, file_checkpoint_a, &logging, std::move(_r_0));
         _taskA->run();
         timer = _taskA->timer();
         tail = std::move(_taskA->state()->X());
@@ -299,7 +298,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
     _task->run();
     timer += _task->timer();
 
-    _res64 = _task->state()->X().to_res64();
+    _res64 = task->state()->X().to_res64();
     logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
     logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
 
@@ -310,12 +309,11 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, Giant* X)
 {
-    CarefulExp* taskRoot = dynamic_cast<CarefulExp*>(_taskRoot.get());
-    if (taskRoot != nullptr && X != nullptr)
+    if (_taskRoot && X != nullptr)
     {
-        taskRoot->init(&input, &gwstate, &logging, std::move(*X));
-        taskRoot->run();
-        if (taskRoot->state()->X() == 1)
+        _taskRoot->init(&input, &gwstate, &logging, std::move(*X));
+        _taskRoot->run();
+        if (_taskRoot->state()->X() == 1)
         {
             logging.error("%s roots of unity check failed.\n", input.display_text().data());
             throw TaskAbortException();
@@ -363,9 +361,15 @@ double Proof::cost()
 
 void ProofSave::init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging)
 {
-    BaseExp::init(input, gwstate, nullptr, nullptr, logging, _proof.count());
+    InputTask::init(input, gwstate, nullptr, nullptr, logging, _proof.count());
     _state_update_period = 1;
     _logging->set_prefix(input->display_text() + " ");
+}
+
+void ProofSave::done()
+{
+    InputTask::done();
+    _logging->set_prefix("");
 }
 
 void ProofSave::read_point(int index, TaskState& state)
@@ -436,13 +440,13 @@ void ProofSave::execute()
 
     if (state() == nullptr)
     {
-        _state.reset(new State());
+        _state.reset(new BaseExp::State());
         read_point(_proof.count(), *state());
         static_cast<TaskState*>(state())->set(0);
     }
     Y = state()->X();
 
-    for (i = state()->iteration(); i < t; i++, commit_execute<State>(i, Y))
+    for (i = state()->iteration(); i < t; i++, commit_execute<BaseExp::State>(i, Y))
     {
         if (_proof.file_products()[i]->read(state_d))
         {
@@ -451,7 +455,7 @@ void ProofSave::execute()
         }
         else
         {
-            state_d.mimic_type(State::TYPE);
+            state_d.mimic_type(BaseExp::State::TYPE);
             if (i == 0)
             {
                 read_point(_proof.count()/2, state_d);
@@ -507,7 +511,7 @@ void ProofSave::execute()
 
 void ProofBuild::init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging)
 {
-    BaseExp::init(input, gwstate, nullptr, nullptr, logging, _proof.depth() + (security() ? 1 : 0));
+    InputTask::init(input, gwstate, nullptr, nullptr, logging, _proof.depth() + (security() ? 1 : 0));
     _state_update_period = 1;
     _logging->set_prefix(input->display_text() + " ");
     if (security())
@@ -518,6 +522,12 @@ void ProofBuild::init(InputNum* input, arithmetic::GWState* gwstate, Logging* lo
         _rnd_seed.arithmetic().init(_rnd_seed.data(), _rnd_seed.size() + 2, _rnd_seed);
         _logging->info("random seed: %s.\n", _rnd_seed.to_string().data());
     }
+}
+
+void ProofBuild::done()
+{
+    InputTask::done();
+    _logging->set_prefix("");
 }
 
 void ProofBuild::execute()
@@ -543,11 +553,11 @@ void ProofBuild::execute()
     }
 
     if (state() == nullptr)
-        _state.reset(new State(0, std::move(_proof.r_count())));
+        _state.reset(new BaseExp::State(0, std::move(_proof.r_count())));
     Y = state()->X();
 
     M = _proof.points()[_proof.count()];
-    for (i = 0; i < t; i++, commit_execute<State>(i, Y), M >>= 1)
+    for (i = 0; i < t; i++, commit_execute<BaseExp::State>(i, Y), M >>= 1)
     {
         _proof.read_product(i, state_d, *_logging);
         D = state_d.X();
@@ -602,7 +612,7 @@ void ProofBuild::execute()
         if (_proof.Li())
             exp_gw(gw().carefully(), exp, D, T = D, 0);
 
-        commit_execute<State>(t + 1, Y);
+        commit_execute<BaseExp::State>(t + 1, Y);
     }
 
     if (state()->X() == 0)
