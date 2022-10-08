@@ -306,8 +306,6 @@ void Test::run(Logging& logging, Params& global)
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
         if (res64 == 0)
             res64 = fermat.success() ? 1 : std::stoull(fermat.res64(), nullptr, 16);
-        if (input.b() != 2)
-            cert64 = 0;
         if (cert64 == 0)
             cert64 = std::stoull(proof.res64(), nullptr, 16);
         if (fermat.success() != (res64 == 1))
