@@ -558,6 +558,8 @@ int net_main(int argc, char *argv[])
         if (net.task()->mode == "VerifyCert")
             proof_op = Proof::CERT;
         int proof_count = 16;
+        if (net.task()->options.find("Gerbicz") != net.task()->options.end())
+            params.CheckStrong = net.task()->options["Gerbicz"] == "1";
         if (net.task()->options.find("ProofCount") != net.task()->options.end())
             proof_count = std::stoi(net.task()->options["ProofCount"]);
         if (net.task()->options.find("ProofName") != net.task()->options.end())

@@ -83,6 +83,8 @@ void MultipointExp::init(InputNum* input, GWState* gwstate, File* file, Logging*
     _state_update_period = MULS_PER_STATE_UPDATE;
     if (smooth() && b() != 2)
         _state_update_period = (int)(_state_update_period/log2(b()));
+    if (_error_check)
+        _logging->info("max roundoff check enabled.\n");
     State* state = read_state<State>(file);
     if (state != nullptr)
         init_state(state);
@@ -99,8 +101,6 @@ void MultipointExp::init_state(State* state)
     _logging->set_prefix(_input->display_text() + " ");
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
-    if (_error_check)
-        _logging->info("max roundoff check enabled.\n");
 }
 
 void MultipointExp::setup()
@@ -370,6 +370,11 @@ void StrongCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fil
     _state_update_period = MULS_PER_STATE_UPDATE;
     if (smooth() && b() != 2)
         _state_update_period = (int)(_state_update_period/log2(b()));
+    _logging->info("Gerbicz%s check enabled, L2 = %d*%d.\n", !smooth() ? "-Li" : "", _L, _L2/_L);
+    _logging->report_param("L", _L);
+    _logging->report_param("L2", _L2);
+    if (_error_check)
+        _logging->info("max roundoff check enabled.\n");
     _file_recovery = file_recovery;
     _state_recovery.reset();
     State* state_recovery = read_state<State>(file_recovery);
@@ -386,14 +391,6 @@ void StrongCheckMultipointExp::init_state(State* state)
     }
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
     _logging->set_prefix(_input->display_text() + " ");
-    if (!_state_recovery)
-    {
-        _logging->info("Gerbicz%s check enabled, L2 = %d*%d.\n", !smooth() ? "-Li" : "", _L, _L2/_L);
-        _logging->report_param("L", _L);
-        _logging->report_param("L2", _L2);
-        if (_error_check)
-            _logging->info("max roundoff check enabled.\n");
-    }
     _state_recovery.reset(state);
     _recovery_op = 0;
     if (!_state || (state_check() != nullptr ? state_check()->recovery() : _state->iteration()) != _state_recovery->iteration())
