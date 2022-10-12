@@ -282,7 +282,11 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         }
 
         if (proof != nullptr)
+        {
+            logging.progress().update(0, (int)gwstate.handle.fft_count/2);
+            logging.progress_save();
             proof->on_point(0, ak);
+        }
         _task->init_state(new BaseExp::State(0, std::move(ak)));
         if (proof != nullptr)
             _task->state()->set_written();

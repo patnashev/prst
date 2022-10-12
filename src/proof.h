@@ -71,6 +71,7 @@ public:
     int depth() { int t; for (t = 0; (1 << t) < _count; t++); return t; }
     std::vector<int>& points() { return _points; }
     int M() { return _M; }
+    void set_cache_points(bool value) { _cache_points = value; }
     InputTask* task() { return _task.get(); }
     CarefulExp* taskRoot() { return _taskRoot.get(); }
     std::string& res64() { return _res64; }

@@ -150,6 +150,7 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
         }
         _points.push_back(iterations);
     }
+    logging.report_param("M", _M);
 }
 
 void Proof::init_files(File* file_point, File* file_product, File* file_cert)
@@ -232,8 +233,7 @@ void Proof::read_point(int index, TaskState& state, Logging& logging)
         logging.error("%s is missing or corrupt.\n", _file_points[index]->filename().data());
         throw TaskAbortException();
     }
-    if (!_cache_points)
-        _file_points[index]->free_buffer();
+    _file_points[index]->free_buffer();
 }
 
 void Proof::read_product(int index, TaskState& state, Logging& logging)

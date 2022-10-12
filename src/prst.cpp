@@ -18,6 +18,9 @@
 #include "pocklington.h"
 #include "testing.h"
 #include "support.h"
+#ifdef NETPRST
+int net_main(int argc, char *argv[]);
+#endif
 
 using namespace arithmetic;
 

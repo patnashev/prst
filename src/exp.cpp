@@ -186,10 +186,15 @@ void MultipointExp::execute()
         if (!_tmp_state)
             _tmp_state.reset(new State());
         static_cast<State*>(_tmp_state.get())->set(i, X());
-        if (_on_point != nullptr && _on_point(next_point, static_cast<State*>(_tmp_state.get())->X()))
+        if (_on_point != nullptr)
         {
-            static_cast<State*>(_tmp_state.get())->set_written();
-            _last_write = std::chrono::system_clock::now();
+            _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+            _logging->progress_save();
+            if (_on_point(next_point, static_cast<State*>(_tmp_state.get())->X()))
+            {
+                static_cast<State*>(_tmp_state.get())->set_written();
+                _last_write = std::chrono::system_clock::now();
+            }
         }
         _tmp_state.swap(_state);
         on_state();
@@ -566,7 +571,11 @@ void StrongCheckMultipointExp::execute()
                     check();
                     tmp = X();
                     if (_on_point != nullptr)
+                    {
+                        _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                        _logging->progress_save();
                         _on_point(next_point, tmp);
+                    }
                     next_point++;
                     set_state<StrongCheckState>(i + 1, state()->iteration(), X(), D());
                 }
@@ -591,7 +600,11 @@ void StrongCheckMultipointExp::execute()
                     check();
                     tmp = X();
                     if (_on_point != nullptr)
+                    {
+                        _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                        _logging->progress_save();
                         _on_point(next_point, tmp);
+                    }
                     next_point++;
                     set_state<StrongCheckState>(i + L, state()->iteration(), X(), D());
                 }
@@ -610,7 +623,11 @@ void StrongCheckMultipointExp::execute()
                     check();
                     tmp = X();
                     if (_on_point != nullptr)
+                    {
+                        _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                        _logging->progress_save();
                         _on_point(next_point, tmp);
+                    }
                     next_point++;
                     set_state<StrongCheckState>(i + L, state()->iteration(), X(), D());
                     slide(_exp, _points[next_point], i + L, false);
@@ -697,10 +714,15 @@ void StrongCheckMultipointExp::execute()
         _tmp_state_recovery->set(i, R());
         if (i == _points[next_check])
         {
-            if (_on_point != nullptr && _on_point(next_check, _tmp_state_recovery->X()))
+            if (_on_point != nullptr)
             {
-                _tmp_state_recovery->set_written();
-                _last_write = std::chrono::system_clock::now();
+                _logging->progress().update(_points[next_check]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                _logging->progress_save();
+                if (_on_point(next_check, _tmp_state_recovery->X()))
+                {
+                    _tmp_state_recovery->set_written();
+                    _last_write = std::chrono::system_clock::now();
+                }
             }
             next_point++;
         }
