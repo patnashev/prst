@@ -366,6 +366,7 @@ void StrongCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fil
     GWASSERT(smooth() || _x0 != 0 || !_X0.empty());
     GWASSERT(!smooth() || (_x0 == 0 && _X0.empty()));
     GWASSERT(_x0 <= (uint32_t)gwstate->maxmulbyconst);
+    GWASSERT(_points.back() > 0);
     BaseExp::init(input, gwstate, file, read_state<StrongCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE;
     if (smooth() && b() != 2)
@@ -530,13 +531,12 @@ void StrongCheckMultipointExp::execute()
     if (i < 30)
         gwset_carefully_count(gw().gwdata(), 30 - i);
 
-    for (next_point = 0; next_point < _points.size() && state()->iteration() >= _points[next_point]; next_point++);
+    for (next_point = 0; next_point < _points.size() && state()->iteration() >= abs(_points[next_point]); next_point++);
     while (next_point < _points.size())
     {
-        for (next_check = next_point; next_check < _points.size() - 1 && _points[next_check] - state()->iteration() < _L2 && (!smooth() || b() == 2 || (_points[next_check] - state()->iteration())%_L == 0); next_check++);
+        for (next_check = next_point; _points[next_check] < 0; next_check++);
         int L = _L;
         int L2 = _L2;
-        int max_next_check = next_check;
         while ((_points[next_check] - state()->iteration()) < L2 && L > 1)
         {
             if (L == 3)
@@ -545,7 +545,7 @@ void StrongCheckMultipointExp::execute()
                 L /= 2;
             L2 = L*L;
             last_power = -1;
-            for (next_check = next_point; next_check < max_next_check && _points[next_check] - state()->iteration() < L2 && (!smooth() || b() == 2 || (_points[next_check] - state()->iteration())%L == 0); next_check++);
+            for (next_check = next_point; _points[next_check] < 0; next_check++);
         }
         if (i - state()->iteration() > L2)
         {
@@ -556,25 +556,25 @@ void StrongCheckMultipointExp::execute()
             _state->set(i);
         }
         else
-            for (; next_point < next_check && i >= _points[next_point]; next_point++);
+            for (; next_point < next_check && i >= abs(_points[next_point]); next_point++);
 
         if ((smooth() && b() == 2) || (!smooth() && _x0 > 0))
         {
             for (j = i - state()->iteration(); j < L2; j++, i++, commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
             {
-                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point] && j + 1 != L2));
-                if (j + 1 != L2 && i + 1 == _points[next_point])
+                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != abs(_points[next_point]) && j + 1 != L2));
+                if (j + 1 != L2 && i + 1 == -_points[next_point])
                 {
                     check();
                     tmp = X();
                     if (_on_point != nullptr)
                     {
-                        _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                        _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                         _logging->progress_save();
                         _on_point(next_point, tmp);
                     }
-                    next_point++;
                     set_state<StrongCheckState>(i + 1, state()->iteration(), X(), D());
+                    next_point++;
                 }
                 if (j + 1 != L2 && (j + 1)%L == 0)
                     gw().mul(X(), D(), D(), is_last(i) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + 1 + L != L2));
@@ -592,18 +592,18 @@ void StrongCheckMultipointExp::execute()
                     exp.power(last_power);
                 }
                 sliding_window(exp);
-                if (j + L != L2 && i + L == _points[next_point])
+                if (j + L != L2 && i + L == -_points[next_point])
                 {
                     check();
                     tmp = X();
                     if (_on_point != nullptr)
                     {
-                        _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                        _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                         _logging->progress_save();
                         _on_point(next_point, tmp);
                     }
-                    next_point++;
                     set_state<StrongCheckState>(i + L, state()->iteration(), X(), D());
+                    next_point++;
                 }
                 if (j + L != L2)
                     gw().mul(X(), D(), D(), is_last(i + L - 1) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2));
@@ -614,20 +614,20 @@ void StrongCheckMultipointExp::execute()
             GWASSERT((i - state()->iteration())%L == 0);
             for (j = i - state()->iteration(); j < L2; j += L, i += L, commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
             {
-                if (i + L >= _points[next_point] && _points[next_point] != state()->iteration() + L2)
+                if (_points[next_point] < 0 && i + L >= -_points[next_point])
                 {
-                    slide(_exp, i, _points[next_point], false);
+                    slide(_exp, i, -_points[next_point], false);
                     check();
                     tmp = X();
                     if (_on_point != nullptr)
                     {
-                        _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                        _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                         _logging->progress_save();
                         _on_point(next_point, tmp);
                     }
+                    set_state<StrongCheckState>(-_points[next_point], state()->iteration(), X(), D());
+                    slide(_exp, -_points[next_point], i + L, false);
                     next_point++;
-                    set_state<StrongCheckState>(i + L, state()->iteration(), X(), D());
-                    slide(_exp, _points[next_point], i + L, false);
                 }
                 else
                     slide(_exp, i, i + L, false);

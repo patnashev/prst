@@ -562,6 +562,8 @@ int net_main(int argc, char *argv[])
             params.CheckStrong = net.task()->options["Gerbicz"] == "1";
         if (net.task()->options.find("ProofCount") != net.task()->options.end())
             proof_count = std::stoi(net.task()->options["ProofCount"]);
+        if (net.task()->options.find("PointsPerL2") != net.task()->options.end())
+            params.StrongCount = proof_count/std::stoi(net.task()->options["PointsPerL2"]);
         if (net.task()->options.find("ProofName") != net.task()->options.end())
             params.ProofPointFilename = net.task()->options["ProofName"];
         if (net.task()->options.find("ProductName") != net.task()->options.end())

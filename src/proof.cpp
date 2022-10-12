@@ -101,35 +101,35 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
 
 void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging& logging)
 {
-    if (params.StrongCount)
+    if (params.CheckStrong && params.CheckStrong.value() && params.StrongCount)
         if (params.StrongCount.value() > _count)
             params.ProofChecksPerPoint = params.StrongCount.value()/_count;
         else
             params.ProofPointsPerCheck = _count/params.StrongCount.value();
-    _points_per_check = 1;
+    int points_per_check = params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1;
+
     if ((input.b() != 2 || input.c() != 1) && params.ProofPointsPerCheck && !Li())
     {
         int i;
-        _points_per_check = params.ProofPointsPerCheck.value();
-        int iters = iterations*_points_per_check/_count;
+        int iters = iterations*points_per_check/_count;
         if (!params.StrongL)
         {
-            int L = _points_per_check*(int)std::sqrt(iters);
+            int L = points_per_check*(int)std::sqrt(iters);
             int L2 = iters - iters%L;
-            for (i = L + _points_per_check; i*i < 2*iters*_points_per_check*_points_per_check; i += _points_per_check)
+            for (i = L + points_per_check; i*i < 2*iters*points_per_check*points_per_check; i += points_per_check)
                 if (L2 < iters - iters%i)
                 {
                     L = i;
                     L2 = iters - iters%i;
                 }
-            params.StrongL = L/_points_per_check;
-            _M = L2/_points_per_check;
+            params.StrongL = L/points_per_check;
+            _M = L2/points_per_check;
         }
         else
-            _M = (iters - iters%(params.StrongL.value()*_points_per_check))/_points_per_check;
+            _M = (iters - iters%(params.StrongL.value()*points_per_check))/points_per_check;
         _points.reserve(_count + 2);
         for (i = 0; i <= _count; i++)
-            _points.push_back(i*_M);
+            _points.push_back(i*_M*(i%points_per_check == 0 || i == _count ? 1 : -1));
     }
     else
     {
@@ -147,6 +147,8 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
                 if ((iterations & (_count/j/2)) != 0)
                     _points.back()++;
             }
+            if (i%points_per_check != 0)
+                _points.back() *= -1;
         }
         _points.push_back(iterations);
     }
@@ -173,10 +175,7 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
 
     if (op() == BUILD)
     {
-        if (_points.size() == count() + 2)
-            logging.info("Building certificate from %d products, %d iterations tail.\n", depth(), _points[count() + 1] - _points[count()]);
-        else
-            logging.info("Building certificate from %d products.\n", depth());
+        logging.info("Building certificate from %d products.\n", depth());
         logging.set_prefix(input.display_text() + " ");
 
         if (!Li())
@@ -213,10 +212,9 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
     int point = _count;
     while (point >= 0)
     {
-        point -= point%_points_per_check;
-        if (_file_points[point]->read(*state) && state->iteration() == _points[point])
+        if (_points[point] >= 0 && _file_points[point]->read(*state) && state->iteration() == _points[point])
         {
-            if (task->state() == nullptr || task->state()->iteration() < state->iteration() || (point < _count && task->state()->iteration() >= _points[point + 1]))
+            if (task->state() == nullptr || task->state()->iteration() < state->iteration())
                 task->init_state(state.release());
             return;
         }
@@ -228,7 +226,7 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
 
 void Proof::read_point(int index, TaskState& state, Logging& logging)
 {
-    if (!_file_points[index]->read(state) || state.iteration() != _points[index])
+    if (!_file_points[index]->read(state) || state.iteration() != abs(_points[index]))
     {
         logging.error("%s is missing or corrupt.\n", _file_points[index]->filename().data());
         throw TaskAbortException();
@@ -250,7 +248,7 @@ bool Proof::on_point(int index, arithmetic::Giant& X)
 {
     if (index > _count)
         return false;
-    BaseExp::State state(_points[index], std::move(X));
+    BaseExp::State state(abs(_points[index]), std::move(X));
     _file_points[index]->write(state);
     if (!_cache_points)
         _file_points[index]->free_buffer();
@@ -549,7 +547,7 @@ void ProofBuild::execute()
     if (_proof.Li())
     {
         len = _proof.r_exp().bitlen() - 1;
-        _proof.r_exp().arithmetic().substr(_proof.r_exp(), len - _proof.points()[1], _proof.points()[1], a_power);
+        _proof.r_exp().arithmetic().substr(_proof.r_exp(), len - abs(_proof.points()[1]), abs(_proof.points()[1]), a_power);
     }
 
     if (state() == nullptr)
@@ -573,7 +571,7 @@ void ProofBuild::execute()
             for (j = 0; j < (1 << i); j++)
             {
                 k = (1 + j*2) << (t - i - 1);
-                _proof.r_exp().arithmetic().substr(_proof.r_exp(), len - _proof.points()[k + 1], _proof.points()[k + 1] - _proof.points()[k], exp);
+                _proof.r_exp().arithmetic().substr(_proof.r_exp(), len - abs(_proof.points()[k + 1]), abs(_proof.points()[k + 1]) - abs(_proof.points()[k]), exp);
                 for (k = 1; k <= i; k++)
                     if ((j & (1 << (k - 1))) == 0)
                     {
