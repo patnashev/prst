@@ -566,13 +566,12 @@ void StrongCheckMultipointExp::execute()
                 if (j + 1 != L2 && i + 1 == -_points[next_point])
                 {
                     check();
+                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    _logging->progress_save();
                     tmp = X();
                     if (_on_point != nullptr)
-                    {
-                        _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-                        _logging->progress_save();
                         _on_point(next_point, tmp);
-                    }
+                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                     set_state<StrongCheckState>(i + 1, state()->iteration(), X(), D());
                     next_point++;
                 }
@@ -595,13 +594,12 @@ void StrongCheckMultipointExp::execute()
                 if (j + L != L2 && i + L == -_points[next_point])
                 {
                     check();
+                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    _logging->progress_save();
                     tmp = X();
                     if (_on_point != nullptr)
-                    {
-                        _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-                        _logging->progress_save();
                         _on_point(next_point, tmp);
-                    }
+                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                     set_state<StrongCheckState>(i + L, state()->iteration(), X(), D());
                     next_point++;
                 }
@@ -618,13 +616,12 @@ void StrongCheckMultipointExp::execute()
                 {
                     slide(_exp, i, -_points[next_point], false);
                     check();
+                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    _logging->progress_save();
                     tmp = X();
                     if (_on_point != nullptr)
-                    {
-                        _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-                        _logging->progress_save();
                         _on_point(next_point, tmp);
-                    }
+                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                     set_state<StrongCheckState>(-_points[next_point], state()->iteration(), X(), D());
                     slide(_exp, -_points[next_point], i + L, false);
                     next_point++;
@@ -636,12 +633,13 @@ void StrongCheckMultipointExp::execute()
             }
         }
         check();
+        _logging->progress().update(i/(double)iterations(), (int)_gwstate->handle.fft_count/2);
         if (next_point != next_check)
         {
             _logging->error("point missed, invalid parameters.\n");
             throw TaskAbortException();
         }
-        
+
         _logging->debug("performing Gerbicz%s check at %d,%d, L2 = %d*%d.\n", !smooth() ? "-Li" : "", next_check, i, L, L2/L);
         GWNum T(D());
         gw().carefully().mul(X(), D(), D(), 0);
@@ -713,7 +711,6 @@ void StrongCheckMultipointExp::execute()
         {
             if (_on_point != nullptr)
             {
-                _logging->progress().update(_points[next_check]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                 _logging->progress_save();
                 if (_on_point(next_check, _tmp_state_recovery->X()))
                 {
@@ -726,6 +723,7 @@ void StrongCheckMultipointExp::execute()
         _tmp_state_recovery.swap(_state_recovery);
         _state.reset(new TaskState(5));
         _state->set(i);
+        _logging->progress().update(i/(double)iterations(), (int)_gwstate->handle.fft_count/2);
         on_state();
         _recovery_op = _restart_op;
         _restart_count = 0;
