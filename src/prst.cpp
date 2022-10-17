@@ -1,4 +1,4 @@
-#define PRST_VERSION "0.7.0"
+#define PRST_VERSION "0.7"
 
 #include <cmath>
 #include <string.h>
@@ -275,7 +275,7 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(argv[i], "-v") == 0)
             {
-                printf("PRST version " PRST_VERSION ", Gwnum library version " GWNUM_VERSION "\n");
+                printf("PRST version " PRST_VERSION "." VERSION_BUILD ", Gwnum library version " GWNUM_VERSION "\n");
                 return 0;
             }
         }

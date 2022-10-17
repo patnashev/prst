@@ -1,4 +1,3 @@
-#define NET_PRST_VERSION "0.7.0"
 #define _SILENCE_CXX17_ALLOCATOR_VOID_DEPRECATION_WARNING
 
 #include <stdio.h>
@@ -14,6 +13,8 @@
 #include "pocklington.h"
 #include "proof.h"
 #include "params.h"
+
+#define NET_PRST_VERSION "0.7." VERSION_BUILD
 
 using namespace restc_cpp;
 using namespace arithmetic;
@@ -59,11 +60,16 @@ void NetLogging::report_param(const std::string& name, const std::string& value)
         _net.task()->fft_desc = value;
 }
 
+void NetLogging::report_progress()
+{
+    Logging::report_progress();
+    _net.task()->time_op = progress().time_op()*1000;
+}
+
 void NetLogging::progress_save()
 {
     _net.task()->progress = progress().progress_total();
     _net.task()->time = progress().time_total();
-    _net.task()->time_op = progress().time_op()*1000;
 }
 
 void NetFile::on_upload()

@@ -113,6 +113,7 @@ public:
     virtual void report(const std::string& message, int level) override;
     virtual void report_param(const std::string& name, int value) override;
     virtual void report_param(const std::string& name, const std::string& value) override;
+    virtual void report_progress() override;
     virtual void progress_save() override;
 
 private:
