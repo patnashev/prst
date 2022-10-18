@@ -1,7 +1,5 @@
 #pragma once
 
-#define VERSION_BUILD "9"
-
 #include <optional>
 #include <string>
 

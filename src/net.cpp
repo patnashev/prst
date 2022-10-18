@@ -13,8 +13,8 @@
 #include "pocklington.h"
 #include "proof.h"
 #include "params.h"
+#include "version.h"
 
-#define NET_PRST_VERSION "0.7." VERSION_BUILD
 
 using namespace restc_cpp;
 using namespace arithmetic;
@@ -464,7 +464,7 @@ int net_main(int argc, char *argv[])
             }
             else if (strcmp(argv[i], "-v") == 0)
             {
-                printf("Net-PRST version " NET_PRST_VERSION ", Gwnum library version " GWNUM_VERSION "\n");
+                printf("Net-PRST version " NET_PRST_VERSION "." VERSION_BUILD ", Gwnum library version " GWNUM_VERSION "\n");
                 return 0;
             }
         }

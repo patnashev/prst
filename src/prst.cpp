@@ -1,4 +1,3 @@
-#define PRST_VERSION "0.7"
 
 #include <cmath>
 #include <string.h>
@@ -18,6 +17,7 @@
 #include "pocklington.h"
 #include "testing.h"
 #include "support.h"
+#include "version.h"
 #ifdef NETPRST
 int net_main(int argc, char *argv[]);
 #endif
