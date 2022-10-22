@@ -31,9 +31,6 @@ void sigterm_handler(int signo)
     signal(signo, sigterm_handler);
 }
 
-// stub for linking
-extern "C" double polymult_safety_margin(int invec1_size, int invec2_size) { return 0; }
-
 int main(int argc, char *argv[])
 {
     signal(SIGTERM, sigterm_handler);
@@ -171,6 +168,13 @@ int main(int argc, char *argv[])
                     {
                         i += 2;
                         params.ProofSecuritySeed = argv[i];
+                    }
+                    else if (i < argc - 2 && strcmp(argv[i + 1], "roots") == 0)
+                    {
+                        i += 2;
+                        params.RootOfUnitySecurity = atoi(argv[i]);
+                        if (params.RootOfUnitySecurity.value() == 0)
+                            params.RootOfUnityCheck = false;
                     }
                     else
                         break;
