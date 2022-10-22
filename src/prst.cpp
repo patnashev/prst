@@ -326,9 +326,10 @@ int main(int argc, char *argv[])
     if (input.empty())
     {
         printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
-        printf("Options: [-t <threads>] [-spin <threads>] [-fft+1] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("Options: [-t <threads>] [-spin <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
+        printf("\t[-fft+1] [-cpu {SSE2 | AVX | FMA3 | AVX512F}] \n");
         printf("\t-fermat [a <a>] \n");
-        printf("\t-proof {save <count> | build <count> [security <seed>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
+        printf("\t-proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
         return 0;
     }
