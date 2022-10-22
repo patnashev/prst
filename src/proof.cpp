@@ -324,7 +324,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging,
         taskSave->run();
         logging.progress().next_stage();
 
-        _res64 = taskSave->state()->X().to_res64();
+        _res64 = taskSave->state()->Y().to_res64();
         logging.info("%s compressed %d points to %d products, time: %.1f s.\n", input.display_text().data(), _count, _file_products.size(), _task->timer());
         logging.result(false, "%s raw certificate RES64: %s.\n", input.display_text().data(), _res64.data());
         logging.result_save(input.input_text() + " raw certificate RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
@@ -342,7 +342,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging,
             logging.result(false, "%s raw certificate RES64: %s.\n", input.display_text().data(), _res64.data());
             logging.result_save(input.input_text() + " raw certificate RES64: " + _res64 + ".\n");
         }
-        _res64 = taskBuild->state()->X().to_res64();
+        _res64 = taskBuild->state()->Y().to_res64();
         logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
         logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
@@ -360,7 +360,7 @@ double Proof::cost()
 void ProofSave::init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging)
 {
     InputTask::init(input, gwstate, nullptr, nullptr, logging, _proof.count());
-    _state_update_period = 1;
+    _state_update_period = 0;
     _logging->set_prefix(input->display_text() + " ");
 }
 
@@ -438,13 +438,14 @@ void ProofSave::execute()
 
     if (state() == nullptr)
     {
-        _state.reset(new BaseExp::State());
-        read_point(_proof.count(), *state());
-        static_cast<TaskState*>(state())->set(0);
+        BaseExp::State point;
+        read_point(_proof.count(), point);
+        _state.reset(new Proof::State(0, std::move(point.X())));
     }
-    Y = state()->X();
+    Y = state()->Y();
+    h = state()->h();
 
-    for (i = state()->iteration(); i < t; i++, commit_execute<BaseExp::State>(i, Y))
+    for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, Y, h))
     {
         if (_proof.file_products()[i]->read(state_d))
         {
@@ -487,6 +488,7 @@ void ProofSave::execute()
                     }
                 }
                 state_d.set(i, D);
+                commit_execute<Proof::State>(i, Y, h);
             }
 
             state_d.mimic_type(Proof::Product::TYPE);
@@ -495,7 +497,7 @@ void ProofSave::execute()
         }
 
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
-        hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h[i]);
+        hash_giants(_gwstate->fingerprint, state()->Y(), state_d.X(), h[i]);
         make_prime(h[i]);
 
         gw().fft(D, D);
@@ -543,7 +545,6 @@ void ProofBuild::execute()
     std::vector<Giant> h;
 
     t = _proof.depth();
-    X = _proof.r_0();
     if (_proof.Li())
     {
         len = _proof.r_exp().bitlen() - 1;
@@ -551,16 +552,19 @@ void ProofBuild::execute()
     }
 
     if (state() == nullptr)
-        _state.reset(new BaseExp::State(0, std::move(_proof.r_count())));
-    Y = state()->X();
+        _state.reset(new Proof::State(0, _proof.r_0(), std::move(_proof.r_count()), std::move(a_power)));
+    X = state()->X();
+    Y = state()->Y();
+    a_power = state()->exp();
+    h = state()->h();
 
-    M = _proof.points()[_proof.count()];
-    for (i = 0; i < t; i++, commit_execute<BaseExp::State>(i, Y), M >>= 1)
+    M = _proof.points()[_proof.count()] >> state()->iteration();
+    for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, X, Y, exp, h), M >>= 1)
     {
         _proof.read_product(i, state_d, *_logging);
         D = state_d.X();
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
-        hash_giants(_gwstate->fingerprint, state()->X(), state_d.X(), h[i]);
+        hash_giants(_gwstate->fingerprint, state()->Y(), state_d.X(), h[i]);
         make_prime(h[i]);
 
         if (_proof.Li())
@@ -599,7 +603,7 @@ void ProofBuild::execute()
     D = _proof.r_0();
     if (!_rnd_seed.empty())
     {
-        _raw_res64 = state()->X().to_res64();
+        _raw_res64 = state()->Y().to_res64();
 
         exp.arithmetic().rnd_seed(_rnd_seed);
         exp.arithmetic().rnd(exp, 64);
@@ -610,10 +614,10 @@ void ProofBuild::execute()
         if (_proof.Li())
             exp_gw(gw().carefully(), exp, D, T = D, 0);
 
-        commit_execute<BaseExp::State>(t + 1, Y);
+        commit_execute<Proof::State>(t + 1, X, Y, exp, h);
     }
 
-    if (state()->X() == 0)
+    if (state()->Y() == 0)
     {
         _logging->error("invalid proof, the certificate is zero.\n");
         throw TaskAbortException();

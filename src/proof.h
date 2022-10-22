@@ -51,6 +51,31 @@ public:
         arithmetic::Giant _a_power;
         arithmetic::Giant _a_base;
     };
+    class State : public TaskState
+    {
+    public:
+        static const char TYPE = 6;
+        State() : TaskState(TYPE) { }
+        template<class T>
+        State(int iteration, T&& Y) : TaskState(1) { TaskState::set(iteration); _Y = std::forward<T>(Y); }
+        template<class T, class R, class S>
+        State(int iteration, S&& X, T&& Y, R&& exp) : TaskState(1) { TaskState::set(iteration); _X = std::forward<S>(X); _Y = std::forward<T>(Y); _exp = std::forward<R>(exp); }
+        template<class T>
+        void set(int iteration, T& Y, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _Y = Y; _h = h; }
+        template<class T, class S>
+        void set(int iteration, S& X, T& Y, arithmetic::Giant& exp, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _X = X; _Y = Y; _exp = exp; _h = h; }
+        arithmetic::Giant& X() { return _X; }
+        arithmetic::Giant& Y() { return _Y; }
+        arithmetic::Giant& exp() { return _exp; }
+        std::vector<arithmetic::Giant>& h() { return _h; }
+
+    private:
+        arithmetic::Giant _X;
+        arithmetic::Giant _Y;
+        arithmetic::Giant _exp;
+        std::vector<arithmetic::Giant> _h;
+    };
+
 
 public:
     Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging, std::optional<bool> Li = std::optional<bool>());
@@ -112,7 +137,7 @@ public:
 
     void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
 
-    BaseExp::State* state() { return static_cast<BaseExp::State*>(Task::state()); }
+    Proof::State* state() { return static_cast<Proof::State*>(Task::state()); }
 
 protected:
     void setup() override { }
@@ -134,7 +159,7 @@ public:
 
     void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
 
-    BaseExp::State* state() { return static_cast<BaseExp::State*>(Task::state()); }
+    Proof::State* state() { return static_cast<Proof::State*>(Task::state()); }
     bool security() { return !_security_seed.empty(); }
     std::string& raw_res64() { return _raw_res64; }
 
