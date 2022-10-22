@@ -35,8 +35,6 @@ int main(int argc, char *argv[])
 {
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT, sigterm_handler);
-    //guessCpuType();
-    //CPU_FLAGS &= ~CPU_FMA3;
 
     File::FILE_APPID = 4;
     // -1 test metadata
@@ -46,6 +44,7 @@ int main(int argc, char *argv[])
     //  3 proof product
     //  4 certificate
     //  5 strong check placeholder
+    //  6 proof state
 
     int i;
     GWState gwstate;
@@ -130,6 +129,35 @@ int main(int argc, char *argv[])
             {
                 i++;
                 gwstate.spin_threads = atoi(argv[i]);
+            }
+            else if (i < argc - 1 && strcmp(argv[i], "-cpu") == 0)
+            {
+                while (true)
+                    if (i < argc - 1 && strcmp(argv[i + 1], "SSE2") == 0)
+                    {
+                        i++;
+                        gwstate.handle.cpu_flags &= ~(CPU_AVX | CPU_FMA3 | CPU_AVX512F);
+                        gwstate.handle.cpu_flags |= CPU_SSE2;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "AVX") == 0)
+                    {
+                        i++;
+                        gwstate.handle.cpu_flags &= ~(CPU_FMA3 | CPU_AVX512F);
+                        gwstate.handle.cpu_flags |= CPU_AVX;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "FMA3") == 0)
+                    {
+                        i++;
+                        gwstate.handle.cpu_flags &= ~(CPU_AVX512F);
+                        gwstate.handle.cpu_flags |= CPU_FMA3;
+                    }
+                    else if (i < argc - 1 && strcmp(argv[i + 1], "AVX512F") == 0)
+                    {
+                        i++;
+                        gwstate.handle.cpu_flags |= CPU_AVX512F;
+                    }
+                    else
+                        break;
             }
             else if (i < argc - 2 && strcmp(argv[i], "-proof") == 0)
             {
