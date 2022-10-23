@@ -117,11 +117,20 @@ int main(int argc, char *argv[])
             {
                 if (argv[i][4] == '+')
                     gwstate.next_fft_count = atoi(argv[i] + 5);
-                else if (argv[i + 1][0] == '+')
-                {
-                    i++;
-                    gwstate.next_fft_count = atoi(argv[i] + 1);
-                }
+                else
+                    while (true)
+                        if (i < argc - 1 && argv[i + 1][0] == '+')
+                        {
+                            i++;
+                            gwstate.next_fft_count = atoi(argv[i] + 1);
+                        }
+                        else if (i < argc - 2 && strcmp(argv[i + 1], "safety") == 0)
+                        {
+                            i += 2;
+                            gwstate.safety_margin = atof(argv[i]);
+                        }
+                        else
+                            break;
             }
             else if (strcmp(argv[i], "-generic") == 0)
                 gwstate.force_general_mod = true;
@@ -326,8 +335,10 @@ int main(int argc, char *argv[])
     if (input.empty())
     {
         printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
-        printf("Options: [-t <threads>] [-spin <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
-        printf("\t[-fft+1] [-cpu {SSE2 | AVX | FMA3 | AVX512F}] \n");
+        printf("Options: [-log {debug | info | warning | error}]\n");
+        printf("\t[-t <threads>] [-spin <threads>]\n");
+        printf("\t[-time [write <sec>] [progress <sec>]]\n");
+        printf("\t[-fft+1] [-fft [+<inc>] [safety <margin>]] [-cpu {SSE2 | AVX | FMA3 | AVX512F}]\n");
         printf("\t-fermat [a <a>] \n");
         printf("\t-proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
