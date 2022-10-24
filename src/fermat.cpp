@@ -108,7 +108,14 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
 
     _a = params.FermatBase ? params.FermatBase.value() : 3;
     if (_type == PROTH)
+    {
         _a = genProthBase(input.gk(), input.n());
+        if (_a < 0)
+        {
+            logging.result(false, "%s is not prime, divisible by %d.\n", input.display_text().data(), -_a);
+            logging.result_save(input.input_text() + " is not prime, divisible by " + std::to_string(-_a) + ".\n");
+        }
+    }
     _n = input.n() - (_type == PROTH || _type == POCKLINGTON ? 1 : 0);
 
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
@@ -239,6 +246,8 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     _Xm1 = Giant();
     Giant ak;
     ak = _a;
+    if (_a < 0)
+        return;
 
     if (type() == PROTH)
         logging.info("Proth test of %s, a = %d.\n", input.display_text().data(), _a);

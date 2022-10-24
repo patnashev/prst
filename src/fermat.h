@@ -38,7 +38,7 @@ protected:
 
 protected:
     int _type;
-    uint32_t _a;
+    int _a;
     int _n;
     Proof* _proof;
     std::vector<int> _points;
