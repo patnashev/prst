@@ -61,7 +61,6 @@ int main(int argc, char *argv[])
     bool supportLLR2 = false;
     bool force_fermat = false;
     InputNum input;
-    std::string toFile;
     int log_level = Logging::LEVEL_WARNING;
 
     for (i = 1; i < argc; i++)
@@ -302,11 +301,6 @@ int main(int argc, char *argv[])
             else if (strcmp(argv[i], "-net") == 0)
                 return net_main(argc, argv);
 #endif
-            else if (i < argc - 1 && strcmp(argv[i], "-file") == 0)
-            {
-                i++;
-                toFile = argv[i];
-            }
             else if (i < argc - 1 && strcmp(argv[i], "-log") == 0)
             {
                 i++;
@@ -328,18 +322,11 @@ int main(int argc, char *argv[])
         else
         {
             if (!input.parse(argv[i]))
-            {
-                File file(argv[i], 0);
-                if (!input.read(file))
-                {
-                    printf("File %s is missing or corrupted.\n", argv[i]);
-                    return 1;
-                }
-            }
+                printf("Unknown option %s.\n", argv[i]);
         }
     if (input.empty())
     {
-        printf("Usage: PRST {\"K*B^N+C\" | <file>} <options>\n");
+        printf("Usage: PRST {\"K*B^N+C\" | \"N!+C\" | \"N#+C\" | \"N\"} <options>\n");
         printf("Options: [-log {debug | info | warning | error}]\n");
         printf("\t[-t <threads>] [-spin <threads>]\n");
         printf("\t[-time [write <sec>] [progress <sec>]]\n");
@@ -348,11 +335,6 @@ int main(int argc, char *argv[])
         printf("\t-proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
         return 0;
-    }
-    if (!toFile.empty())
-    {
-        File file(toFile, 0);
-        input.write(file);
     }
 
     std::unique_ptr<File> file_proofpoint;
