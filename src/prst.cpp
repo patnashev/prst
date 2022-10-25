@@ -35,6 +35,11 @@ int main(int argc, char *argv[])
 {
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT, sigterm_handler);
+    setvbuf(stdout, NULL, _IONBF, 0);
+#if defined(_MSC_VER) && !defined(_DEBUG)
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _CALL_REPORTFAULT);
+#endif
 
     File::FILE_APPID = 4;
     // -1 test metadata
