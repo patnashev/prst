@@ -510,7 +510,7 @@ int net_main(int argc, char *argv[])
 					.Post(net.url() + "llr/new")
 					.Argument("workerID", net.worker_id())
 					.Argument("uptime", net.uptime())
-					.Argument("version", NET_PRST_VERSION)
+					.Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
 
 					// Send the request
 					.Execute()
@@ -615,7 +615,7 @@ int net_main(int argc, char *argv[])
             if (proof_op == Proof::CERT)
             {
                 fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-                File* file_checkpoint = newFile("checkpoint", fingerprint);
+                File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
                 File* file_recoverypoint = newFile("recoverypoint", fingerprint);
                 proof->run(input, gwstate, *file_checkpoint, *file_recoverypoint, logging);
             }
@@ -626,13 +626,13 @@ int net_main(int argc, char *argv[])
                 File* file_proofproduct = newFile(!params.ProofProductFilename.empty() ? params.ProofProductFilename : "prod", fingerprint, Proof::Product::TYPE);
                 proof->init_files(file_proofpoint, file_proofproduct, file_cert);
 
-                File* file_checkpoint = newFile("checkpoint", fingerprint);
+                File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
                 File* file_recoverypoint = newFile("recoverypoint", fingerprint);
                 fermat->run(input, gwstate, *file_checkpoint, *file_recoverypoint, logging, proof.get());
             }
             else if (fermat)
             {
-                File* file_checkpoint = newFile("checkpoint", fingerprint);
+                File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
                 File* file_recoverypoint = newFile("recoverypoint", fingerprint);
                 fermat->run(input, gwstate, *file_checkpoint, *file_recoverypoint, logging, nullptr);
             }
@@ -667,7 +667,7 @@ int net_main(int argc, char *argv[])
                         .Argument("res", proof_op == Proof::CERT ? proof->res64() : fermat->success() ? "prime" : fermat->res64())
                         .Argument("cert", proof && proof_op != Proof::CERT ? proof->res64() : "")
                         .Argument("time", std::to_string(logging.progress().time_total()))
-                        .Argument("version", NET_PRST_VERSION)
+                        .Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
 
 						// Send the request
 						.Execute();

@@ -43,7 +43,7 @@ public:
         arithmetic::Giant& X() { return _X; }
         arithmetic::Giant& a_power() { return _a_power; }
         arithmetic::Giant& a_base() { return _a_base; }
-        bool read(Reader& reader) override { _a_power = 0; _a_base = 0; return TaskState::read(reader) && reader.read(_X) && ((reader.read(_a_power) && reader.read(_a_base)) || true); }
+        bool read(Reader& reader) override { _a_power = 0; _a_base = 0; return TaskState::read(reader) && reader.read(_X) && ((reader.read(_a_power) && _a_power != 0 && reader.read(_a_base)) || true); }
         void write(Writer& writer) override { TaskState::write(writer); writer.write(_X); writer.write(_a_power); writer.write(_a_base); }
 
     private:

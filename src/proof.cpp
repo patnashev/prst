@@ -291,7 +291,10 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
         else
             task->init_smooth(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
         if (task->state() == nullptr)
+        {
             task->init_state(new BaseExp::State(0, std::move(_r_count)));
+            task->state()->set_written();
+        }
     }
     _task->run();
     timer += _task->timer();
