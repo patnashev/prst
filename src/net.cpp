@@ -233,6 +233,8 @@ File* LLR2NetFile::add_child(const std::string& name, uint32_t fingerprint)
 
 void LLR2NetFile::read_buffer()
 {
+    if (!_buffer.empty())
+        _net_ctx.upload_wait();
     NetFile::read_buffer();
 
     if (_buffer.size() > 16 && *(uint32_t*)_buffer.data() == MAGIC_NUM && _buffer[4] == 2)
