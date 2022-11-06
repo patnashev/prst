@@ -385,7 +385,12 @@ public:
     LiCheckExp(T&& exp, int count, int L = 0) : StrongCheckMultipointExp(std::forward<T>(exp), false, std::vector<int>(), 0, 0, nullptr)
     {
         int n = _exp.bitlen() - 1;
-        if (L == 0)
+        if (n < count)
+        {
+            _L = 1;
+            _L2 = 1;
+        }
+        else if (L == 0)
             StrongCheckMultipointExp::Gerbicz_params(n/count, 1.0, _L, _L2);
         else
         {
@@ -393,7 +398,7 @@ public:
             _L2 = n/count;
             _L2 -= _L2%L;
         }
-        for (int i = 0; i <= count; i++)
+        for (int i = 0; i <= count && _L2*i <= n; i++)
             _points.push_back(_L2*i);
         if (_points.back() != n)
             _points.push_back(n);
