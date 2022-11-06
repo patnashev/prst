@@ -337,6 +337,26 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    Logging logging(log_level);
+
+    if (input.bitlen() < 32)
+    {
+        Giant num = input.value();
+        GWASSERT(num.size() == 1);
+        logging.info("Trial division test of %s.\n", input.display_text().data());
+        if (is_prime(num.data()[0]))
+        {
+            logging.result(true, "%s is prime!\n", input.display_text().data());
+            logging.result_save(input.input_text() + " is prime!\n");
+        }
+        else
+        {
+            logging.result(false, "%s is not prime.\n", input.display_text().data());
+            logging.result_save(input.input_text() + " is not prime.\n");
+        }
+        return 0;
+    }
+
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
@@ -347,8 +367,6 @@ int main(int argc, char *argv[])
         else
             file.reset(new File(filename, fingerprint));
     };
-
-    Logging logging(log_level);
 
     uint32_t fingerprint = input.fingerprint();
     gwstate.fingerprint = fingerprint;
