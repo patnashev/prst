@@ -352,7 +352,12 @@ class GerbiczCheckExp : public StrongCheckMultipointExp
 public:
     GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, arithmetic::Giant&)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<int>(), 0, 0, on_point)
     {
-        if (L == 0)
+        if (n < count)
+        {
+            _L = 1;
+            _L2 = 1;
+        }
+        else if (L == 0)
             StrongCheckMultipointExp::Gerbicz_params(n/count, log2(b), _L, _L2);
         else
         {
@@ -360,7 +365,7 @@ public:
             _L2 = n/count;
             _L2 -= _L2%L;
         }
-        for (int i = 0; i <= count; i++)
+        for (int i = 0; i <= count && _L2*i <= n; i++)
             _points.push_back(_L2*i);
         if (_points.back() != n)
             _points.push_back(n);
