@@ -149,25 +149,22 @@ int main(int argc, char *argv[])
                     if (i < argc - 1 && strcmp(argv[i + 1], "SSE2") == 0)
                     {
                         i++;
-                        gwstate.handle.cpu_flags &= ~(CPU_AVX | CPU_FMA3 | CPU_AVX512F);
-                        gwstate.handle.cpu_flags |= CPU_SSE2;
+                        gwstate.instructions = "SSE2";
                     }
                     else if (i < argc - 1 && strcmp(argv[i + 1], "AVX") == 0)
                     {
                         i++;
-                        gwstate.handle.cpu_flags &= ~(CPU_FMA3 | CPU_AVX512F);
-                        gwstate.handle.cpu_flags |= CPU_AVX;
+                        gwstate.instructions = "AVX";
                     }
                     else if (i < argc - 1 && strcmp(argv[i + 1], "FMA3") == 0)
                     {
                         i++;
-                        gwstate.handle.cpu_flags &= ~(CPU_AVX512F);
-                        gwstate.handle.cpu_flags |= CPU_FMA3;
+                        gwstate.instructions = "FMA3";
                     }
                     else if (i < argc - 1 && strcmp(argv[i + 1], "AVX512F") == 0)
                     {
                         i++;
-                        gwstate.handle.cpu_flags |= CPU_AVX512F;
+                        gwstate.instructions = "AVX512F";
                     }
                     else
                         break;
