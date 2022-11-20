@@ -562,7 +562,7 @@ void ProofBuild::execute()
     h = state()->h();
 
     M = _proof.points()[_proof.count()] >> state()->iteration();
-    for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, X, Y, exp, h), M >>= 1)
+    for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, X, Y, a_power, h), M >>= 1)
     {
         _proof.read_product(i, state_d, *_logging);
         D = state_d.X();
@@ -617,7 +617,7 @@ void ProofBuild::execute()
         if (_proof.Li())
             exp_gw(gw().carefully(), exp, D, T = D, 0);
 
-        commit_execute<Proof::State>(t + 1, X, Y, exp, h);
+        commit_execute<Proof::State>(t + 1, X, Y, a_power, h);
     }
 
     if (state()->Y() == 0)

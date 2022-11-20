@@ -312,7 +312,13 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(argv[i], "-v") == 0)
             {
-                printf("PRST version " PRST_VERSION "." VERSION_BUILD ", Gwnum library version " GWNUM_VERSION "\n");
+                printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION);
+#ifdef GMP
+                GMPArithmetic* gmp = dynamic_cast<GMPArithmetic*>(&GiantsArithmetic::default_arithmetic());
+                if (gmp != nullptr)
+                    printf(", GMP library version %s", gmp->version().data());
+#endif
+                printf("\n");
                 return 0;
             }
         }

@@ -14,12 +14,12 @@ VPATH     = ..:../../framework:../../framework/arithmetic
 # on a 32 byte boundary.  Use proper dummyNN.o to do the alignment
 
 DUMMY2 = ../../framework/gwnum/linux64/gwnum.ld
-LIBS2  = -lm -lpthread -lstdc++ -static
+LIBS2  = -lm -lpthread -lstdc++ -lgmp -static
 
 CC  = gcc
 CXX = g++
-CFLAGS   = -I.. -I../../framework/gwnum                                                -DX86_64 -O2 -std=c99     -Wall -Wextra
-CXXFLAGS = -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
+CFLAGS   = -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -O2 -std=c99     -Wall -Wextra
+CXXFLAGS = -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
 
 #########################################################################
 
