@@ -267,7 +267,11 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             tail = std::move(_task_tail_simple->state()->X());
         }
         if (input.c() < 0)
+        {
             tail.inv(*gwstate.N);
+            if (input.c() == -1 && _a < 46341)
+                GWASSERT(tail*(_a*_a)%*gwstate.N == 1);
+        }
     }
 
     StrongCheckMultipointExp* taskCheck = dynamic_cast<StrongCheckMultipointExp*>(_task.get());
