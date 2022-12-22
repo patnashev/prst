@@ -133,6 +133,11 @@ int main(int argc, char *argv[])
                             i += 2;
                             gwstate.safety_margin = atof(argv[i]);
                         }
+                        else if (i < argc - 1 && strcmp(argv[i + 1], "info") == 0)
+                        {
+                            i++;
+                            gwstate.information_only = true;
+                        }
                         else
                             break;
             }
@@ -333,14 +338,14 @@ int main(int argc, char *argv[])
         printf("Options: [-log {debug | info | warning | error}]\n");
         printf("\t[-t <threads>] [-spin <threads>]\n");
         printf("\t[-time [write <sec>] [progress <sec>]]\n");
-        printf("\t[-fft+1] [-fft [+<inc>] [safety <margin>]] [-cpu {SSE2 | AVX | FMA3 | AVX512F}]\n");
+        printf("\t[-fft+1] [-fft [+<inc>] [safety <margin>] [info]] [-cpu {SSE2 | AVX | FMA3 | AVX512F}]\n");
         printf("\t-fermat [a <a>] \n");
         printf("\t-proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
         return 0;
     }
 
-    Logging logging(log_level);
+    Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
 
     if (input.bitlen() < 32)
     {

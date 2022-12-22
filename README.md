@@ -8,7 +8,7 @@ Options: -log {debug | info | warning | error}
          -spin <threads>
          -time [write <sec>] [progress <sec>]
          -fft+1
-         -fft [+<inc>] [safety <margin>]
+         -fft [+<inc>] [safety <margin>] [info]
          -cpu {SSE2 | AVX | FMA3 | AVX512F}
          -fermat [a <a>]
          -proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]

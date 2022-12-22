@@ -49,13 +49,13 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
     if (_input_base2)
-        logging.info("Proth test of %s = %s, a = %d.\n", input.display_text().data(), _input_base2->display_text().data(), _a);
+        logging.info("Proth test of %s = %s, a = %d, complexity = %d.\n", input.display_text().data(), _input_base2->display_text().data(), _a, (int)logging.progress().cost_total());
     else
     {
         std::string factors;
         for (auto it = _tasks.begin(); it != _tasks.end(); it++)
             factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->index].first.to_string();
-        logging.info("Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
+        logging.info("Pocklington test of %s, a = %d, factors = {%s}, complexity = %d.\n", input.display_text().data(), _a, factors.data(), (int)logging.progress().cost_total());
     }
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
 

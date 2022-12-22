@@ -250,10 +250,12 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         return;
 
     if (type() == PROTH)
-        logging.info("Proth test of %s, a = %d.\n", input.display_text().data(), _a);
+        logging.info("Proth test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     else if (type() == FERMAT)
-        logging.info("Fermat probabilistic test of %s, a = %d.\n", input.display_text().data(), _a);
+        logging.info("Fermat probabilistic test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     logging.report_param("a", _a);
+    if (gwstate.information_only)
+        exit(0);
 
     Giant tail;
     if (_task_tail_simple)
