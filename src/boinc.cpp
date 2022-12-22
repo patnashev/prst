@@ -1,7 +1,6 @@
 
 #include <cmath>
 #include <string.h>
-#include <signal.h>
 
 #include "gwnum.h"
 #include "cpuid.h"
@@ -15,45 +14,34 @@
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
-#include "testing.h"
-#include "support.h"
-#include "version.h"
-#ifdef BOINC
 #include "boinc.h"
-#endif
-#ifdef NETPRST
-int net_main(int argc, char *argv[]);
-#endif
 
 using namespace arithmetic;
 
-void sigterm_handler(int signo)
+void BoincLogging::report(const std::string& message, int level)
 {
-    Task::abort();
-    printf("Terminating...\n");
-    signal(signo, sigterm_handler);
+    if (level == LEVEL_RESULT)
+        return;
+    //message
 }
 
-int main(int argc, char *argv[])
+void BoincLogging::report_progress()
 {
-    signal(SIGTERM, sigterm_handler);
-    signal(SIGINT, sigterm_handler);
-    setvbuf(stdout, NULL, _IONBF, 0);
-#if defined(_MSC_VER) && !defined(_DEBUG)
-    _set_error_mode(_OUT_TO_STDERR);
-    _set_abort_behavior(0, _CALL_REPORTFAULT);
-#endif
+    //progress().progress_total()
+    //progress().time_total()
+}
 
-    File::FILE_APPID = 4;
-    // -1 test metadata
-    //  0 number
-    //  1 checkpoint
-    //  2 strong check checkpoint
-    //  3 proof product
-    //  4 certificate
-    //  5 strong check placeholder
-    //  6 proof state
+void BoincLogging::progress_save()
+{
+    //checkpoint
+}
 
+void BoincLogging::heartbeat()
+{
+}
+
+int boinc_main(int argc, char *argv[])
+{
     int i;
     GWState gwstate;
     Params params;
@@ -61,10 +49,8 @@ int main(int argc, char *argv[])
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
-    bool supportLLR2 = false;
     bool force_fermat = false;
     InputNum input;
-    int log_level = Logging::LEVEL_WARNING;
 
     for (i = 1; i < argc; i++)
         if (argv[i][0] == '-' && argv[i][1])
@@ -106,13 +92,6 @@ int main(int argc, char *argv[])
                 else
                     break;
                 continue;
-
-            case 'd':
-                if (!argv[i][2])
-                    log_level = Logging::LEVEL_INFO;
-                else
-                    break;
-                continue;
             }
 
             if (i < argc - 1 && strcmp(argv[i], "-M") == 0)
@@ -135,11 +114,6 @@ int main(int argc, char *argv[])
                         {
                             i += 2;
                             gwstate.safety_margin = atof(argv[i]);
-                        }
-                        else if (i < argc - 1 && strcmp(argv[i + 1], "info") == 0)
-                        {
-                            i++;
-                            gwstate.information_only = true;
                         }
                         else
                             break;
@@ -186,12 +160,6 @@ int main(int argc, char *argv[])
                         proof_op = Proof::SAVE;
                         proof_count = atoi(argv[i]);
                     }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "build") == 0)
-                    {
-                        i += 2;
-                        proof_op = Proof::BUILD;
-                        proof_count = atoi(argv[i]);
-                    }
                     else if (i < argc - 2 && strcmp(argv[i + 1], "cert") == 0)
                     {
                         i += 2;
@@ -209,18 +177,6 @@ int main(int argc, char *argv[])
                             i++;
                             proof_cert = argv[i];
                         }
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "security") == 0)
-                    {
-                        i += 2;
-                        params.ProofSecuritySeed = argv[i];
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "roots") == 0)
-                    {
-                        i += 2;
-                        params.RootOfUnitySecurity = atoi(argv[i]);
-                        if (params.RootOfUnitySecurity.value() == 0)
-                            params.RootOfUnityCheck = false;
                     }
                     else
                         break;
@@ -269,12 +225,6 @@ int main(int argc, char *argv[])
                     else
                         break;
             }
-            else if (i < argc - 1 && strcmp(argv[i], "-support") == 0)
-            {
-                i++;
-                if (strcmp(argv[i], "LLR2") == 0)
-                    supportLLR2 = true;
-            }
             else if (strcmp(argv[i], "-fermat") == 0)
             {
                 force_fermat = true;
@@ -300,92 +250,22 @@ int main(int argc, char *argv[])
                     else
                         break;
             }
-            else if (strcmp(argv[i], "-test") == 0)
-                return testing_main(argc, argv);
-#ifdef BOINC
-            else if (strcmp(argv[i], "-boinc") == 0)
-                return boinc_main(argc, argv);
-#endif
-#ifdef NETPRST
-            else if (strcmp(argv[i], "-net") == 0)
-                return net_main(argc, argv);
-#endif
-            else if (i < argc - 1 && strcmp(argv[i], "-log") == 0)
-            {
-                i++;
-                if (strcmp(argv[i], "debug") == 0)
-                    log_level = Logging::LEVEL_DEBUG;
-                if (strcmp(argv[i], "info") == 0)
-                    log_level = Logging::LEVEL_INFO;
-                if (strcmp(argv[i], "warning") == 0)
-                    log_level = Logging::LEVEL_WARNING;
-                if (strcmp(argv[i], "error") == 0)
-                    log_level = Logging::LEVEL_ERROR;
-            }
-            else if (strcmp(argv[i], "-v") == 0)
-            {
-                printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION);
-#ifdef GMP
-                GMPArithmetic* gmp = dynamic_cast<GMPArithmetic*>(&GiantsArithmetic::default_arithmetic());
-                if (gmp != nullptr)
-                    printf(", GMP library version %s", gmp->version().data());
-#endif
-                printf("\n");
-                return 0;
-            }
         }
         else
         {
             if (!input.parse(argv[i]))
                 printf("Unknown option %s.\n", argv[i]);
         }
-    if (input.empty())
-    {
-        printf("Usage: PRST {\"K*B^N+C\" | \"N!+C\" | \"N#+C\" | \"N\"} <options>\n");
-        printf("Options: [-log {debug | info | warning | error}]\n");
-        printf("\t[-t <threads>] [-spin <threads>]\n");
-        printf("\t[-time [write <sec>] [progress <sec>]]\n");
-        printf("\t[-fft+1] [-fft [+<inc>] [safety <margin>] [info]] [-cpu {SSE2 | AVX | FMA3 | AVX512F}]\n");
-        printf("\t-fermat [a <a>] \n");
-        printf("\t-proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
-        printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
-        return 0;
-    }
 
-    Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
-
-    if (input.bitlen() < 32)
-    {
-        Giant num = input.value();
-        GWASSERT(num.size() == 1);
-        logging.info("Trial division test of %s.\n", input.display_text().data());
-        if (is_prime(num.data()[0]))
-        {
-            logging.result(true, "%s is prime!\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is prime!\n");
-        }
-        else
-        {
-            logging.result(false, "%s is not prime.\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is not prime.\n");
-        }
-        return 0;
-    }
+    BoincLogging logging;
 
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
-    auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::State::TYPE)
-    {
-        if (supportLLR2)
-            file.reset(new LLR2File(filename, gwstate.fingerprint, type));
-        else
-            file.reset(new File(filename, fingerprint));
-    };
 
     uint32_t fingerprint = input.fingerprint();
     gwstate.fingerprint = fingerprint;
-    newFile(file_cert, !proof_cert.empty() && proof_cert != "default" ? proof_cert : "prst_" + std::to_string(fingerprint) + ".cert", fingerprint, Proof::Certificate::TYPE);
+    file_cert.reset(new File(proof_cert, fingerprint));
     std::unique_ptr<Proof> proof;
     if (proof_op != Proof::NO_OP)
         proof.reset(new Proof(proof_op, proof_count, input, params, *file_cert, logging));
@@ -432,8 +312,8 @@ int main(int argc, char *argv[])
         else if (proof)
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
-            newFile(file_proofpoint, !params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
-            newFile(file_proofproduct, !params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint, Proof::Product::TYPE);
+            file_proofpoint.reset(new File(params.ProofPointFilename, fingerprint));
+            file_proofproduct.reset(new File(params.ProofProductFilename, fingerprint));
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
 
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
