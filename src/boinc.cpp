@@ -31,6 +31,15 @@ void BoincLogging::report_progress()
     //progress().time_total()
 }
 
+bool BoincLogging::state_save_flag()
+{
+    return false;
+}
+
+void BoincLogging::state_save()
+{
+}
+
 void BoincLogging::progress_save()
 {
     //checkpoint

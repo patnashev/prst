@@ -9,6 +9,8 @@ public:
 
     void report(const std::string& message, int level) override;
     void report_progress() override;
+    bool state_save_flag() override;
+    void state_save() override;
     void progress_save() override;
     void heartbeat() override;
 };
