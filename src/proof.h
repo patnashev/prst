@@ -101,6 +101,7 @@ public:
     CarefulExp* taskRoot() { return _taskRoot.get(); }
     std::string& res64() { return _res64; }
 
+    std::vector<File*>& file_points() { return _file_points; }
     std::vector<File*>& file_products() { return _file_products; }
     File* file_cert() { return _file_cert; }
     arithmetic::Giant& r_0() { return _r_0; }
