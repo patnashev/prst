@@ -15,38 +15,149 @@
 #include "proof.h"
 #include "pocklington.h"
 #include "boinc.h"
+#include "version.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#define sleep(x) Sleep(1000*(x))
+#else
+#include <unistd.h>  // sleep
+#endif
+
+#define BOINC
+#include "bow.h"
 
 using namespace arithmetic;
 
 void BoincLogging::report(const std::string& message, int level)
 {
-    if (level == LEVEL_RESULT)
-        return;
-    //message
+    if (level == LEVEL_RESULT && !bow_standalone())
+    {
+        bow_report_progress(1.0);  // and hide message
+        Logging::report("Testing complete.\n", level);
+    }
+    else
+        Logging::report(message, level);
 }
 
 void BoincLogging::report_progress()
 {
-    //progress().progress_total()
-    //progress().time_total()
-}
-
-bool BoincLogging::state_save_flag()
-{
-    return false;
-}
-
-void BoincLogging::state_save()
-{
+    if (bow_standalone())
+        Logging::report_progress();
+    else
+        bow_report_progress(progress().progress_total());
 }
 
 void BoincLogging::progress_save()
 {
-    //checkpoint
+    bow_app_checkpointed(progress().progress_total());
+}
+
+#define TRICKLE_PERIOD             (24 * 3600)   // Send trickles each 24 hours
+#define TRICKLE_FIRST_REPORT_DELAY (10 * 60)     // Send first trickle if task is running more then 10 minutes
+
+static const char trickle_file[] = "trickle_ts.txt";
+
+static void save_trickle_file(time_t ts)
+{
+    FILE *f = fopen(trickle_file, "wt");
+    if (f)
+    {
+        fprintf(f, "%ld\n", (long)ts);
+        fclose(f);
+    }
+}
+
+static void send_trickle_message(Progress &progr)
+{
+    static time_t last_trickle_time;
+    static const char variety[] = "llr_progress";
+
+    time_t now = time(NULL);
+
+    // On first run, try to load saved timestamp of last trickle
+    if (last_trickle_time == 0)
+    {
+        FILE *f = fopen(trickle_file, "rt");
+        if (f)
+        {
+            long tmp;
+            if (fscanf(f, "%ld", &tmp) == 1)
+                last_trickle_time = tmp;
+            fclose(f);
+        }
+        // If no trickles were sent yet, schedule it to be sent few minutes after start
+        // (to be sure that task started up just fine). Otherwise, if Boinc starts a
+        // task too close to deadline and did't finish it in time (wrong completion estimate
+        // or paused by user), server will be not aware that task is running and will
+        // resend potentially good task.
+        if (last_trickle_time == 0)
+        {
+            last_trickle_time = now - TRICKLE_PERIOD + TRICKLE_FIRST_REPORT_DELAY;
+            save_trickle_file(last_trickle_time);
+        }
+    }
+
+    // Time to send new trickle?
+    if (now - last_trickle_time >= TRICKLE_PERIOD /* && ratio_done >= 0 */)  /* ratio_done < 0 not applicable here */
+    {
+        double ratio_done = progr.progress_total();
+        bow_send_trickle_up(variety, ratio_done);
+        last_trickle_time = now;
+        save_trickle_file(last_trickle_time);
+    }
 }
 
 void BoincLogging::heartbeat()
 {
+    Logging::heartbeat();
+    send_trickle_message(progress());
+}
+
+bool BoincLogging::state_save_flag()
+{
+    if (Task::abort_flag())  return false;   // Don't do anything if already requested to quit
+
+    unsigned mask = bow_poll_events();
+
+check_again:
+    if (mask & BOW_EVENT_QUIT_NORMAL)
+    {
+        error("Exiting - requested by client\n");
+        Task::abort();
+        return true;    // notice abort ASAP
+    }
+    else if (mask & BOW_EVENT_QUIT_HBT)
+    {
+        error("Exiting - lost connection with Boinc client\n");
+        Task::abort();
+        return true;    // notice abort ASAP
+    }
+    else if (mask & BOW_EVENT_ABORT)
+    {
+        error("Boinc requested us to abort\n");
+        throw TaskAbortException();
+    }
+    else if (mask & BOW_EVENT_SUSPENDED)
+    {
+        static int log_count;
+
+        if (log_count < 5)  // Don't generate too many same messages if user configured Boinc in "suspend when active" mode
+            info("Suspending\n");
+        do
+        {
+            sleep(1);
+            mask = bow_poll_events();
+            if (mask & ~BOW_EVENT_SUSPENDED) goto check_again;  // more critical event received
+        } while (mask & BOW_EVENT_SUSPENDED);
+        if (log_count < 5)
+        {
+            info("Resuming\n");
+            log_count++;
+        }
+    }
+
+    return false;
 }
 
 int boinc_main(int argc, char *argv[])
@@ -60,6 +171,20 @@ int boinc_main(int argc, char *argv[])
     std::string proof_cert;
     bool force_fermat = false;
     InputNum input;
+
+    bow_init();
+    Task::DISK_WRITE_TIME = bow_get_checkpoint_seconds(Task::DISK_WRITE_TIME);
+    printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION);  // always print in Boinc mode (data collected by validator)
+#ifdef GMP
+    GMPArithmetic* gmp = dynamic_cast<GMPArithmetic*>(&GiantsArithmetic::default_arithmetic());
+    if (gmp != nullptr)
+        printf(", GMP library version %s", gmp->version().data());
+#endif
+    printf("\n");
+
+    params.ProofPointFilename = "proof";
+    params.ProofProductFilename = "prod";
+    proof_cert = "proofc.crt";
 
     for (i = 1; i < argc; i++)
         if (argv[i][0] == '-' && argv[i][1])
@@ -89,18 +214,6 @@ int boinc_main(int argc, char *argv[])
                     return 1;
                 }
                 continue;
-
-            case 'f':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    gwstate.known_factors = argv[i] + 2;
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    gwstate.known_factors = argv[i];
-                }
-                else
-                    break;
-                continue;
             }
 
             if (i < argc - 1 && strcmp(argv[i], "-M") == 0)
@@ -126,6 +239,13 @@ int boinc_main(int argc, char *argv[])
                         }
                         else
                             break;
+            }
+            else if (strcmp(argv[i], "--nthreads") == 0 && i < argc - 1)  // alias for '-t', set by Boinc
+            {
+                i++;
+                gwstate.thread_count = atoi(argv[i]);
+                if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
+                    gwstate.thread_count = 1;
             }
             else if (strcmp(argv[i], "-generic") == 0)
                 gwstate.force_general_mod = true;
@@ -181,11 +301,6 @@ int boinc_main(int argc, char *argv[])
                         params.ProofPointFilename = argv[i];
                         i++;
                         params.ProofProductFilename = argv[i];
-                        if (proof_op == Proof::BUILD && i < argc - 1 && argv[i + 1][0] != '-')
-                        {
-                            i++;
-                            proof_cert = argv[i];
-                        }
                     }
                     else
                         break;
@@ -265,6 +380,11 @@ int boinc_main(int argc, char *argv[])
             if (!input.parse(argv[i]))
                 printf("Unknown option %s.\n", argv[i]);
         }
+    if (input.empty())
+    {
+        printf("No input.\n");
+        return 0;
+    }
 
     BoincLogging logging;
 
@@ -305,11 +425,10 @@ int boinc_main(int argc, char *argv[])
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
+    bool failed = false;
     try
     {
-        File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
-        file_progress.hash = false;
-        logging.progress_file(&file_progress);
+        logging.progress().time_init(bow_get_starting_elapsed_time());
 
         if (proof_op == Proof::CERT)
         {
@@ -335,14 +454,17 @@ int boinc_main(int argc, char *argv[])
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
         }
-
-        file_progress.clear();
     }
     catch (const TaskAbortException&)
     {
+        failed = true;
     }
 
     gwstate.done();
+
+    if (!failed)             bow_finish(0);   // Boinc task completed, or exit(0) in standalone mode
+    if (!Task::abort_flag()) bow_finish(1);   // Failed and it's NOT a Ctrl-C (or quit request), abort Boinc job
+    // otherwise it's Boinc temporary exit, just return from program.
 
     return 0;
 }
