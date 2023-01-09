@@ -182,8 +182,8 @@ int boinc_main(int argc, char *argv[])
 #endif
     printf("\n");
 
-    params.ProofPointFilename = "proof";
-    params.ProofProductFilename = "prod";
+    params.ProofPointFilename = "prsproof";
+    params.ProofProductFilename = "prsprod";
 
     for (i = 1; i < argc; i++)
         if (argv[i][0] == '-' && argv[i][1])
@@ -202,16 +202,6 @@ int boinc_main(int argc, char *argv[])
                     break;
                 if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
                     gwstate.thread_count = 1;
-                continue;
-
-            case 'q':
-                if (argv[i][2] != '\"' && !isdigit(argv[i][2]))
-                    break;
-                if (!input.parse(argv[i] + 2))
-                {
-                    printf("Invalid number format.\n");
-                    return 1;
-                }
                 continue;
             }
 
