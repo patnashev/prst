@@ -16,21 +16,32 @@
 #include "pocklington.h"
 #include "boinc.h"
 
+#define BOINC
+#include "bow.h"
+#include <unistd.h>  // sleep
+
 using namespace arithmetic;
 
 void BoincLogging::report(const std::string& message, int level)
 {
-    if (level == LEVEL_RESULT)
-        return;
-    //message
+    if (level == LEVEL_RESULT && !bow_standalone())
+    {
+        bow_report_progress(1.0);  // and hide message
+        Logging::report("Testing complete.\n", level);
+    }
+    else
+        Logging::report(message, level);
 }
 
 void BoincLogging::report_progress()
 {
-    //progress().progress_total()
-    //progress().time_total()
+    if (bow_standalone())
+        Logging::report_progress();
+    else
+        bow_report_progress(progress().progress_total());
 }
 
+/*
 bool BoincLogging::state_save_flag()
 {
     return false;
@@ -39,16 +50,122 @@ bool BoincLogging::state_save_flag()
 void BoincLogging::state_save()
 {
 }
+*/
 
 void BoincLogging::progress_save()
 {
-    //checkpoint
+    Logging::progress_save();
+    bow_app_checkpointed(progress().progress_total());
+}
+
+#define TRICKLE_PERIOD             (24 * 3600)   // Send trickles each 24 hours
+#define TRICKLE_FIRST_REPORT_DELAY (10 * 60)     // Send first trickle if task is running more then 10 minutes
+
+static const char trickle_file[] = "trickle_ts.txt";
+
+static void save_trickle_file(time_t ts)
+{
+    FILE *f = fopen(trickle_file, "wt");
+    if (f)
+    {
+        fprintf(f, "%ld\n", (long)ts);
+        fclose(f);
+    }
+}
+
+static void send_trickle_message(Progress &progr)
+{
+    static time_t last_trickle_time;
+    static const char variety[] = "llr_progress";
+
+    time_t now = time(NULL);
+
+    // On first run, try to load saved timestamp of last trickle
+    if (last_trickle_time == 0)
+    {
+        FILE *f = fopen(trickle_file, "rt");
+        if (f)
+        {
+            long tmp;
+            if (fscanf(f, "%ld", &tmp) == 1)
+                last_trickle_time = tmp;
+            fclose(f);
+        }
+        // If no trickles were sent yet, schedule it to be sent few minutes after start
+        // (to be sure that task started up just fine). Otherwise, if Boinc starts a
+        // task too close to deadline and did't finish it in time (wrong completion estimate
+        // or paused by user), server will be not aware that task is running and will
+        // resend potentially good task.
+        if (last_trickle_time == 0)
+        {
+            last_trickle_time = now - TRICKLE_PERIOD + TRICKLE_FIRST_REPORT_DELAY;
+            save_trickle_file(last_trickle_time);
+        }
+    }
+
+    // Time to send new trickle?
+    if (now - last_trickle_time >= TRICKLE_PERIOD /* && ratio_done >= 0 */)  /* ratio_done < 0 not applicable here */
+    {
+        double ratio_done = progr.progress_total();
+        bow_send_trickle_up(variety, ratio_done);
+        last_trickle_time = now;
+        save_trickle_file(last_trickle_time);
+    }
 }
 
 void BoincLogging::heartbeat()
 {
+    Logging::heartbeat();
+    send_trickle_message(progress());
 }
 
+bool BoincLogging::state_save_flag()
+{
+    if (Task::abort_flag())  return false;   // Don't do anything if already requested to quit
+
+    unsigned mask = bow_poll_events();
+
+check_again:
+    if (mask & BOW_EVENT_QUIT_NORMAL)
+    {
+        error("Exiting - requested by client\n");
+        Task::abort();
+        return true;    // notice abort ASAP
+    }
+    else if (mask & BOW_EVENT_QUIT_HBT)
+    {
+        error("Exiting - lost connection with Boinc client\n");
+        Task::abort();
+        return true;    // notice abort ASAP
+    }
+    else if (mask & BOW_EVENT_ABORT)
+    {
+        error("Boinc requested us to abort\n");
+        throw TaskAbortException();
+    }
+    else if (mask & BOW_EVENT_SUSPENDED)
+    {
+        static int log_count;
+
+        if (log_count < 5)  // Don't generate too many same messages if user configured Boinc in "suspend when active" mode
+            info("Suspending\n");
+        do
+        {
+            sleep(1);
+            mask = bow_poll_events();
+            if (mask & ~BOW_EVENT_SUSPENDED) goto check_again;  // more critical event received
+        } while (mask & BOW_EVENT_SUSPENDED);
+        if (log_count < 5)
+        {
+            info("Resuming\n");
+            log_count++;
+        }
+    }
+
+    return false;
+}
+
+/*
 int boinc_main(int argc, char *argv[])
 {
     int i;
@@ -346,3 +463,4 @@ int boinc_main(int argc, char *argv[])
 
     return 0;
 }
+*/

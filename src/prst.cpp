@@ -21,6 +21,7 @@
 #ifdef BOINC
 #include "boinc.h"
 #endif
+#include "bow.h"
 #ifdef NETPRST
 int net_main(int argc, char *argv[]);
 #endif
@@ -65,6 +66,13 @@ int main(int argc, char *argv[])
     bool force_fermat = false;
     InputNum input;
     int log_level = Logging::LEVEL_WARNING;
+
+    // Initialize Boinc, if necessary
+#ifdef BOINC
+    bow_init();
+    Task::DISK_WRITE_TIME = bow_get_checkpoint_seconds(Task::DISK_WRITE_TIME);
+    printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION "\n");  // always print in Boinc mode (data collected by validator)
+#endif
 
     for (i = 1; i < argc; i++)
         if (argv[i][0] == '-' && argv[i][1])
@@ -143,6 +151,13 @@ int main(int argc, char *argv[])
                         }
                         else
                             break;
+            }
+            else if (strcmp(argv[i], "--nthreads") == 0 && i < argc - 1)  // alias for '-t', set by Boinc
+            {
+                i++;
+                gwstate.thread_count = atoi(argv[i]);
+                if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
+                    gwstate.thread_count = 1;
             }
             else if (strcmp(argv[i], "-generic") == 0)
                 gwstate.force_general_mod = true;
@@ -302,10 +317,12 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(argv[i], "-test") == 0)
                 return testing_main(argc, argv);
+/*
 #ifdef BOINC
             else if (strcmp(argv[i], "-boinc") == 0)
                 return boinc_main(argc, argv);
 #endif
+*/
 #ifdef NETPRST
             else if (strcmp(argv[i], "-net") == 0)
                 return net_main(argc, argv);
@@ -352,7 +369,11 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+#ifdef BOINC
+    BoincLogging logging;
+#else
     Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
+#endif
 
     if (input.bitlen() < 32)
     {
@@ -416,6 +437,7 @@ int main(int argc, char *argv[])
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
+    bool failed = false;
     try
     {
         File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
@@ -451,9 +473,14 @@ int main(int argc, char *argv[])
     }
     catch (const TaskAbortException&)
     {
+        failed = true;
     }
 
     gwstate.done();
+
+    if (!failed)             bow_finish(0);   // Boinc task completed, or exit(0) in standalone mode
+    if (!Task::abort_flag()) bow_finish(1);   // Failed and it's NOT a Ctrl-C (or quit request), abort Boinc job
+    // otherwise it's Boinc temporary exit, just return from program.
 
     return 0;
 }
