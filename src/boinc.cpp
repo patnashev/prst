@@ -25,7 +25,7 @@
 #endif
 
 #define BOINC
-#include "bow.h"
+#include "bow/bow.h"
 
 using namespace arithmetic;
 
@@ -184,7 +184,6 @@ int boinc_main(int argc, char *argv[])
 
     params.ProofPointFilename = "proof";
     params.ProofProductFilename = "prod";
-    proof_cert = "proofc.crt";
 
     for (i = 1; i < argc; i++)
         if (argv[i][0] == '-' && argv[i][1])
