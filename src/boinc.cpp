@@ -282,7 +282,8 @@ int boinc_main(int argc, char *argv[])
                     {
                         i += 2;
                         proof_op = Proof::CERT;
-                        proof_cert = argv[i];
+                        //proof_cert = argv[i];
+                        bow_resolve_filename(argv[i], proof_cert);
                     }
                     else if (i < argc - 3 && strcmp(argv[i + 1], "name") == 0)
                     {
