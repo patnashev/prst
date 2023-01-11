@@ -25,6 +25,7 @@ public:
     int type() { return _type; }
     int a() { return _a; }
     bool success() { return _success; }
+    bool prime() { return _prime; }
     std::string& res64() { return _res64; }
     arithmetic::Giant& result() { return _Xm1.empty() ? _task->state()->X() : _Xm1; }
 
@@ -50,5 +51,6 @@ protected:
     std::unique_ptr<MultipointExp> _task;
 
     bool _success = false;
+    bool _prime = false;
     std::string _res64;
 };

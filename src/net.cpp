@@ -65,7 +65,7 @@ void NetLogging::report_param(const std::string& name, const std::string& value)
 void NetLogging::report_progress()
 {
     Logging::report_progress();
-    _net.task()->time_op = progress().time_op()*1000;
+    _net.task()->time_op = progress().time_op();
 }
 
 void NetLogging::progress_save()
@@ -132,7 +132,7 @@ void NetFile::read_buffer()
             {
                 // Construct a request to the server
                 auto reply = RequestBuilder(ctx)
-                    .Get(_net_ctx.url() + "llr/" + _net_ctx.task_id() + "/" + filename())
+                    .Get(_net_ctx.url() + "prst/" + _net_ctx.task_id() + "/" + filename())
                     .Argument("workerID", _net_ctx.worker_id())
 
                     // Send the request
@@ -323,7 +323,7 @@ void NetContext::upload(NetFile* file)
                 }
                 file = _upload_queue.front();
                 _upload_queue.pop_front();
-                put_url = url() + "llr/" + task_id() + "/" + file->filename();
+                put_url = url() + "prst/" + task_id() + "/" + file->filename();
                 data = file->buffer().data();
                 size = file->buffer().size();
                 md5 = file->md5hash();
@@ -336,6 +336,7 @@ void NetContext::upload(NetFile* file)
                     .Put(put_url)
                     .Argument("md5", md5)
                     .Argument("workerID", worker_id())
+                    .Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
                     .Argument("uptime", uptime())
                     .Argument("fft_desc", _task->fft_desc)
                     .Argument("fft_len", _task->fft_len)
@@ -511,7 +512,7 @@ int net_main(int argc, char *argv[])
 
 				// Construct a request to the server
 				SerializeFromJson(*net.task(), RequestBuilder(ctx)
-					.Post(net.url() + "llr/new")
+					.Post(net.url() + "prst/new")
 					.Argument("workerID", net.worker_id())
 					.Argument("uptime", net.uptime())
 					.Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
@@ -537,7 +538,12 @@ int net_main(int argc, char *argv[])
         NetFile file_number(net, "number", 0);
         InputNum input;
         if (net.task()->n > 0)
-            input.init(net.task()->sk, net.task()->sb, net.task()->n, net.task()->c);
+        {
+            if (net.task()->sb == "!" || net.task()->sb == "#")
+                input.parse(net.task()->sk + "*" + std::to_string(net.task()->n) + net.task()->sb + (net.task()->c >= 0 ? "+" : "") + std::to_string(net.task()->c));
+            else
+                input.init(net.task()->sk, net.task()->sb, net.task()->n, net.task()->c);
+        }
         else if (!input.read(file_number))
         {
             logging.error("Number file is missing or corrupted.\n");
@@ -546,6 +552,8 @@ int net_main(int argc, char *argv[])
         }
         if (net.task()->options.find("FFT_Increment") != net.task()->options.end())
             gwstate.next_fft_count = std::stoi(net.task()->options["FFT_Increment"]);
+        if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
+            gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
         net.task()->a = net.task()->L = net.task()->L2 = net.task()->M = 0;
         int maxSize = (int)(maxMem/(gwnum_size(gwstate.gwdata())));
 
@@ -557,27 +565,24 @@ int net_main(int argc, char *argv[])
             Task::DISK_WRITE_TIME = disk_write_time;
         
         Params params;
-        bool supportLLR2 = true;
+        bool supportLLR2 = false;
         if (net.task()->options.find("support") != net.task()->options.end())
             supportLLR2 = net.task()->options["support"] == "LLR2";
         int proof_op = Proof::NO_OP;
-        if (net.task()->mode == "SavePoints")
+        if (net.task()->proof == "save")
             proof_op = Proof::SAVE;
-        if (net.task()->mode == "BuildCert")
-            proof_op = Proof::BUILD;
-        if (net.task()->mode == "VerifyCert")
+        if (net.task()->proof == "cert")
             proof_op = Proof::CERT;
-        int proof_count = 16;
-        if (net.task()->options.find("Gerbicz") != net.task()->options.end())
-            params.CheckStrong = net.task()->options["Gerbicz"] == "1";
-        if (net.task()->options.find("ProofCount") != net.task()->options.end())
-            proof_count = std::stoi(net.task()->options["ProofCount"]);
-        if (net.task()->options.find("PointsPerL2") != net.task()->options.end())
-            params.StrongCount = proof_count/std::stoi(net.task()->options["PointsPerL2"]);
-        if (net.task()->options.find("ProofName") != net.task()->options.end())
-            params.ProofPointFilename = net.task()->options["ProofName"];
-        if (net.task()->options.find("ProductName") != net.task()->options.end())
-            params.ProofProductFilename = net.task()->options["ProductName"];
+        int proof_count = net.task()->count;
+        if (net.task()->options.find("strong") != net.task()->options.end())
+        {
+            params.CheckStrong = true;
+            params.StrongCount = std::stoi(net.task()->options["strong"]);
+            if (params.StrongCount.value() == 0)
+                params.StrongCount.reset();
+        }
+        if (net.task()->options.find("a") != net.task()->options.end())
+            params.FermatBase = std::stoi(net.task()->options["a"]);
 
         std::list<std::unique_ptr<NetFile>> files;
         auto newFile = [&](const std::string& filename, uint32_t fingerprint, char type = BaseExp::State::TYPE)
@@ -589,7 +594,7 @@ int net_main(int argc, char *argv[])
         };
         uint32_t fingerprint = input.fingerprint();
         gwstate.fingerprint = fingerprint;
-        File* file_cert = newFile(!params.ProofPointFilename.empty() ? params.ProofPointFilename + ".crt" : "proof.crt", fingerprint, Proof::Certificate::TYPE);
+        File* file_cert = newFile("cert", fingerprint, Proof::Certificate::TYPE);
         std::unique_ptr<Proof> proof;
         if (proof_op != Proof::NO_OP)
             proof.reset(new Proof(proof_op, proof_count, input, params, *file_cert, logging));
@@ -626,8 +631,8 @@ int net_main(int argc, char *argv[])
             else if (proof)
             {
                 fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
-                File* file_proofpoint = newFile(!params.ProofPointFilename.empty() ? params.ProofPointFilename : "proof", fingerprint);
-                File* file_proofproduct = newFile(!params.ProofProductFilename.empty() ? params.ProofProductFilename : "prod", fingerprint, Proof::Product::TYPE);
+                File* file_proofpoint = newFile("proof", fingerprint);
+                File* file_proofproduct = newFile("prod", fingerprint, Proof::Product::TYPE);
                 proof->init_files(file_proofpoint, file_proofproduct, file_cert);
 
                 File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
@@ -666,9 +671,9 @@ int net_main(int argc, char *argv[])
 				{
 					// Construct a request to the server
 					RequestBuilder(ctx)
-						.Post(net.url() + "llr/res/" + net.task_id())
+						.Post(net.url() + "prst/res/" + net.task_id())
 						.Argument("workerID", net.worker_id())
-                        .Argument("res", proof_op == Proof::CERT ? proof->res64() : fermat->success() ? "prime" : fermat->res64())
+                        .Argument("res", proof_op == Proof::CERT ? proof->res64() : fermat->prime() ? "prime" : (fermat->success() && fermat->res64().empty() ? "prp" : fermat->success() ? "prp/" : "") + fermat->res64())
                         .Argument("cert", proof && proof_op != Proof::CERT ? proof->res64() : "")
                         .Argument("time", std::to_string(logging.progress().time_total()))
                         .Argument("version", NET_PRST_VERSION "." VERSION_BUILD)

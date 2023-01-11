@@ -27,7 +27,8 @@ struct PRSTTask {
     std::string sb;
     int n = 0;
     int c = 0;
-    std::string mode;
+    std::string proof;
+    int count = 0;
     double time = 0.0;
     std::map<std::string, std::string> options;
 
@@ -47,7 +48,8 @@ BOOST_FUSION_ADAPT_STRUCT(
     (auto, sb)
     (auto, n)
     (auto, c)
-    (auto, mode)
+    (auto, proof)
+    (auto, count)
     (auto, time)
     (auto, options)
 )

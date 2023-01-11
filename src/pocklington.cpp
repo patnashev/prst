@@ -94,9 +94,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 tmp += 1;
                 if (tmp != 0 && tmp != *gwstate.N)
                 {
-                    _success = false;
                     _res64 = tmp.to_res64();
-                    logging.result(_success, "%s is not prime. Proth RES64: %s.\n", input.display_text().data(), _res64.data());
+                    logging.result(_prime, "%s is not prime. Proth RES64: %s.\n", input.display_text().data(), _res64.data());
                     logging.result_save(input.input_text() + " is not prime. Proth RES64: " + _res64 + ".\n");
                 }
                 break;
@@ -127,9 +126,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             tmp.gcd(*gwstate.N);
             if (tmp != 1)
             {
-                _success = false;
                 _res64 = tmp.to_res64();
-                logging.result(_success, "%s is not prime. Factor RES64: %s.\n", input.display_text().data(), _res64.data());
+                logging.result(_prime, "%s is not prime. Factor RES64: %s.\n", input.display_text().data(), _res64.data());
                 logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ".\n");
                 break;
             }
@@ -179,7 +177,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
 
     if (_success)
     {
-        logging.result(_success, "%s is prime!\n", input.display_text().data());
+        _prime = true;
+        logging.result(_prime, "%s is prime!\n", input.display_text().data());
         logging.result_save(input.input_text() + " is prime!\n");
     }
 

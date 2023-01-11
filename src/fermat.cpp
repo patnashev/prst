@@ -325,7 +325,8 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     if (type() == PROTH && (_Xm1 == 0 || _Xm1 == *gwstate.N))
     {
         _success = true;
-        logging.result(_success, "%s is prime! Time: %.1f s.\n", input.display_text().data(), _task->timer());
+        _prime = true;
+        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), _task->timer());
         logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
     else if (type() == PROTH || _task->state()->X() != 1)
@@ -337,12 +338,12 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         }
         else
             _res64 = _task->state()->X().to_res64();
-        logging.result(_success, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
+        logging.result(_prime, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), _task->timer());
         logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
-    if (!_success && _task->state()->X() == 1)
+    if (!_prime && _task->state()->X() == 1)
     {
-        _success = type() != PROTH;
+        _success = true;
         logging.result(type() != PROTH && type() != POCKLINGTON, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), _task->timer());
         logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)_task->timer()) + " s.\n");
     }
