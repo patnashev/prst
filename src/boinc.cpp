@@ -6,6 +6,7 @@
 #include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
+#include "cmdline.h"
 #include "inputnum.h"
 #include "file.h"
 #include "logging.h"
@@ -162,10 +163,8 @@ check_again:
 
 int boinc_main(int argc, char *argv[])
 {
-    int i;
     GWState gwstate;
     Params params;
-    uint64_t maxMem = 0;
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
@@ -185,191 +184,64 @@ int boinc_main(int argc, char *argv[])
     params.ProofPointFilename = "prsproof";
     params.ProofProductFilename = "prsprod";
 
-    for (i = 1; i < argc; i++)
-        if (argv[i][0] == '-' && argv[i][1])
-        {
-            switch (argv[i][1])
-            {
-            case 't':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    gwstate.thread_count = atoi(argv[i] + 2);
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    gwstate.thread_count = atoi(argv[i]);
-                }
-                else
-                    break;
-                if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
-                    gwstate.thread_count = 1;
-                continue;
-            }
+    CmdLine()
+        .ignore("-boinc")
+        .value_number("-t", 0, gwstate.thread_count, 1, 256)
+        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
+        .value_number("--nthreads", ' ', gwstate.thread_count, 1, 256)  // alias for '-t', set by Boinc
+        .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
+        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .check("-generic", gwstate.force_general_mod, true)
+        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+        .group("-fft")
+            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
+            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
+            .end()
+        .group("-proof")
+            .exclusive()
+                .ex_case()
+                    .value_number("save", ' ', proof_count, 2, 1048576)
+                        .prev_check(proof_op, Proof::SAVE)
+                .optional()
+                    .list("name", ' ', ' ')
+                        .value_string(params.ProofPointFilename)
+                        .value_string(params.ProofProductFilename)
+                        .end()
+                    .end()
+                .ex_case()
+                    //.value_string("cert", ' ', proof_cert)
+                    .value_code("cert", ' ', [&](const char* cert) { bow_resolve_filename(cert, proof_cert); return true; })
+                        .prev_check(proof_op, Proof::CERT)
+                    .end()
+                .end()
+            .end()
+        .group("-check")
+            .exclusive()
+                .ex_case().check_code("near", [&] { params.CheckNear = true; params.Check = false; }).end()
+                .ex_case().check_code("always", [&] { params.CheckNear = false; params.Check = true; }).end()
+                .ex_case().check_code("never", [&] { params.CheckNear = false; params.Check = false; }).end()
+                .end()
+            .group("strong")
+                .value_number("count", ' ', params.StrongCount, 1, 1048576)
+                .value_number("L", ' ', params.StrongL, 1, INT_MAX)
+                .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
+                .end()
+                .prev_check(params.CheckStrong, true)
+            .end()
+        .group("-fermat")
+            .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
+            .end()
+            .prev_check(force_fermat, true)
+        .group("-time")
+            .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
+            .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
+            .end()
+        .default_code([&](const char* param) {
+            if (!input.parse(param))
+                printf("Unknown option %s.\n", param);
+            })
+        .parse(argc, argv);
 
-            if (i < argc - 1 && strcmp(argv[i], "-M") == 0)
-            {
-                i++;
-                maxMem = InputNum::parse_numeral(argv[i]);
-            }
-            else if (strncmp(argv[i], "-fft", 4) == 0 && ((!argv[i][4] && i < argc - 1) || argv[i][4] == '+'))
-            {
-                if (argv[i][4] == '+')
-                    gwstate.next_fft_count = atoi(argv[i] + 5);
-                else
-                    while (true)
-                        if (i < argc - 1 && argv[i + 1][0] == '+')
-                        {
-                            i++;
-                            gwstate.next_fft_count = atoi(argv[i] + 1);
-                        }
-                        else if (i < argc - 2 && strcmp(argv[i + 1], "safety") == 0)
-                        {
-                            i += 2;
-                            gwstate.safety_margin = atof(argv[i]);
-                        }
-                        else
-                            break;
-            }
-            else if (strcmp(argv[i], "--nthreads") == 0 && i < argc - 1)  // alias for '-t', set by Boinc
-            {
-                i++;
-                gwstate.thread_count = atoi(argv[i]);
-                if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
-                    gwstate.thread_count = 1;
-            }
-            else if (strcmp(argv[i], "-generic") == 0)
-                gwstate.force_general_mod = true;
-            else if (i < argc - 1 && strcmp(argv[i], "-spin") == 0)
-            {
-                i++;
-                gwstate.spin_threads = atoi(argv[i]);
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-cpu") == 0)
-            {
-                while (true)
-                    if (i < argc - 1 && strcmp(argv[i + 1], "SSE2") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "SSE2";
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "AVX") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "AVX";
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "FMA3") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "FMA3";
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "AVX512F") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "AVX512F";
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 2 && strcmp(argv[i], "-proof") == 0)
-            {
-                while (true)
-                    if (i < argc - 2 && strcmp(argv[i + 1], "save") == 0)
-                    {
-                        i += 2;
-                        proof_op = Proof::SAVE;
-                        proof_count = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "cert") == 0)
-                    {
-                        i += 2;
-                        proof_op = Proof::CERT;
-                        //proof_cert = argv[i];
-                        bow_resolve_filename(argv[i], proof_cert);
-                    }
-                    else if (i < argc - 3 && strcmp(argv[i + 1], "name") == 0)
-                    {
-                        i += 2;
-                        params.ProofPointFilename = argv[i];
-                        i++;
-                        params.ProofProductFilename = argv[i];
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-check") == 0)
-            {
-                while (true)
-                    if (i < argc - 1 && strcmp(argv[i + 1], "near") == 0)
-                    {
-                        i++;
-                        params.CheckNear = true;
-                        params.Check = false;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "always") == 0)
-                    {
-                        i++;
-                        params.CheckNear = false;
-                        params.Check = true;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "never") == 0)
-                    {
-                        i++;
-                        params.CheckNear = false;
-                        params.Check = false;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "strong") == 0)
-                    {
-                        i++;
-                        params.CheckStrong = true;
-                        if (i < argc - 2 && strcmp(argv[i + 1], "count") == 0)
-                        {
-                            i += 2;
-                            params.StrongCount = atoi(argv[i]);
-                        }
-                        if (i < argc - 2 && strcmp(argv[i + 1], "L") == 0)
-                        {
-                            i += 2;
-                            params.StrongL = atoi(argv[i]);
-                        }
-                        if (i < argc - 2 && strcmp(argv[i + 1], "L2") == 0)
-                        {
-                            i += 2;
-                            params.StrongL2 = atoi(argv[i]);
-                        }
-                    }
-                    else
-                        break;
-            }
-            else if (strcmp(argv[i], "-fermat") == 0)
-            {
-                force_fermat = true;
-                if (i < argc - 2 && strcmp(argv[i + 1], "a") == 0)
-                {
-                    i += 2;
-                    params.FermatBase = atoi(argv[i]);
-                }
-            }
-            else if (strcmp(argv[i], "-time") == 0)
-            {
-                while (true)
-                    if (i < argc - 2 && strcmp(argv[i + 1], "write") == 0)
-                    {
-                        i += 2;
-                        Task::DISK_WRITE_TIME = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "progress") == 0)
-                    {
-                        i += 2;
-                        Task::PROGRESS_TIME = atoi(argv[i]);
-                    }
-                    else
-                        break;
-            }
-        }
-        else
-        {
-            if (!input.parse(argv[i]))
-                printf("Unknown option %s.\n", argv[i]);
-        }
     if (input.empty())
     {
         printf("No input.\n");

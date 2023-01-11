@@ -7,6 +7,7 @@
 #include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
+#include "cmdline.h"
 #include "inputnum.h"
 #include "file.h"
 #include "logging.h"
@@ -54,10 +55,8 @@ int main(int argc, char *argv[])
     //  5 strong check placeholder
     //  6 proof state
 
-    int i;
     GWState gwstate;
     Params params;
-    uint64_t maxMem = 0;
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
@@ -66,264 +65,83 @@ int main(int argc, char *argv[])
     InputNum input;
     int log_level = Logging::LEVEL_WARNING;
 
-    for (i = 1; i < argc; i++)
-        if (argv[i][0] == '-' && argv[i][1])
-        {
-            switch (argv[i][1])
-            {
-            case 't':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    gwstate.thread_count = atoi(argv[i] + 2);
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    gwstate.thread_count = atoi(argv[i]);
-                }
-                else
-                    break;
-                if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
-                    gwstate.thread_count = 1;
-                continue;
-
-            case 'q':
-                if (argv[i][2] != '\"' && !isdigit(argv[i][2]))
-                    break;
-                if (!input.parse(argv[i] + 2))
-                {
-                    printf("Invalid number format.\n");
-                    return 1;
-                }
-                continue;
-
-            case 'f':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    gwstate.known_factors = argv[i] + 2;
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    gwstate.known_factors = argv[i];
-                }
-                else
-                    break;
-                continue;
-
-            case 'd':
-                if (!argv[i][2])
-                    log_level = Logging::LEVEL_INFO;
-                else
-                    break;
-                continue;
-            }
-
-            if (i < argc - 1 && strcmp(argv[i], "-M") == 0)
-            {
-                i++;
-                maxMem = InputNum::parse_numeral(argv[i]);
-            }
-            else if (strncmp(argv[i], "-fft", 4) == 0 && ((!argv[i][4] && i < argc - 1) || argv[i][4] == '+'))
-            {
-                if (argv[i][4] == '+')
-                    gwstate.next_fft_count = atoi(argv[i] + 5);
-                else
-                    while (true)
-                        if (i < argc - 1 && argv[i + 1][0] == '+')
-                        {
-                            i++;
-                            gwstate.next_fft_count = atoi(argv[i] + 1);
-                        }
-                        else if (i < argc - 2 && strcmp(argv[i + 1], "safety") == 0)
-                        {
-                            i += 2;
-                            gwstate.safety_margin = atof(argv[i]);
-                        }
-                        else if (i < argc - 1 && strcmp(argv[i + 1], "info") == 0)
-                        {
-                            i++;
-                            gwstate.information_only = true;
-                        }
-                        else
-                            break;
-            }
-            else if (strcmp(argv[i], "-generic") == 0)
-                gwstate.force_general_mod = true;
-            else if (i < argc - 1 && strcmp(argv[i], "-spin") == 0)
-            {
-                i++;
-                gwstate.spin_threads = atoi(argv[i]);
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-cpu") == 0)
-            {
-                while (true)
-                    if (i < argc - 1 && strcmp(argv[i + 1], "SSE2") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "SSE2";
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "AVX") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "AVX";
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "FMA3") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "FMA3";
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "AVX512F") == 0)
-                    {
-                        i++;
-                        gwstate.instructions = "AVX512F";
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 2 && strcmp(argv[i], "-proof") == 0)
-            {
-                while (true)
-                    if (i < argc - 2 && strcmp(argv[i + 1], "save") == 0)
-                    {
-                        i += 2;
-                        proof_op = Proof::SAVE;
-                        proof_count = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "build") == 0)
-                    {
-                        i += 2;
-                        proof_op = Proof::BUILD;
-                        proof_count = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "cert") == 0)
-                    {
-                        i += 2;
-                        proof_op = Proof::CERT;
-                        proof_cert = argv[i];
-                    }
-                    else if (i < argc - 3 && strcmp(argv[i + 1], "name") == 0)
-                    {
-                        i += 2;
-                        params.ProofPointFilename = argv[i];
-                        i++;
-                        params.ProofProductFilename = argv[i];
-                        if (proof_op == Proof::BUILD && i < argc - 1 && argv[i + 1][0] != '-')
-                        {
-                            i++;
-                            proof_cert = argv[i];
-                        }
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "security") == 0)
-                    {
-                        i += 2;
-                        params.ProofSecuritySeed = argv[i];
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "roots") == 0)
-                    {
-                        i += 2;
-                        params.RootOfUnitySecurity = atoi(argv[i]);
-                        if (params.RootOfUnitySecurity.value() == 0)
-                            params.RootOfUnityCheck = false;
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-check") == 0)
-            {
-                while (true)
-                    if (i < argc - 1 && strcmp(argv[i + 1], "near") == 0)
-                    {
-                        i++;
-                        params.CheckNear = true;
-                        params.Check = false;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "always") == 0)
-                    {
-                        i++;
-                        params.CheckNear = false;
-                        params.Check = true;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "never") == 0)
-                    {
-                        i++;
-                        params.CheckNear = false;
-                        params.Check = false;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "strong") == 0)
-                    {
-                        i++;
-                        params.CheckStrong = true;
-                        if (i < argc - 2 && strcmp(argv[i + 1], "count") == 0)
-                        {
-                            i += 2;
-                            params.StrongCount = atoi(argv[i]);
-                        }
-                        if (i < argc - 2 && strcmp(argv[i + 1], "L") == 0)
-                        {
-                            i += 2;
-                            params.StrongL = atoi(argv[i]);
-                        }
-                        if (i < argc - 2 && strcmp(argv[i + 1], "L2") == 0)
-                        {
-                            i += 2;
-                            params.StrongL2 = atoi(argv[i]);
-                        }
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-support") == 0)
-            {
-                i++;
-                if (strcmp(argv[i], "LLR2") == 0)
-                    supportLLR2 = true;
-            }
-            else if (strcmp(argv[i], "-fermat") == 0)
-            {
-                force_fermat = true;
-                if (i < argc - 2 && strcmp(argv[i + 1], "a") == 0)
-                {
-                    i += 2;
-                    params.FermatBase = atoi(argv[i]);
-                }
-            }
-            else if (strcmp(argv[i], "-time") == 0)
-            {
-                while (true)
-                    if (i < argc - 2 && strcmp(argv[i + 1], "write") == 0)
-                    {
-                        i += 2;
-                        Task::DISK_WRITE_TIME = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "progress") == 0)
-                    {
-                        i += 2;
-                        Task::PROGRESS_TIME = atoi(argv[i]);
-                    }
-                    else
-                        break;
-            }
-            else if (strcmp(argv[i], "-test") == 0)
-                return testing_main(argc, argv);
+    CmdLine()
+        .value_number("-t", 0, gwstate.thread_count, 1, 256)
+        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
+        .value_number("--nthreads", ' ', gwstate.thread_count, 1, 256)  // alias for '-t', set by Boinc
+        .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
+        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .check("-generic", gwstate.force_general_mod, true)
+        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+        .group("-fft")
+            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
+            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
+            .check("info", gwstate.information_only, true)
+            .end()
+        .group("-proof")
+            .exclusive()
+                .ex_case()
+                    .value_number("save", ' ', proof_count, 2, 1048576)
+                        .prev_check(proof_op, Proof::SAVE)
+                .optional()
+                    .list("name", ' ', ' ')
+                        .value_string(params.ProofPointFilename)
+                        .value_string(params.ProofProductFilename)
+                        .end()
+                    .end()
+                .ex_case()
+                    .value_number("build", ' ', proof_count, 2, 1048576)
+                        .prev_check(proof_op, Proof::BUILD)
+                .optional()
+                    .list("name", ' ', ' ')
+                        .value_string(params.ProofPointFilename)
+                        .value_string(params.ProofProductFilename)
+                        .value_string(proof_cert)
+                        .end()
+                    .value_string("security", ' ', params.ProofSecuritySeed)
+                    .value_number("roots", ' ', params.RootOfUnitySecurity, 0, 64)
+                        .prev_code([&] { if (params.RootOfUnitySecurity.value() == 0) params.RootOfUnityCheck = false; })
+                    .end()
+                .ex_case()
+                    .value_string("cert", ' ', proof_cert)
+                        .prev_check(proof_op, Proof::CERT)
+                    .end()
+                .end()
+            .end()
+        .group("-check")
+            .exclusive()
+                .ex_case().check_code("near", [&] { params.CheckNear = true; params.Check = false; }).end()
+                .ex_case().check_code("always", [&] { params.CheckNear = false; params.Check = true; }).end()
+                .ex_case().check_code("never", [&] { params.CheckNear = false; params.Check = false; }).end()
+                .end()
+            .group("strong")
+                .value_number("count", ' ', params.StrongCount, 1, 1048576)
+                .value_number("L", ' ', params.StrongL, 1, INT_MAX)
+                .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
+                .end()
+                .prev_check(params.CheckStrong, true)
+            .end()
+        .group("-fermat")
+            .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
+            .end()
+            .prev_check(force_fermat, true)
+        .group("-time")
+            .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
+            .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
+            .end()
+        .group("-support")
+            .check("LLR2", supportLLR2, true)
+            .end()
+        .value_enum("-log", ' ', log_level, Enum<int>().add("debug", Logging::LEVEL_DEBUG).add("info", Logging::LEVEL_INFO).add("warning", Logging::LEVEL_WARNING).add("error", Logging::LEVEL_ERROR))
+        .check("-d", log_level, Logging::LEVEL_INFO)
+        .check_code("-test", [&] { exit(testing_main(argc, argv)); })
 #ifdef BOINC
-            else if (strcmp(argv[i], "-boinc") == 0)
-                return boinc_main(argc, argv);
+        .check_code("-boinc", [&] { exit(boinc_main(argc, argv)); })
 #endif
 #ifdef NETPRST
-            else if (strcmp(argv[i], "-net") == 0)
-                return net_main(argc, argv);
+        .check_code("-net", [&] { exit(net_main(argc, argv)); })
 #endif
-            else if (i < argc - 1 && strcmp(argv[i], "-log") == 0)
-            {
-                i++;
-                if (strcmp(argv[i], "debug") == 0)
-                    log_level = Logging::LEVEL_DEBUG;
-                if (strcmp(argv[i], "info") == 0)
-                    log_level = Logging::LEVEL_INFO;
-                if (strcmp(argv[i], "warning") == 0)
-                    log_level = Logging::LEVEL_WARNING;
-                if (strcmp(argv[i], "error") == 0)
-                    log_level = Logging::LEVEL_ERROR;
-            }
-            else if (strcmp(argv[i], "-v") == 0)
-            {
+        .check_code("-v", [&] {
                 printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION);
 #ifdef GMP
                 GMPArithmetic* gmp = dynamic_cast<GMPArithmetic*>(&GiantsArithmetic::default_arithmetic());
@@ -331,14 +149,21 @@ int main(int argc, char *argv[])
                     printf(", GMP library version %s", gmp->version().data());
 #endif
                 printf("\n");
-                return 0;
-            }
-        }
-        else
-        {
-            if (!input.parse(argv[i]))
-                printf("Unknown option %s.\n", argv[i]);
-        }
+                exit(0);
+            })
+        .value_code("-q", 0, [&](const char* param) {
+                if (param[0] != '\"' && !isdigit(param[0]))
+                    return false;
+                if (!input.parse(param))
+                    return false;
+                return true;
+            })
+        .default_code([&](const char* param) {
+            if (!input.parse(param))
+                printf("Unknown option %s.\n", param);
+            })
+        .parse(argc, argv);
+
     if (input.empty())
     {
         printf("Usage: PRST {\"K*B^N+C\" | \"N!+C\" | \"N#+C\" | \"N\"} <options>\n");
