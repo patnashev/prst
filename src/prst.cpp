@@ -19,8 +19,9 @@
 #include "testing.h"
 #include "support.h"
 #include "version.h"
+
 #ifdef BOINC
-#include "boinc.h"
+int boinc_main(int argc, char *argv[]);
 #endif
 #ifdef NETPRST
 int net_main(int argc, char *argv[]);

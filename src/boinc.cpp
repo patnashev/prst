@@ -1,6 +1,4 @@
 
-#ifdef BOINC
-
 #include <cmath>
 #include <string.h>
 
@@ -26,6 +24,8 @@
 #else
 #include <unistd.h>  // sleep
 #endif
+
+#ifdef BOINC
 
 #include "bow/bow.h"
 

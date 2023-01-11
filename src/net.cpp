@@ -5,7 +5,6 @@
 #include "gwnum.h"
 #include "cpuid.h"
 
-#include "net.h"
 #include "md5.h"
 #include "task.h"
 #include "exception.h"
@@ -15,6 +14,9 @@
 #include "params.h"
 #include "version.h"
 
+#ifdef NETPRST
+
+#include "net.h"
 
 using namespace restc_cpp;
 using namespace arithmetic;
@@ -689,3 +691,4 @@ int net_main(int argc, char *argv[])
     return 0;
 }
 
+#endif
