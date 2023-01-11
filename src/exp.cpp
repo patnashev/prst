@@ -386,6 +386,7 @@ void StrongCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fil
     State* state_recovery = read_state<State>(file_recovery);
     if (state_recovery != nullptr)
         init_state(state_recovery);
+    _file_recovery_empty = state_recovery == nullptr;
 }
 
 void StrongCheckMultipointExp::init_state(State* state)
@@ -423,7 +424,10 @@ void StrongCheckMultipointExp::StrongCheckState::set(int iteration, int recovery
 void StrongCheckMultipointExp::write_state()
 {
     if (_file_recovery != nullptr && _state_recovery && !_state_recovery->is_written())
+    {
         _file_recovery->write(*_state_recovery);
+        _file_recovery_empty = false;
+    }
     if (state_check() != nullptr)
     {
         try
@@ -722,7 +726,11 @@ void StrongCheckMultipointExp::execute()
                 {
                     _tmp_state_recovery->set_written();
                     _last_write = std::chrono::system_clock::now();
-                    _file_recovery->clear();
+                    if (!_file_recovery_empty)
+                    {
+                        _file_recovery->clear();
+                        _file_recovery_empty = true;
+                    }
                 }
             }
             next_point++;

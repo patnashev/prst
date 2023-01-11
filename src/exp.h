@@ -339,6 +339,7 @@ protected:
 
 protected:
     File* _file_recovery = nullptr;
+    bool _file_recovery_empty = true;
     std::unique_ptr<State> _state_recovery;
     std::unique_ptr<State> _tmp_state_recovery;
     int _recovery_op = 0;
