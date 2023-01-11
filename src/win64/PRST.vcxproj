@@ -109,12 +109,12 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <OpenMPSupport>false</OpenMPSupport>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <AdditionalDependencies>..\..\framework\gwnum\win64\gwnum64d.lib;..\..\framework\gmp\win64\libgmp-gw1.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories></AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
       <DelayLoadDLLs>libgmp-gw1.dll</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
@@ -152,14 +152,15 @@
       <PreprocessorDefinitions>GMP;X86_64;_WIN32_WINNT=0x0600;_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalDependencies>..\..\framework\gwnum\win64\gwnum64.lib;..\..\framework\gmp\win64\libgmp-gw1.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories></AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
       <DelayLoadDLLs>libgmp-gw1.dll</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
@@ -183,8 +184,8 @@
     <ClCompile Include="..\pocklington.cpp" />
     <ClCompile Include="..\proof.cpp" />
     <ClCompile Include="..\prst.cpp" />
-    <ClInclude Include="..\support.cpp" />
-    <ClInclude Include="..\testing.cpp" />
+    <ClCompile Include="..\support.cpp" />
+    <ClCompile Include="..\testing.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\framework\arithmetic\arithmetic.h" />
