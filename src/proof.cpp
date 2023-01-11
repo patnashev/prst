@@ -220,7 +220,7 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
         }
         point--;
     }
-    if (task->state() != nullptr)
+    if (task->state() != nullptr && (task->state()->iteration() >= _points[1] || !Li()))
         task->init_state(nullptr);
 }
 

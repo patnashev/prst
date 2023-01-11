@@ -96,6 +96,11 @@ void MultipointExp::init(InputNum* input, GWState* gwstate, File* file, Logging*
 
 void MultipointExp::init_state(State* state)
 {
+    if (state == nullptr)
+    {
+        _state.reset();
+        return;
+    }
     _state.reset(state);
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
     _logging->set_prefix(_input->display_text() + " ");
@@ -510,6 +515,7 @@ void StrongCheckMultipointExp::execute()
             R() = _x0;
         tmp = _x0;
         init_state(new State(0, !_X0.empty() ? _X0 : tmp));
+        _state_recovery->set_written();
     }
     else
     {
@@ -716,6 +722,7 @@ void StrongCheckMultipointExp::execute()
                 {
                     _tmp_state_recovery->set_written();
                     _last_write = std::chrono::system_clock::now();
+                    _file_recovery->clear();
                 }
             }
             next_point++;
