@@ -1,4 +1,6 @@
 
+#ifdef BOINC
+
 #include <cmath>
 #include <string.h>
 
@@ -25,7 +27,6 @@
 #include <unistd.h>  // sleep
 #endif
 
-#define BOINC
 #include "bow/bow.h"
 
 using namespace arithmetic;
@@ -330,3 +331,5 @@ int boinc_main(int argc, char *argv[])
 
     return 0;
 }
+
+#endif
