@@ -172,6 +172,7 @@
     <ClCompile Include="..\..\framework\arithmetic\group.cpp" />
     <ClCompile Include="..\..\framework\arithmetic\integer.cpp" />
     <ClCompile Include="..\..\framework\arithmetic\lucas.cpp" />
+    <ClCompile Include="..\..\framework\cmdline.cpp" />
     <ClCompile Include="..\..\framework\file.cpp" />
     <ClCompile Include="..\..\framework\inputnum.cpp" />
     <ClCompile Include="..\..\framework\logging.cpp" />
@@ -193,6 +194,7 @@
     <ClInclude Include="..\..\framework\arithmetic\group.h" />
     <ClInclude Include="..\..\framework\arithmetic\integer.h" />
     <ClInclude Include="..\..\framework\arithmetic\lucas.h" />
+    <ClInclude Include="..\..\framework\cmdline.h" />
     <ClInclude Include="..\..\framework\file.h" />
     <ClInclude Include="..\..\framework\inputnum.h" />
     <ClInclude Include="..\..\framework\logging.h" />
