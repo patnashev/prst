@@ -1,6 +1,7 @@
 
 #include <cmath>
 #include <string.h>
+#include <iostream>
 
 #include "gwnum.h"
 #include "cpuid.h"
@@ -33,13 +34,20 @@ using namespace arithmetic;
 
 void BoincLogging::report(const std::string& message, int level)
 {
-    if (level == LEVEL_RESULT && !bow_standalone())
+    if (bow_standalone())
+        Logging::report(message, level);
+    else if (level == LEVEL_RESULT)
     {
         bow_report_progress(1.0);  // and hide message
-        Logging::report("Testing complete.\n", level);
+        if (progress().cur_stage() == 0)
+            std::cout << "Testing complete.\n";
+        else if (progress().cur_stage() == 1)
+            std::cout << "Files ready.\n";
+        else
+            std::cout << "Done.\n";
     }
     else
-        Logging::report(message, level);
+        std::cout << message;
 }
 
 void BoincLogging::report_progress()
