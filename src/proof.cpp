@@ -212,6 +212,10 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
     int point = _count;
     while (point >= 0)
     {
+        if (point == 0 && Li())
+        {
+            return;
+        }
         if (_points[point] >= 0 && _file_points[point]->read(*state) && state->iteration() == _points[point])
         {
             if (task->state() == nullptr || task->state()->iteration() < state->iteration())
@@ -220,6 +224,7 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
         }
         point--;
     }
+    task->init_state(nullptr);
 }
 
 void Proof::read_point(int index, TaskState& state, Logging& logging)
