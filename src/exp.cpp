@@ -148,6 +148,7 @@ void MultipointExp::execute()
             X() = _x0;
         tmp = _x0;
         init_state(new State(0, !_X0.empty() ? _X0 : tmp));
+        state()->set_written();
     }
     else
     {
@@ -197,7 +198,7 @@ void MultipointExp::execute()
             _logging->progress_save();
             if (_on_point(next_point, static_cast<State*>(_tmp_state.get())->X()))
             {
-                static_cast<State*>(_tmp_state.get())->set_written();
+                _tmp_state->set_written();
                 _last_write = std::chrono::system_clock::now();
             }
         }
@@ -394,6 +395,7 @@ void StrongCheckMultipointExp::init_state(State* state)
     if (state == nullptr)
     {
         _state_recovery.reset();
+        _state.reset();
         return;
     }
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
@@ -519,7 +521,7 @@ void StrongCheckMultipointExp::execute()
             R() = _x0;
         tmp = _x0;
         init_state(new State(0, !_X0.empty() ? _X0 : tmp));
-        _state_recovery->set_written();
+        state()->set_written();
     }
     else
     {
