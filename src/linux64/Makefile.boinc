@@ -15,5 +15,8 @@ $(EXE_BOINC): $(COMPOBJS_COMMON) prst_boinc.o bow.o boinc.o
 prst_boinc.o: prst.cpp
 	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
 
+boinc.o: boinc.cpp
+	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
+
 bow.o: bow/bow.cpp
 	$(CXX) -o $@ -c $(CXXFLAGS) $(BOINC_INC) $<
