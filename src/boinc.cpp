@@ -39,10 +39,8 @@ void BoincLogging::report(const std::string& message, int level)
     else if (level == LEVEL_RESULT)
     {
         bow_report_progress(1.0);  // and hide message
-        if (progress().cur_stage() == 0)
+        if (progress().cur_stage() <= 1)
             std::cout << "Testing complete.\n";
-        else if (progress().cur_stage() == 1)
-            std::cout << "Files ready.\n";
         else
             std::cout << "Done.\n";
     }
