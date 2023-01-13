@@ -8,6 +8,7 @@
 #include "md5.h"
 #include "task.h"
 #include "exception.h"
+#include "cmdline.h"
 #include "fermat.h"
 #include "pocklington.h"
 #include "proof.h"
@@ -336,7 +337,7 @@ void NetContext::upload(NetFile* file)
                     .Put(put_url)
                     .Argument("md5", md5)
                     .Argument("workerID", worker_id())
-                    .Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
+                    .Argument("version", PRST_VERSION "." VERSION_BUILD)
                     .Argument("uptime", uptime())
                     .Argument("fft_desc", _task->fft_desc)
                     .Argument("fft_len", _task->fft_len)
@@ -386,98 +387,37 @@ void NetContext::done()
 
 int net_main(int argc, char *argv[])
 {
-    int i;
     GWState gwstate;
     std::string url;
     std::string worker_id;
     int log_level = Logging::LEVEL_INFO;
     int net_log_level = Logging::LEVEL_WARNING;
-    uint64_t maxMem = 2048*1048576ULL;
     int disk_write_time = Task::DISK_WRITE_TIME;
 
-    for (i = 1; i < argc; i++)
-        if (argv[i][0] == '-' && argv[i][1])
-        {
-            switch (argv[i][1])
-            {
-            case 't':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    gwstate.thread_count = atoi(argv[i] + 2);
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    gwstate.thread_count = atoi(argv[i]);
-                }
+    CmdLine()
+        .ignore("-net")
+        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
+        .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
+        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_string("-i", ' ', worker_id)
+        .group("-time")
+            .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
+            .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
+            .end()
+        .value_enum("-log", ' ', log_level, Enum<int>().add("debug", Logging::LEVEL_DEBUG).add("info", Logging::LEVEL_INFO).add("warning", Logging::LEVEL_WARNING).add("error", Logging::LEVEL_ERROR))
+        .check_code("-v", [&] {
+                print_banner();
+                exit(0);
+            })
+        .default_code([&](const char* param) {
+                if (strncmp(param, "http://", 7) != 0)
+                    printf("Unknown option %s.\n", param);
                 else
-                    break;
-                if (gwstate.thread_count == 0 || gwstate.thread_count > 64)
-                    gwstate.thread_count = 1;
-                continue;
+                    url = param;
+            })
+        .parse(argc, argv);
 
-            case 'M':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    maxMem = InputNum::parse_numeral(argv[i] + 2);
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    maxMem = InputNum::parse_numeral(argv[i]);
-                }
-                else
-                    break;
-                continue;
-
-            case 'i':
-                if (argv[i][2])
-                    worker_id = argv[i] + 2;
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    worker_id = argv[i];
-                }
-                else
-                    break;
-                continue;
-            }
-
-            if (strcmp(argv[i], "-time") == 0)
-            {
-                while (true)
-                    if (i < argc - 2 && strcmp(argv[i + 1], "write") == 0)
-                    {
-                        i += 2;
-                        disk_write_time = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "progress") == 0)
-                    {
-                        i += 2;
-                        Task::PROGRESS_TIME = atoi(argv[i]);
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-log") == 0)
-            {
-                i++;
-                if (strcmp(argv[i], "debug") == 0)
-                    log_level = Logging::LEVEL_DEBUG;
-                if (strcmp(argv[i], "info") == 0)
-                    log_level = Logging::LEVEL_INFO;
-                if (strcmp(argv[i], "warning") == 0)
-                    log_level = Logging::LEVEL_WARNING;
-                if (strcmp(argv[i], "error") == 0)
-                    log_level = Logging::LEVEL_ERROR;
-            }
-            else if (strcmp(argv[i], "-v") == 0)
-            {
-                printf("Net-PRST version " NET_PRST_VERSION "." VERSION_BUILD ", Gwnum library version " GWNUM_VERSION "\n");
-                return 0;
-            }
-        }
-        else
-        {
-            url = argv[i];
-        }
-    if (url.empty() || url.find("http://") != 0 || worker_id.empty())
+    if (url.empty() || worker_id.empty())
     {
         printf("Usage: PRST -net -i <WorkerID> http://<host>:<port>/api/\n");
         return 0;
@@ -515,7 +455,7 @@ int net_main(int argc, char *argv[])
 					.Post(net.url() + "prst/new")
 					.Argument("workerID", net.worker_id())
 					.Argument("uptime", net.uptime())
-					.Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
+					.Argument("version", PRST_VERSION "." VERSION_BUILD)
 
 					// Send the request
 					.Execute()
@@ -555,7 +495,6 @@ int net_main(int argc, char *argv[])
         if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
             gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
         net.task()->a = net.task()->L = net.task()->L2 = net.task()->M = 0;
-        int maxSize = (int)(maxMem/(gwnum_size(gwstate.gwdata())));
 
         logging.progress() = Progress();
         logging.progress().time_init(net.task()->time);
@@ -676,7 +615,7 @@ int net_main(int argc, char *argv[])
                         .Argument("res", proof_op == Proof::CERT ? proof->res64() : fermat->prime() ? "prime" : (fermat->success() && fermat->res64().empty() ? "prp" : fermat->success() ? "prp/" : "") + fermat->res64())
                         .Argument("cert", proof && proof_op != Proof::CERT ? proof->res64() : "")
                         .Argument("time", std::to_string(logging.progress().time_total()))
-                        .Argument("version", NET_PRST_VERSION "." VERSION_BUILD)
+                        .Argument("version", PRST_VERSION "." VERSION_BUILD)
 
 						// Send the request
 						.Execute();

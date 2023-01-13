@@ -69,7 +69,6 @@ int main(int argc, char *argv[])
     CmdLine()
         .value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("--nthreads", ' ', gwstate.thread_count, 1, 256)  // alias for '-t', set by Boinc
         .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
         .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
         .check("-generic", gwstate.force_general_mod, true)
@@ -143,13 +142,7 @@ int main(int argc, char *argv[])
         .check_code("-net", [&] { exit(net_main(argc, argv)); })
 #endif
         .check_code("-v", [&] {
-                printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION);
-#ifdef GMP
-                GMPArithmetic* gmp = dynamic_cast<GMPArithmetic*>(&GiantsArithmetic::default_arithmetic());
-                if (gmp != nullptr)
-                    printf(", GMP library version %s", gmp->version().data());
-#endif
-                printf("\n");
+                print_banner();
                 exit(0);
             })
         .value_code("-q", 0, [&](const char* param) {

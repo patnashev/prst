@@ -182,13 +182,7 @@ int boinc_main(int argc, char *argv[])
 
     bow_init();
     Task::DISK_WRITE_TIME = bow_get_checkpoint_seconds(Task::DISK_WRITE_TIME);
-    printf("PRST version " PRST_VERSION "." VERSION_BUILD ", GWnum library version " GWNUM_VERSION);  // always print in Boinc mode (data collected by validator)
-#ifdef GMP
-    GMPArithmetic* gmp = dynamic_cast<GMPArithmetic*>(&GiantsArithmetic::default_arithmetic());
-    if (gmp != nullptr)
-        printf(", GMP library version %s", gmp->version().data());
-#endif
-    printf("\n");
+    print_banner();
 
     params.ProofPointFilename = "prsproof";
     params.ProofProductFilename = "prsprod";
