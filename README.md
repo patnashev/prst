@@ -1,5 +1,5 @@
 # PRST
-PRST is a primality testing utility written in C++. It is based on [GWnum](https://www.mersenne.org/download/) multiplication library by George Woltman.
+PRST is a primality testing utility written in C++ by Pavel Atnashev. It is based on [GWnum](https://www.mersenne.org/download/) multiplication library by George Woltman.
 
 The utility is best used for systematic searches of large prime numbers, either by public distributed projects or by private individuals. It can handle numbers of many popular forms like Proth numbers, Thabit numbers, generalized Fermat numbers, factorials, primorials and arbitrary numbers. Mersenne numbers are better handled by [GIMPS](https://www.mersenne.org/).
 
