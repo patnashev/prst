@@ -13,7 +13,7 @@ The following primality tests are currently implemented:
 The utility can provide a high level of reliability by employing several overlapping error checks and a verification mechanism based on secure mathematical algorithms.
 
 Donate XMR: 453MFNnC7N7NK9iK99FoNh3xZ4wY9yqt1Qk6F62iUZjg6bv6xD3oH3U2EABnUQMmco5BEK5FAhtKF18Mn43QQsysNHX9wB3,
-view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d460f09b167e0a
+view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d460f09b167e0a.
 
 ```
 Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "N"} <options>
@@ -40,7 +40,7 @@ Options: -v
          -fermat [a <a>]
                  forces Fermat probabilistic test, optionally supplying starting value,
                  a = 3 by default.
-         -check [{near | always| never}] [strong [count <count>] [L <L>]]
+         -check [{near | always | never}] [strong [count <count>] [L <L>]]
                  enables/disables roundoff checking, by default only when close
                  to switching to the next transform size.
                  enables strong error check using Gerbicz or Gerbicz-Li algorithms.
