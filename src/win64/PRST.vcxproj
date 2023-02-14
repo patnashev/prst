@@ -159,6 +159,7 @@
     <ClCompile Include="..\boinc.cpp" />
     <ClCompile Include="..\exp.cpp" />
     <ClCompile Include="..\fermat.cpp" />
+    <ClCompile Include="..\morrison.cpp" />
     <ClCompile Include="..\pocklington.cpp" />
     <ClCompile Include="..\proof.cpp" />
     <ClCompile Include="..\prst.cpp" />
@@ -183,6 +184,7 @@
     <ClInclude Include="..\exp.h" />
     <ClInclude Include="..\fermat.h" />
     <ClInclude Include="..\params.h" />
+    <ClInclude Include="..\morrison.h" />
     <ClInclude Include="..\pocklington.h" />
     <ClInclude Include="..\proof.h" />
     <ClInclude Include="..\support.h" />

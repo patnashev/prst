@@ -9,6 +9,8 @@ public:
 
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof) override;
 
+    const std::string& factors() { return _factors; }
+
 protected:
     class FactorTask
     {
@@ -20,6 +22,7 @@ protected:
     };
 
 protected:
+    std::string _factors;
     std::unique_ptr<InputNum> _input_k;
     std::unique_ptr<InputNum> _input_base2;
     std::vector<FactorTask> _tasks;

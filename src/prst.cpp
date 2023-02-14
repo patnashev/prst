@@ -16,6 +16,7 @@
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
+#include "morrison.h"
 #include "testing.h"
 #include "support.h"
 #include "version.h"
@@ -55,6 +56,7 @@ int main(int argc, char *argv[])
     //  4 certificate
     //  5 strong check placeholder
     //  6 proof state
+    //  7 Morrison test params
 
     GWState gwstate;
     Params params;
@@ -210,7 +212,8 @@ int main(int argc, char *argv[])
         proof.reset(new Proof(proof_op, proof_count, input, params, *file_cert, logging));
 
     std::unique_ptr<Fermat> fermat;
-    
+    std::unique_ptr<Morrison> morrison;
+
     if (proof_op == Proof::CERT)
     {
     }
@@ -224,6 +227,19 @@ int main(int argc, char *argv[])
             for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
                 factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) :  "");
             logging.warning("Not enough factors of b for Pocklington test. Factorized part: %s.\n", factors.data());
+            fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
+        }
+    }
+    else if (input.c() == -1 && !force_fermat)
+    {
+        if (input.is_factorized_half())
+            morrison.reset(new Morrison(input, params, logging));
+        else
+        {
+            std::string factors;
+            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
+            logging.warning("Not enough factors of b for Morrison test. Factorized part: %s.\n", factors.data());
             fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
         }
     }
@@ -248,6 +264,13 @@ int main(int argc, char *argv[])
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.r", fingerprint);
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
+        else if (morrison)
+        {
+            fingerprint = File::unique_fingerprint(fingerprint, morrison->factors());
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
+            File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".p", fingerprint);
+            morrison->run(input, gwstate, file_checkpoint, file_params, logging);
+        }
         else if (proof)
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
@@ -261,6 +284,7 @@ int main(int argc, char *argv[])
         }
         else if (fermat)
         {
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
