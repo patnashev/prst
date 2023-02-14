@@ -17,6 +17,7 @@
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
+#include "morrison.h"
 #include "testing.h"
 
 #include "test.data"
@@ -138,7 +139,7 @@ int testing_main(int argc, char *argv[])
         printf("Options: [-t <threads>] [-spin <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
         printf("\t-check [{near | always| never}] [Gerbicz] \n");
         printf("Subsets:\n");
-        printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + prime\n");
+        printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + deterministic + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
         printf("\trandom\n");
         return 0;
@@ -146,49 +147,49 @@ int testing_main(int argc, char *argv[])
 
     TestLogging logging(log_level == Logging::LEVEL_ERROR ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
     
-    std::list<std::tuple<std::string,SubLogging,std::deque<Test>>> tests;
-    auto add = [&](const std::string& subset) -> std::deque<Test>& { return std::get<2>(tests.emplace_back(subset, SubLogging(logging, log_level), std::deque<Test>())); };
+    std::list<std::tuple<std::string,SubLogging,std::deque<std::unique_ptr<Test>>>> tests;
+    auto add = [&](const std::string& subset) -> std::deque<std::unique_ptr<Test>>& { return std::get<2>(tests.emplace_back(subset, SubLogging(logging, log_level), std::deque<std::unique_ptr<Test>>())); };
 
     if (subset == "all" || subset == "321plus")
     {
         auto& cont = add("321plus");
         for (NTest* nTest = Test321Plus; nTest->n != 0; nTest++)
-            cont.emplace_back(3, 2, *nTest, 1);
+            cont.emplace_back(new Test(3, 2, *nTest, 1));
     }
 
     if (subset == "all" || subset == "321minus")
     {
         auto& cont = add("321minus");
         for (NTest* nTest = Test321Minus; nTest->n != 0; nTest++)
-            cont.emplace_back(3, 2, *nTest, -1);
+            cont.emplace_back(new Test(3, 2, *nTest, -1));
     }
 
     if (subset == "all" || subset == "b5plus")
     {
         auto& cont = add("b5plus");
         for (NTest* nTest = TestBase5Plus; nTest->n != 0; nTest++)
-            cont.emplace_back(2, 5, *nTest, 1);
+            cont.emplace_back(new Test(2, 5, *nTest, 1));
     }
 
     if (subset == "all" || subset == "b5minus")
     {
         auto& cont = add("b5minus");
         for (NTest* nTest = TestBase5Minus; nTest->n != 0; nTest++)
-            cont.emplace_back(2, 5, *nTest, -1);
+            cont.emplace_back(new Test(2, 5, *nTest, -1));
     }
 
     if (subset == "all" || subset == "gfn13")
     {
         auto& cont = add("gfn13");
         for (BTest* bTest = TestGFN13; bTest->b != 0; bTest++)
-            cont.emplace_back(1, *bTest, 8192, 1);
+            cont.emplace_back(new Test(1, *bTest, 8192, 1));
     }
 
     if (subset == "all" || subset == "special")
     {
         auto& cont = add("special");
         for (KBNCTest* kbncTest = TestSpecial; kbncTest->n != 0; kbncTest++)
-            cont.emplace_back(*kbncTest);
+            cont.emplace_back(new Test(*kbncTest));
     }
 
     if (subset == "all" || subset == "error")
@@ -196,38 +197,46 @@ int testing_main(int argc, char *argv[])
         auto& cont = add("error");
     }
     
+    if (subset == "all" || subset == "deterministic")
+    {
+        auto& cont = add("deterministic");
+        for (KBNCTest* kbncTest = TestPrime; kbncTest->n != 0; kbncTest++)
+            if (kbncTest->c == -1 || (kbncTest->c == 1 && kbncTest->sb != "2"))
+                cont.emplace_back(new DeterministicTest(*kbncTest));
+    }
+
     if (subset == "all" || subset == "prime")
     {
         auto& cont = add("prime");
         for (KBNCTest* kbncTest = TestPrime; kbncTest->n != 0; kbncTest++)
-            cont.emplace_back(*kbncTest);
+            cont.emplace_back(new Test(*kbncTest));
     }
     
     if (subset == "slow" || subset == "gfn13more")
     {
         auto& cont = add("gfn13more");
         for (BTest* bTest = TestGFN13More; bTest->b != 0; bTest++)
-            cont.emplace_back(1, *bTest, 8192, 1);
+            cont.emplace_back(new Test(1, *bTest, 8192, 1));
     }
 
     if (subset == "slow" || subset == "109208b5plus")
     {
         auto& cont = add("109208b5plus");
         for (NTest* nTest = Test109208Base5Plus; nTest->n != 0; nTest++)
-            cont.emplace_back(109208, 5, *nTest, 1);
+            cont.emplace_back(new Test(109208, 5, *nTest, 1));
     }
 
     if (subset == "slow" || subset == "100186b5minus")
     {
         auto& cont = add("100186b5minus");
         for (NTest* nTest = Test100186Base5Minus; nTest->n != 0; nTest++)
-            cont.emplace_back(100186, 5, *nTest, -1);
+            cont.emplace_back(new Test(100186, 5, *nTest, -1));
     }
 
     for (auto& subsetTests : tests)
     {
         for (auto& test : std::get<2>(subsetTests))
-            std::get<1>(subsetTests).progress().add_stage(test.cost());
+            std::get<1>(subsetTests).progress().add_stage(test->cost());
         logging.progress().add_stage(std::get<1>(subsetTests).progress().cost_total());
     }
 
@@ -247,7 +256,7 @@ int testing_main(int argc, char *argv[])
                 {
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                    test.run(subLogging, params);
+                    test->run(subLogging, params);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
@@ -362,6 +371,80 @@ void Test::run(Logging& logging, Params& global)
         if (proof_cert.res64() != proof_build.res64())
         {
             logging.error("Certificate mismatch.\n");
+            throw TaskAbortException();
+        }
+    }
+    catch (const TaskAbortException&)
+    {
+        finally();
+        throw;
+    }
+    finally();
+}
+
+void DeterministicTest::run(Logging& logging, Params& global)
+{
+    Params params;
+    params.Check = global.Check;
+    params.CheckNear = global.CheckNear;
+    params.CheckStrong = global.CheckStrong;
+
+    uint32_t fingerprint = input.fingerprint();
+    std::unique_ptr<Pocklington> pocklington;
+    std::unique_ptr<Morrison> morrison;
+    if (input.c() == 1)
+    {
+        pocklington.reset(new Pocklington(input, params, logging, nullptr));
+        fingerprint = File::unique_fingerprint(fingerprint, pocklington->factors());
+    }
+    if (input.c() == -1)
+    {
+        morrison.reset(new Morrison(input, params, logging));
+        fingerprint = File::unique_fingerprint(fingerprint, morrison->factors());
+    }
+    File file_checkpoint("prst_c", fingerprint);
+    File file_recoverypoint("prst_r", fingerprint);
+    File file_params("prst_p", fingerprint);
+
+    GWState gwstate;
+    gwstate.thread_count = global.thread_count;
+    gwstate.spin_threads = global.spin_threads;
+    input.setup(gwstate);
+    logging.info("Using %s.\n", gwstate.fft_description.data());
+
+    auto finally = [&]
+    {
+        file_checkpoint.clear(true);
+        file_recoverypoint.clear(true);
+        file_params.clear(true);
+        gwstate.done();
+    };
+    try
+    {
+        bool prime = false;
+        std::string sres64 = "0";
+        if (pocklington)
+        {
+            pocklington->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
+            prime = pocklington->prime();
+            sres64 = pocklington->res64();
+        }
+        if (morrison)
+        {
+            morrison->run(input, gwstate, file_checkpoint, file_params, logging);
+            prime = morrison->prime();
+            sres64 = morrison->res64();
+        }
+        if (res64 == 0)
+            res64 = prime ? 1 : std::stoull(sres64, nullptr, 16);
+        if (prime != (res64 == 1))
+        {
+            logging.error("Primality mismatch.\n");
+            throw TaskAbortException();
+        }
+        if (!prime && std::stoull(sres64, nullptr, 16) != res64)
+        {
+            logging.error("RES64 mismatch.\n");
             throw TaskAbortException();
         }
     }

@@ -49,12 +49,20 @@ public:
     }
 
     double cost() { double len = log2(input.gb())*input.n(); return len*std::sqrt(len)*(input.b() != 2 ? 1.2 : 1.0); }
-    void run(Logging& logging, Params& global);
+    virtual void run(Logging& logging, Params& global);
 
 public:
     InputNum input;
     uint64_t res64;
     uint64_t cert64;
+};
+
+class DeterministicTest : public Test
+{
+public:
+    DeterministicTest(KBNCTest& t) : Test(t) { }
+
+    void run(Logging& logging, Params& global) override;
 };
 
 class TestLogging : public Logging
