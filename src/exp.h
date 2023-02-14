@@ -16,8 +16,8 @@ public:
     public:
         static const char TYPE = 1;
         State() : TaskState(TYPE) { }
-        State(int iteration, const arithmetic::Giant& X) : TaskState(1) { TaskState::set(iteration); _X = X; }
-        State(int iteration, arithmetic::Giant&& X) : TaskState(1) { TaskState::set(iteration); _X = std::move(X); }
+        State(int iteration, const arithmetic::Giant& X) : TaskState(TYPE) { TaskState::set(iteration); _X = X; }
+        State(int iteration, arithmetic::Giant&& X) : TaskState(TYPE) { TaskState::set(iteration); _X = std::move(X); }
         template<class T>
         void set(int iteration, T& X) { TaskState::set(iteration); _X = X; }
         arithmetic::Giant& X() { return _X; }

@@ -493,13 +493,14 @@ void ProofSave::execute()
                         }
                     }
                 }
+                check();
                 state_d.set(i, D);
-                commit_execute<Proof::State>(i, Y, h);
             }
 
             state_d.mimic_type(Proof::Product::TYPE);
             _proof.file_products()[i]->write(state_d);
             _proof.file_products()[i]->free_buffer();
+            on_state();
         }
 
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);

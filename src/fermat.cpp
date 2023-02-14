@@ -322,6 +322,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     if (type() == PROTH)
         _Xm1 += 1;
 
+    logging.progress().next_stage();
     if (type() == PROTH && (_Xm1 == 0 || _Xm1 == *gwstate.N))
     {
         _success = true;
@@ -348,7 +349,6 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
     }
 
-    logging.progress().next_stage();
     if (proof != nullptr)
         proof->run(input, gwstate, logging, _success ? nullptr : &result());
 

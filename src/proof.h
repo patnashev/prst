@@ -57,9 +57,9 @@ public:
         static const char TYPE = 6;
         State() : TaskState(TYPE) { }
         template<class T>
-        State(int iteration, T&& Y) : TaskState(1) { TaskState::set(iteration); _Y = std::forward<T>(Y); }
+        State(int iteration, T&& Y) : TaskState(TYPE) { TaskState::set(iteration); _Y = std::forward<T>(Y); }
         template<class T, class R, class S>
-        State(int iteration, S&& X, T&& Y, R&& exp) : TaskState(1) { TaskState::set(iteration); _X = std::forward<S>(X); _Y = std::forward<T>(Y); _exp = std::forward<R>(exp); }
+        State(int iteration, S&& X, T&& Y, R&& exp) : TaskState(TYPE) { TaskState::set(iteration); _X = std::forward<S>(X); _Y = std::forward<T>(Y); _exp = std::forward<R>(exp); }
         template<class T>
         void set(int iteration, T& Y, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _Y = Y; _h = h; }
         template<class T, class S>
