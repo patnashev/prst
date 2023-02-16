@@ -10,6 +10,7 @@
 
 using namespace arithmetic;
 
+// https://eprint.iacr.org/2023/195
 // BLS https://doi.org/10.1090/S0025-5718-1975-0384673-1
 // For Q=1  gcd(U_{(N+1)/q}, N) = gcd(V_{2(N+1)/q} - 2, N)
 // For Q=-1 gcd(U_{(N+1)/q}, N) = gcd(V_{(N+1)/2q}, N) due to BLS proof of Theorem 14.

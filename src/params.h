@@ -7,8 +7,6 @@ class Params
 {
 public:
     int maxmulbyconst = 1;
-    int thread_count = 1;
-    int spin_threads = 1;
 
     std::optional<bool> Check;
     std::optional<bool> CheckNear;

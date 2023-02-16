@@ -31,9 +31,10 @@ Options: -v
          -time [write <sec>] [progress <sec>]
                  period of writing checkpoints and outputing progress statistics.
          -fft+1
-         -fft [+<inc>] [safety <margin>] [info]
+         -fft [+<inc>] [safety <margin>] [generic] [info]
                  increments the size of transform used.
                  sets safety margin influencing switching to the next transform size.
+                 forces generic reduction transform for debug purposes.
                  outputs only setup information, no primality test is performed.
          -cpu {SSE2 | AVX | FMA3 | AVX512F}
                  CPU instruction set to use.

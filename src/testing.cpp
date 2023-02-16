@@ -9,6 +9,7 @@
 #include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
+#include "cmdline.h"
 #include "inputnum.h"
 #include "file.h"
 #include "logging.h"
@@ -26,118 +27,51 @@ using namespace arithmetic;
 
 int testing_main(int argc, char *argv[])
 {
-    int i;
-    Task::PROGRESS_TIME = 60;
-    int log_level = Logging::LEVEL_WARNING;
+    GWState gwstate;
     Params params;
-    uint64_t maxMem = 0;
     std::string subset;
+    int log_level = Logging::LEVEL_WARNING;
+    Task::PROGRESS_TIME = 60;
 
-    for (i = 1; i < argc; i++)
-        if (argv[i][0] == '-' && argv[i][1])
-        {
-            switch (argv[i][1])
-            {
-            case 't':
-                if (argv[i][2] && isdigit(argv[i][2]))
-                    params.thread_count = atoi(argv[i] + 2);
-                else if (!argv[i][2] && i < argc - 1)
-                {
-                    i++;
-                    params.thread_count = atoi(argv[i]);
-                }
-                else
-                    break;
-                if (params.thread_count == 0 || params.thread_count > 64)
-                    params.thread_count = 1;
-                continue;
+    CmdLine()
+        .ignore("-test")
+        .value_number("-t", 0, gwstate.thread_count, 1, 256)
+        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
+        .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
+        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+        .group("-fft")
+            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
+            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
+            .check("generic", gwstate.force_general_mod, true)
+            .end()
+        .group("-check")
+            .exclusive()
+                .ex_case().check_code("near", [&] { params.CheckNear = true; params.Check = false; }).end()
+                .ex_case().check_code("always", [&] { params.CheckNear = false; params.Check = true; }).end()
+                .ex_case().check_code("never", [&] { params.CheckNear = false; params.Check = false; }).end()
+                .end()
+            .group("strong")
+                .value_number("count", ' ', params.StrongCount, 1, 1048576)
+                .value_number("L", ' ', params.StrongL, 1, INT_MAX)
+                .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
+                .end()
+                .prev_check(params.CheckStrong, true)
+            .end()
+        .group("-time")
+            .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
+            .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
+            .end()
+        .value_enum("-log", ' ', log_level, Enum<int>().add("debug", Logging::LEVEL_DEBUG).add("info", Logging::LEVEL_INFO).add("warning", Logging::LEVEL_WARNING).add("error", Logging::LEVEL_ERROR))
+        .check("-d", log_level, Logging::LEVEL_INFO)
+        .default_code([&](const char* param) {
+                subset = param;
+            })
+        .parse(argc, argv);
 
-            case 'd':
-                if (!argv[i][2])
-                    log_level = Logging::LEVEL_INFO;
-                else
-                    break;
-                continue;
-            }
-
-            if (i < argc - 1 && strcmp(argv[i], "-M") == 0)
-            {
-                i++;
-                maxMem = InputNum::parse_numeral(argv[i]);
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-spin") == 0)
-            {
-                i++;
-                params.spin_threads = atoi(argv[i]);
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-test") == 0)
-            {
-                i++;
-                subset = argv[i];
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-check") == 0)
-            {
-                while (true)
-                    if (i < argc - 1 && strcmp(argv[i + 1], "near") == 0)
-                    {
-                        i++;
-                        params.CheckNear = true;
-                        params.Check = false;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "always") == 0)
-                    {
-                        i++;
-                        params.CheckNear = false;
-                        params.Check = true;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "never") == 0)
-                    {
-                        i++;
-                        params.CheckNear = false;
-                        params.Check = false;
-                    }
-                    else if (i < argc - 1 && strcmp(argv[i + 1], "Gerbicz") == 0)
-                    {
-                        i++;
-                        params.CheckStrong = true;
-                    }
-                    else
-                        break;
-            }
-            else if (strcmp(argv[i], "-time") == 0)
-            {
-                while (true)
-                    if (i < argc - 2 && strcmp(argv[i + 1], "write") == 0)
-                    {
-                        i += 2;
-                        Task::DISK_WRITE_TIME = atoi(argv[i]);
-                    }
-                    else if (i < argc - 2 && strcmp(argv[i + 1], "progress") == 0)
-                    {
-                        i += 2;
-                        Task::PROGRESS_TIME = atoi(argv[i]);
-                    }
-                    else
-                        break;
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-log") == 0)
-            {
-                i++;
-                if (strcmp(argv[i], "debug") == 0)
-                    log_level = Logging::LEVEL_DEBUG;
-                if (strcmp(argv[i], "info") == 0)
-                    log_level = Logging::LEVEL_INFO;
-                if (strcmp(argv[i], "warning") == 0)
-                    log_level = Logging::LEVEL_WARNING;
-                if (strcmp(argv[i], "error") == 0)
-                    log_level = Logging::LEVEL_ERROR;
-            }
-        }
     if (subset.empty())
     {
         printf("Usage: PRST -test <subset> <options>\n");
-        printf("Options: [-t <threads>] [-spin <threads>] [-log {debug | info | warning | error}] [-time [write <sec>] [progress <sec>]]\n");
-        printf("\t-check [{near | always| never}] [Gerbicz] \n");
         printf("Subsets:\n");
         printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + deterministic + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
@@ -249,14 +183,14 @@ int testing_main(int argc, char *argv[])
             if (std::get<0>(subsetTests) == "error")
             {
                 SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR + 1 : log_level);
-                RootsTest(subLogging, params);
+                RootsTest(subLogging, params, gwstate);
             }
             else
                 for (auto& test : std::get<2>(subsetTests))
                 {
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                    test->run(subLogging, params);
+                    test->run(subLogging, params, gwstate);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
@@ -274,12 +208,12 @@ int testing_main(int argc, char *argv[])
     return 0;
 }
 
-void Test::run(Logging& logging, Params& global)
+void Test::run(Logging& logging, Params& global_params, GWState& global_state)
 {
     Params params;
-    params.Check = global.Check;
-    params.CheckNear = global.CheckNear;
-    params.CheckStrong = global.CheckStrong;
+    params.Check = global_params.Check;
+    params.CheckNear = global_params.CheckNear;
+    params.CheckStrong = global_params.CheckStrong;
     params.ProofSecuritySeed = "12345";
     params.RootOfUnityCheck = false;
     int proof_count = 16;
@@ -296,8 +230,7 @@ void Test::run(Logging& logging, Params& global)
     File file_recoverypoint("prst_r", fingerprint);
 
     GWState gwstate;
-    gwstate.thread_count = global.thread_count;
-    gwstate.spin_threads = global.spin_threads;
+    gwstate.copy(global_state);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -382,12 +315,12 @@ void Test::run(Logging& logging, Params& global)
     finally();
 }
 
-void DeterministicTest::run(Logging& logging, Params& global)
+void DeterministicTest::run(Logging& logging, Params& global_params, GWState& global_state)
 {
     Params params;
-    params.Check = global.Check;
-    params.CheckNear = global.CheckNear;
-    params.CheckStrong = global.CheckStrong;
+    params.Check = global_params.Check;
+    params.CheckNear = global_params.CheckNear;
+    params.CheckStrong = global_params.CheckStrong;
 
     uint32_t fingerprint = input.fingerprint();
     std::unique_ptr<Pocklington> pocklington;
@@ -407,8 +340,7 @@ void DeterministicTest::run(Logging& logging, Params& global)
     File file_params("prst_p", fingerprint);
 
     GWState gwstate;
-    gwstate.thread_count = global.thread_count;
-    gwstate.spin_threads = global.spin_threads;
+    gwstate.copy(global_state);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -456,12 +388,12 @@ void DeterministicTest::run(Logging& logging, Params& global)
     finally();
 }
 
-void RootsTest(Logging& logging, Params& global)
+void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 {
     Params params;
-    params.Check = global.Check;
-    params.CheckNear = global.CheckNear;
-    params.CheckStrong = global.CheckStrong;
+    params.Check = global_params.Check;
+    params.CheckNear = global_params.CheckNear;
+    params.CheckStrong = global_params.CheckStrong;
     params.RootOfUnityCheck = false;
     InputNum input;
     int proof_count = 4;
@@ -490,8 +422,7 @@ void RootsTest(Logging& logging, Params& global)
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
     GWState gwstate;
-    gwstate.thread_count = global.thread_count;
-    gwstate.spin_threads = global.spin_threads;
+    gwstate.copy(global_state);
     gwstate.maxmulbyconst = fermat.a();
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());

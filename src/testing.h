@@ -49,7 +49,7 @@ public:
     }
 
     double cost() { double len = log2(input.gb())*input.n(); return len*std::sqrt(len)*(input.b() != 2 ? 1.2 : 1.0); }
-    virtual void run(Logging& logging, Params& global);
+    virtual void run(Logging& logging, Params& global_params, arithmetic::GWState& global_state);
 
 public:
     InputNum input;
@@ -62,7 +62,7 @@ class DeterministicTest : public Test
 public:
     DeterministicTest(KBNCTest& t) : Test(t) { }
 
-    void run(Logging& logging, Params& global) override;
+    void run(Logging& logging, Params& global_params, arithmetic::GWState& global_state) override;
 };
 
 class TestLogging : public Logging
@@ -83,4 +83,4 @@ private:
     std::chrono::system_clock::time_point _last_progress = std::chrono::system_clock::now();
 };
 
-void RootsTest(Logging& logging, Params& global);
+void RootsTest(Logging& logging, Params& global_params, arithmetic::GWState& global_state);
