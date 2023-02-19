@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include <algorithm>
 #include <string.h>
 
@@ -252,7 +253,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
 
             G.gcd(*gwstate.N);
             logging.progress().update(0, 0);
-            if (G != 1)
+            if (G != 1) // Q=1: 19*2130-1, Q=-1: 225*5516-1
             {
                 _res64 = G.to_res64();
                 logging.set_prefix("");
