@@ -435,3 +435,50 @@ public:
         StrongCheckMultipointExp::init(input, gwstate, file, file_recovery, logging);
     }
 };
+
+template<class IT>
+class Product : public InputTask
+{
+public:
+    Product(IT first, IT last) : InputTask(), _first(first), _last(last)
+    {
+    }
+
+    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging)
+    {
+        InputTask::init(input, gwstate, nullptr, nullptr, logging, (int)(_last - _first));
+    }
+
+    arithmetic::Giant& result() { return static_cast<BaseExp::State*>(state())->X(); }
+
+protected:
+    void setup() override { }
+    void release() override { }
+    void execute() override
+    {
+        int i;
+        arithmetic::GWNum P(gw());
+        arithmetic::GWNum X(gw());
+        if (state() == nullptr)
+        {
+            P = *_first;
+            i = 1;
+        }
+        else
+        {
+            i = state()->iteration();
+            P = static_cast<BaseExp::State*>(state())->X();
+        }
+        for (IT it = _first + i; it != _last; it++, i++, commit_execute<BaseExp::State>(i, P))
+        {
+            X = *it;
+            gw().carefully().mul(X, P, P, 0);
+        }
+
+        done();
+    }
+
+protected:
+    IT _first;
+    IT _last;
+};
