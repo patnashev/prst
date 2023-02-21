@@ -99,12 +99,12 @@ int genProthBase(Giant& k, uint32_t n) {
 
 Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof)
 {
-    if ((type == AUTO || type == PROTH) && input.b() == 2 && input.c() == 1)
+    if ((type == AUTO || type == PROTH) && input.b() == 2 && input.c() == 1 && log2(input.gk()) < input.n())
         _type = PROTH;
-    else if (type == AUTO)
-        _type = FERMAT;
+    else if (type == POCKLINGTON)
+        _type = POCKLINGTON;
     else
-        _type = type;
+        _type = FERMAT;
 
     _a = params.FermatBase ? params.FermatBase.value() : 3;
     if (_type == PROTH)

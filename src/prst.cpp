@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
         }
     }
     else
-        fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
+        fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, params, logging, proof.get()));
 
 
     gwstate.maxmulbyconst = params.maxmulbyconst;
