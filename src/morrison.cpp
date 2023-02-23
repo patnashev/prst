@@ -414,7 +414,7 @@ void LucasMul::execute()
     {
         auto& prime = _primes[index - _giants.size()];
         _iterations = std::get<1>(prime);
-        _state_update_period = MULS_PER_STATE_UPDATE/(_progress->costs()[index]/_iterations);
+        _state_update_period = MULS_PER_STATE_UPDATE/(int)(_progress->costs()[index]/_iterations);
         for (; i < _iterations; i++, commit_execute<State>(i, index, Vn.V(), Vn.parity()))
             lucas.mul(Vn, std::get<0>(prime), std::get<2>(prime), Vn);
 
