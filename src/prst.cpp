@@ -7,7 +7,7 @@
 #include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
-#include "cmdline.h"
+#include "config.h"
 #include "inputnum.h"
 #include "file.h"
 #include "logging.h"
@@ -67,9 +67,10 @@ int main(int argc, char *argv[])
     bool force_fermat = false;
     InputNum input;
     int log_level = Logging::LEVEL_WARNING;
+    std::string log_file;
 
-    CmdLine()
-        .value_number("-t", 0, gwstate.thread_count, 1, 256)
+    Config cnfg;
+    cnfg.value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
         .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
         .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
@@ -84,7 +85,7 @@ int main(int argc, char *argv[])
             .exclusive()
                 .ex_case()
                     .value_number("save", ' ', proof_count, 2, 1048576)
-                        .prev_check(proof_op, Proof::SAVE)
+                        .on_check(proof_op, Proof::SAVE)
                 .optional()
                     .list("name", ' ', ' ')
                         .value_string(params.ProofPointFilename)
@@ -93,7 +94,7 @@ int main(int argc, char *argv[])
                     .end()
                 .ex_case()
                     .value_number("build", ' ', proof_count, 2, 1048576)
-                        .prev_check(proof_op, Proof::BUILD)
+                        .on_check(proof_op, Proof::BUILD)
                 .optional()
                     .list("name", ' ', ' ')
                         .value_string(params.ProofPointFilename)
@@ -102,11 +103,11 @@ int main(int argc, char *argv[])
                         .end()
                     .value_string("security", ' ', params.ProofSecuritySeed)
                     .value_number("roots", ' ', params.RootOfUnitySecurity, 0, 64)
-                        .prev_code([&] { if (params.RootOfUnitySecurity.value() == 0) params.RootOfUnityCheck = false; })
+                        .on_code([&] { if (params.RootOfUnitySecurity.value() == 0) params.RootOfUnityCheck = false; })
                     .end()
                 .ex_case()
                     .value_string("cert", ' ', proof_cert)
-                        .prev_check(proof_op, Proof::CERT)
+                        .on_check(proof_op, Proof::CERT)
                     .end()
                 .end()
             .end()
@@ -121,12 +122,12 @@ int main(int argc, char *argv[])
                 .value_number("L", ' ', params.StrongL, 1, INT_MAX)
                 .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
                 .end()
-                .prev_check(params.CheckStrong, true)
+                .on_check(params.CheckStrong, true)
             .end()
         .group("-fermat")
             .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
             .end()
-            .prev_check(force_fermat, true)
+            .on_check(force_fermat, true)
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
@@ -134,7 +135,15 @@ int main(int argc, char *argv[])
         .group("-support")
             .check("LLR2", supportLLR2, true)
             .end()
-        .value_enum("-log", ' ', log_level, Enum<int>().add("debug", Logging::LEVEL_DEBUG).add("info", Logging::LEVEL_INFO).add("warning", Logging::LEVEL_WARNING).add("error", Logging::LEVEL_ERROR))
+        .group("-log")
+            .exclusive()
+                .ex_case().check("debug", log_level, Logging::LEVEL_DEBUG).end()
+                .ex_case().check("info", log_level, Logging::LEVEL_INFO).end()
+                .ex_case().check("warning", log_level, Logging::LEVEL_WARNING).end()
+                .ex_case().check("error", log_level, Logging::LEVEL_ERROR).end()
+                .end()
+            .value_string("file", ' ', log_file)
+            .end()
         .check("-d", log_level, Logging::LEVEL_INFO)
         .check_code("-test", [&] { exit(testing_main(argc, argv)); })
 #ifdef BOINC
@@ -154,11 +163,20 @@ int main(int argc, char *argv[])
                     return false;
                 return true;
             })
+        .value_code("-ini", ' ', [&](const char* param) {
+                File ini_file(param, 0);
+                ini_file.read_buffer();
+                if (ini_file.buffer().empty())
+                    printf("ini file not found: %s.\n", param);
+                else
+                    cnfg.parse_ini(ini_file);
+                return true;
+            })
         .default_code([&](const char* param) {
             if (!input.parse(param))
                 printf("Unknown option %s.\n", param);
             })
-        .parse(argc, argv);
+        .parse_args(argc, argv);
 
     if (input.empty())
     {
@@ -174,6 +192,8 @@ int main(int argc, char *argv[])
     }
 
     Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
+    if (!log_file.empty())
+        logging.file_log(log_file);
 
     if (input.bitlen() < 32)
     {
@@ -255,7 +275,7 @@ int main(int argc, char *argv[])
     {
         File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
         file_progress.hash = false;
-        logging.progress_file(&file_progress);
+        logging.file_progress(&file_progress);
 
         if (proof_op == Proof::CERT)
         {

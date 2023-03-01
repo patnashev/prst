@@ -9,7 +9,7 @@
 #include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
-#include "cmdline.h"
+#include "config.h"
 #include "inputnum.h"
 #include "file.h"
 #include "logging.h"
@@ -31,9 +31,10 @@ int testing_main(int argc, char *argv[])
     Params params;
     std::string subset;
     int log_level = Logging::LEVEL_WARNING;
+    std::string log_file;
     Task::PROGRESS_TIME = 60;
 
-    CmdLine()
+    Config()
         .ignore("-test")
         .value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
@@ -56,18 +57,26 @@ int testing_main(int argc, char *argv[])
                 .value_number("L", ' ', params.StrongL, 1, INT_MAX)
                 .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
                 .end()
-                .prev_check(params.CheckStrong, true)
+                .on_check(params.CheckStrong, true)
             .end()
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
             .end()
-        .value_enum("-log", ' ', log_level, Enum<int>().add("debug", Logging::LEVEL_DEBUG).add("info", Logging::LEVEL_INFO).add("warning", Logging::LEVEL_WARNING).add("error", Logging::LEVEL_ERROR))
+        .group("-log")
+            .exclusive()
+                .ex_case().check("debug", log_level, Logging::LEVEL_DEBUG).end()
+                .ex_case().check("info", log_level, Logging::LEVEL_INFO).end()
+                .ex_case().check("warning", log_level, Logging::LEVEL_WARNING).end()
+                .ex_case().check("error", log_level, Logging::LEVEL_ERROR).end()
+                .end()
+            .value_string("file", ' ', log_file)
+            .end()
         .check("-d", log_level, Logging::LEVEL_INFO)
         .default_code([&](const char* param) {
                 subset = param;
             })
-        .parse(argc, argv);
+        .parse_args(argc, argv);
 
     if (subset.empty())
     {
@@ -80,7 +89,9 @@ int testing_main(int argc, char *argv[])
     }
 
     TestLogging logging(log_level == Logging::LEVEL_ERROR ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
-    
+    if (!log_file.empty())
+        logging.file_log(log_file);
+
     std::list<std::tuple<std::string,SubLogging,std::deque<std::unique_ptr<Test>>>> tests;
     auto add = [&](const std::string& subset) -> std::deque<std::unique_ptr<Test>>& { return std::get<2>(tests.emplace_back(subset, SubLogging(logging, log_level), std::deque<std::unique_ptr<Test>>())); };
 
@@ -182,7 +193,9 @@ int testing_main(int argc, char *argv[])
             logging.warning("Running %s tests.\n", std::get<0>(subsetTests).data());
             if (std::get<0>(subsetTests) == "error")
             {
-                SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR + 1 : log_level);
+                SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
+                if (!log_file.empty())
+                    subLogging.file_log(log_file);
                 RootsTest(subLogging, params, gwstate);
             }
             else
@@ -190,6 +203,8 @@ int testing_main(int argc, char *argv[])
                 {
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
+                    if (!log_file.empty())
+                        subLogging.file_log(log_file);
                     test->run(subLogging, params, gwstate);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
@@ -390,6 +405,7 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
 
 void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 {
+    SubLogging noLogging(logging, Logging::LEVEL_ERROR + 1);
     Params params;
     params.Check = global_params.Check;
     params.CheckNear = global_params.CheckNear;
@@ -485,7 +501,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         Proof proof_root(Proof::ROOT, proof_count, input, params, file_cert, logging);
         try
         {
-            proof_root.run(input, gwstate, logging, &fermat.result());
+            proof_root.run(input, gwstate, logging.level() > Logging::LEVEL_INFO ? noLogging : logging, &fermat.result());
         }
         catch (const TaskAbortException&) {}
         if (proof_root.taskRoot()->state()->X() != 1)

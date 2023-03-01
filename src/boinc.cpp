@@ -7,7 +7,7 @@
 #include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
-#include "cmdline.h"
+#include "config.h"
 #include "inputnum.h"
 #include "file.h"
 #include "logging.h"
@@ -185,7 +185,7 @@ int boinc_main(int argc, char *argv[])
     params.ProofPointFilename = "prsproof";
     params.ProofProductFilename = "prsprod";
 
-    CmdLine()
+    Config()
         .ignore("-boinc")
         .value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
@@ -202,7 +202,7 @@ int boinc_main(int argc, char *argv[])
             .exclusive()
                 .ex_case()
                     .value_number("save", ' ', proof_count, 2, 1048576)
-                        .prev_check(proof_op, Proof::SAVE)
+                        .on_check(proof_op, Proof::SAVE)
                 .optional()
                     .list("name", ' ', ' ')
                         .value_string(params.ProofPointFilename)
@@ -212,7 +212,7 @@ int boinc_main(int argc, char *argv[])
                 .ex_case()
                     //.value_string("cert", ' ', proof_cert)
                     .value_code("cert", ' ', [&](const char* cert) { bow_resolve_filename(cert, proof_cert); return true; })
-                        .prev_check(proof_op, Proof::CERT)
+                        .on_check(proof_op, Proof::CERT)
                     .end()
                 .end()
             .end()
@@ -227,12 +227,12 @@ int boinc_main(int argc, char *argv[])
                 .value_number("L", ' ', params.StrongL, 1, INT_MAX)
                 .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
                 .end()
-                .prev_check(params.CheckStrong, true)
+                .on_check(params.CheckStrong, true)
             .end()
         .group("-fermat")
             .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
             .end()
-            .prev_check(force_fermat, true)
+            .on_check(force_fermat, true)
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
@@ -241,7 +241,7 @@ int boinc_main(int argc, char *argv[])
             if (!input.parse(param))
                 printf("Unknown option %s.\n", param);
             })
-        .parse(argc, argv);
+        .parse_args(argc, argv);
 
     if (input.empty())
     {

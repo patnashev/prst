@@ -8,7 +8,7 @@
 #include "md5.h"
 #include "task.h"
 #include "exception.h"
-#include "cmdline.h"
+#include "config.h"
 #include "fermat.h"
 #include "pocklington.h"
 #include "proof.h"
@@ -38,7 +38,7 @@ void NetLogging::LoggingNetFile::on_upload()
 void NetLogging::report(const std::string& message, int level)
 {
     Logging::report(message, level);
-    if (_net_level > level || level == LEVEL_RESULT)
+    if (_net_level > level || level == LEVEL_RESULT || level == LEVEL_PROGRESS)
         return;
     _file.write_text(message);
 }
@@ -394,8 +394,8 @@ int net_main(int argc, char *argv[])
     int net_log_level = Logging::LEVEL_WARNING;
     int disk_write_time = Task::DISK_WRITE_TIME;
 
-    CmdLine()
-        .ignore("-net")
+    Config cnfg;
+    cnfg.ignore("-net")
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
         .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
         .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
@@ -409,13 +409,22 @@ int net_main(int argc, char *argv[])
                 print_banner();
                 exit(0);
             })
+        .value_code("-ini", ' ', [&](const char* param) {
+                File ini_file(param, 0);
+                ini_file.read_buffer();
+                if (ini_file.buffer().empty())
+                    printf("ini file not found: %s.\n", param);
+                else
+                    cnfg.parse_ini(ini_file);
+                return true;
+            })
         .default_code([&](const char* param) {
                 if (strncmp(param, "http://", 7) != 0)
                     printf("Unknown option %s.\n", param);
                 else
                     url = param;
             })
-        .parse(argc, argv);
+        .parse_args(argc, argv);
 
     if (url.empty() || worker_id.empty())
     {
