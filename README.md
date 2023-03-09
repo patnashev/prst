@@ -21,8 +21,15 @@ view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d46
 Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "N"} <options>
 Options: -v
                  outputs version information.
-         -log {debug | info | warning | error}
+         -test
+                 performs built-in tests.
+         -ini <filename>
+                 reads command line options from ini file. See sample.ini.
+         -log [{debug | info | warning | error}] [file <filename>]
                  level of detail of output information.
+                 sets log file to write all output.
+         -time [write <sec>] [progress <sec>]
+                 period of writing checkpoints and outputing progress statistics.
          -t <threads>
                  number of threads to use. For optimal performance this number
                  should depend on the amount of L3 cache.
@@ -30,8 +37,6 @@ Options: -v
                  number of threads using spinwaits. Recommened values are 0 (none),
                  1 (default, only the main thread spinwaits) and the same as -t (all
                  threads spinwait, best performance but consumes 100% of CPU).
-         -time [write <sec>] [progress <sec>]
-                 period of writing checkpoints and outputing progress statistics.
          -fft+1
          -fft [+<inc>] [safety <margin>] [generic] [info]
                  increments the size of transform used.

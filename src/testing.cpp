@@ -30,7 +30,7 @@ int testing_main(int argc, char *argv[])
     GWState gwstate;
     Params params;
     std::string subset;
-    int log_level = Logging::LEVEL_WARNING;
+    int log_level = Logging::LEVEL_PROGRESS;
     std::string log_file;
     Task::PROGRESS_TIME = 60;
 
@@ -84,11 +84,10 @@ int testing_main(int argc, char *argv[])
         printf("Subsets:\n");
         printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + deterministic + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
-        printf("\trandom\n");
         return 0;
     }
 
-    TestLogging logging(log_level == Logging::LEVEL_ERROR ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
+    TestLogging logging(log_level);
     if (!log_file.empty())
         logging.file_log(log_file);
 
@@ -185,6 +184,7 @@ int testing_main(int argc, char *argv[])
         logging.progress().add_stage(std::get<1>(subsetTests).progress().cost_total());
     }
 
+    const char* test_text = "";
     try
     {
         for (auto& subsetTests : tests)
@@ -193,31 +193,39 @@ int testing_main(int argc, char *argv[])
             logging.warning("Running %s tests.\n", std::get<0>(subsetTests).data());
             if (std::get<0>(subsetTests) == "error")
             {
-                SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                if (!log_file.empty())
+                test_text = "error";
+                SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
+                subLogging.file_result(log_file);
+                if (log_level > Logging::LEVEL_DEBUG)
+                    subLogging.file_result(log_file);
+                else
                     subLogging.file_log(log_file);
                 RootsTest(subLogging, params, gwstate);
             }
             else
                 for (auto& test : std::get<2>(subsetTests))
                 {
+                    test_text = test->input.display_text().data();
+                    logging.info("%s\n", test_text);
                     std::get<1>(subsetTests).progress().update(0, 0);
-                    SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_INFO ? Logging::LEVEL_ERROR : log_level);
-                    if (!log_file.empty())
+                    SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
+                    if (log_level > Logging::LEVEL_DEBUG)
+                        subLogging.file_result(log_file);
+                    else
                         subLogging.file_log(log_file);
                     test->run(subLogging, params, gwstate);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
         }
-        logging.warning("All tests completed successfully.\n");
+        logging.error("All tests completed successfully.\n");
     }
     catch (const TaskAbortException&)
     {
         if (Task::abort_flag())
-            logging.error("Test aborted.\n");
+            logging.warning("Test aborted.\n");
         else
-            logging.error("Test failed.\n");
+            logging.error("Test %s failed.\n", test_text);
     }
 
     return 0;
@@ -246,6 +254,7 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
 
     GWState gwstate;
     gwstate.copy(global_state);
+    gwstate.maxmulbyconst = params.maxmulbyconst;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -356,6 +365,7 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
 
     GWState gwstate;
     gwstate.copy(global_state);
+    gwstate.maxmulbyconst = params.maxmulbyconst;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 

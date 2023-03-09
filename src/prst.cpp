@@ -181,13 +181,22 @@ int main(int argc, char *argv[])
     if (input.empty())
     {
         printf("Usage: PRST {\"K*B^N+C\" | \"N!+C\" | \"N#+C\" | \"N\"} <options>\n");
-        printf("Options: [-log {debug | info | warning | error}]\n");
-        printf("\t[-t <threads>] [-spin <threads>]\n");
-        printf("\t[-time [write <sec>] [progress <sec>]]\n");
-        printf("\t[-fft+1] [-fft [+<inc>] [safety <margin>] [info]] [-cpu {SSE2 | AVX | FMA3 | AVX512F}]\n");
-        printf("\t-fermat [a <a>] \n");
-        printf("\t-proof {save <count> | build <count> [security <seed>] [roots <depth>] | cert {<name> | default}} [name <proof> <product> [{<cert> | default}]]\n");
-        printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]] \n");
+        printf("Options:\n");
+        printf("\t-v\n");
+        printf("\t-test\n");
+        printf("\t-ini <filename>\n");
+        printf("\t-log [{debug | info | warning | error}] [file <filename>]\n");
+        printf("\t-time [write <sec>] [progress <sec>]\n");
+        printf("\t-t <threads>\n");
+        printf("\t-spin <threads>\n");
+        printf("\t-fft+1\n");
+        printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
+        printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
+        printf("\t-fermat [a <a>]\n");
+        printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]]\n");
+        printf("\t-proof save <count> [name <proof> <product>]\n");
+        printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product> {<cert> | default}]\n");
+        printf("\t-proof cert {<name> | default}\n");
         return 0;
     }
 

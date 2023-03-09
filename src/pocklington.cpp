@@ -153,7 +153,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             for (; *primes <= _a; primes++);
             _a = *primes;
             std::string sa = std::to_string(_a);
-            if (dynamic_cast<FastExp*>(_task.get()) != nullptr)
+            if (!_task->smooth())
             {
                 double fft_count = gwstate.handle.fft_count;
                 gwstate.done();
