@@ -143,9 +143,10 @@ int testing_main(int argc, char *argv[])
     
     if (subset == "all" || subset == "deterministic")
     {
+        std::string str2("2");
         auto& cont = add("deterministic");
         for (KBNCTest* kbncTest = TestPrime; kbncTest->n != 0; kbncTest++)
-            if (kbncTest->c == -1 || (kbncTest->c == 1 && kbncTest->sb != "2"))
+            if (kbncTest->c == -1 || (kbncTest->c == 1 && kbncTest->sb != str2))
                 cont.emplace_back(new DeterministicTest(*kbncTest));
     }
 
