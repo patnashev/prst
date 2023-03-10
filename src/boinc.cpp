@@ -185,8 +185,8 @@ int boinc_main(int argc, char *argv[])
     params.ProofPointFilename = "prsproof";
     params.ProofProductFilename = "prsprod";
 
-    Config()
-        .ignore("-boinc")
+    Config cnfg;
+    cnfg.ignore("-boinc")
         .value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
         .value_number("--nthreads", ' ', gwstate.thread_count, 1, 256)  // alias for '-t', set by Boinc
@@ -237,6 +237,17 @@ int boinc_main(int argc, char *argv[])
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
             .end()
+        .value_code("-ini", ' ', [&](const char* param) {
+                std::string ini_name;
+                bow_resolve_filename(param, ini_name);
+                File ini_file(ini_name, 0);
+                ini_file.read_buffer();
+                if (ini_file.buffer().empty())
+                    printf("ini file not found: %s.\n", param);
+                else
+                    cnfg.parse_ini(ini_file);
+                return true;
+            })
         .default_code([&](const char* param) {
             if (!input.parse(param))
                 printf("Unknown option %s.\n", param);

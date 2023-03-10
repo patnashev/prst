@@ -34,8 +34,8 @@ int testing_main(int argc, char *argv[])
     std::string log_file;
     Task::PROGRESS_TIME = 60;
 
-    Config()
-        .ignore("-test")
+    Config cnfg;
+    cnfg.ignore("-test")
         .value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
         .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
@@ -73,6 +73,15 @@ int testing_main(int argc, char *argv[])
             .value_string("file", ' ', log_file)
             .end()
         .check("-d", log_level, Logging::LEVEL_INFO)
+        .value_code("-ini", ' ', [&](const char* param) {
+                File ini_file(param, 0);
+                ini_file.read_buffer();
+                if (ini_file.buffer().empty())
+                    printf("ini file not found: %s.\n", param);
+                else
+                    cnfg.parse_ini(ini_file);
+                return true;
+            })
         .default_code([&](const char* param) {
                 subset = param;
             })
