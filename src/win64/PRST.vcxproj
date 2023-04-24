@@ -189,6 +189,7 @@
     <ClInclude Include="..\proof.h" />
     <ClInclude Include="..\support.h" />
     <ClInclude Include="..\testing.h" />
+    <ClInclude Include="..\version.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\test.data" />

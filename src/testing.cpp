@@ -205,7 +205,6 @@ int testing_main(int argc, char *argv[])
             {
                 test_text = "error";
                 SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
-                subLogging.file_result(log_file);
                 if (log_level > Logging::LEVEL_DEBUG)
                     subLogging.file_result(log_file);
                 else
