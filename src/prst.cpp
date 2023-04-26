@@ -63,6 +63,7 @@ int main(int argc, char *argv[])
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
+    bool proof_keep = false;
     bool supportLLR2 = false;
     bool force_fermat = false;
     InputNum input;
@@ -91,6 +92,7 @@ int main(int argc, char *argv[])
                         .value_string(params.ProofPointFilename)
                         .value_string(params.ProofProductFilename)
                         .end()
+                    .check("keep", proof_keep, true)
                     .end()
                 .ex_case()
                     .value_number("build", ' ', proof_count, 2, 1048576)
@@ -99,11 +101,12 @@ int main(int argc, char *argv[])
                     .list("name", ' ', ' ')
                         .value_string(params.ProofPointFilename)
                         .value_string(params.ProofProductFilename)
-                        .value_string(proof_cert)
                         .end()
+                    .value_string("cert", ' ', proof_cert)
                     .value_string("security", ' ', params.ProofSecuritySeed)
                     .value_number("roots", ' ', params.RootOfUnitySecurity, 0, 64)
                         .on_code([&] { if (params.RootOfUnitySecurity.value() == 0) params.RootOfUnityCheck = false; })
+                    .check("keep", proof_keep, true)
                     .end()
                 .ex_case()
                     .value_string("cert", ' ', proof_cert)
@@ -194,8 +197,8 @@ int main(int argc, char *argv[])
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
         printf("\t-fermat [a <a>]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]]\n");
-        printf("\t-proof save <count> [name <proof> <product>]\n");
-        printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product> {<cert> | default}]\n");
+        printf("\t-proof save <count> [name <proof> <product>] [keep]\n");
+        printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [cert <name>] [keep]\n");
         printf("\t-proof cert {<name> | default}\n");
         return 0;
     }
@@ -310,6 +313,21 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
+
+            if (!proof_keep)
+            {
+                if (proof_op == Proof::SAVE)
+                    for (int i = 1; i < proof->count(); i++)
+                        proof->file_points()[i]->clear();
+                if (proof_op == Proof::BUILD)
+                {
+                    if (!proof->Li())
+                        proof->file_points()[0]->clear();
+                    proof->file_points()[proof->count()]->clear();
+                    for (auto file : proof->file_products())
+                        file->clear();
+                }
+            }
         }
         else if (fermat)
         {

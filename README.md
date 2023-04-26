@@ -52,10 +52,14 @@ Options: -v
                  enables/disables roundoff checking, by default only when close
                  to switching to the next transform size.
                  enables strong error check using Gerbicz or Gerbicz-Li algorithms.
-         -proof save <count> [name <proof> <product>]
+         -proof save <count> [name <proof> <product>] [keep]
                  saves proof files for verification (on tester side).
-         -proof build <count> [security <seed>] [roots <depth>] [name <proof> <product> {<cert> | default}]
+                 keeps all temporary files if asked.
+         -proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [cert <name>] [keep]
                  builds a certificate from proof files (on authority side).
+                 uses security seed to encrypt the certificate.
+                 detects root of unity attack up to 2^depth degree.
+                 keeps all input files if asked.
          -proof cert {<name> | default}
                  verifies the certificate (on any side).
 ```
