@@ -28,7 +28,7 @@ Options: -v
          -log [{debug | info | warning | error}] [file <filename>]
                  level of detail of output information.
                  sets log file to write all output.
-         -time [write <sec>] [progress <sec>]
+         -time [write <sec>] [progress <sec>] [coarse]
                  period of writing checkpoints and outputing progress statistics.
          -t <threads>
                  number of threads to use. For optimal performance this number

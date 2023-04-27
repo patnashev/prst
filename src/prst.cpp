@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
         printf("\t-test\n");
         printf("\t-ini <filename>\n");
         printf("\t-log [{debug | info | warning | error}] [file <filename>]\n");
-        printf("\t-time [write <sec>] [progress <sec>]\n");
+        printf("\t-time [write <sec>] [progress <sec>] [coarse]\n");
         printf("\t-t <threads>\n");
         printf("\t-spin <threads>\n");
         printf("\t-fft+1\n");
