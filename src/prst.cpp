@@ -266,7 +266,11 @@ int main(int argc, char *argv[])
     else if (input.c() == -1 && !force_fermat)
     {
         if (input.is_factorized_half())
+        {
             morrison.reset(new Morrison(input, params, logging));
+            if (proof_op != Proof::NO_OP)
+                logging.warning("Proofs are not implemented in Morrison test. Use -fermat first.\n");
+        }
         else
         {
             std::string factors;

@@ -23,6 +23,9 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
     Giant tmp;
     std::vector<std::pair<Giant, int>> factors;
 
+    if (params.CheckStrong)
+        logging.warning("Strong check is not implemented in Morrison test. Use -fermat first.\n");
+
     tmp = 1;
     factors.reserve(input.b_factors().size());
     for (i = 0; i < input.b_factors().size(); i++)
@@ -157,8 +160,10 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         }
 
         logging.set_prefix("");
-        logging.info("Morrison test of %s, P = %d, Q = %d, factors = {%s}.\n", input.display_text().data(), _P, _negQ ? -1 : 1, _factors.data());
+        logging.info("Morrison test of %s, P = %d, Q = %d, factors = {%s}, complexity = %d.\n", input.display_text().data(), _P, _negQ ? -1 : 1, _factors.data(), (int)logging.progress().cost_total());
         logging.set_prefix(input.display_text() + " ");
+        if (gwstate.information_only)
+            exit(0);
 
         checkpoint = file_checkpoint.add_child(std::to_string(_P), File::unique_fingerprint(file_checkpoint.fingerprint(), std::to_string(_P)));
         _task->init(&input, &gwstate, checkpoint, &logging, _P);

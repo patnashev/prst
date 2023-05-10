@@ -53,11 +53,11 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         if (Li())
         {
             if (!CheckStrong)
-                _taskA.reset(task = new SlidingWindowExp(std::move(cert.a_power())));
+                _taskA.reset(new SlidingWindowExp(std::move(cert.a_power())));
             else
-                _taskA.reset(task = new LiCheckExp(std::move(cert.a_power()), checks, params.StrongL ? params.StrongL.value() : 0));
+                _taskA.reset(new LiCheckExp(std::move(cert.a_power()), checks, params.StrongL ? params.StrongL.value() : 0));
             if (params.SlidingWindow)
-                task->_W = params.SlidingWindow.value();
+                _taskA->_W = params.SlidingWindow.value();
             logging.progress().add_stage(_taskA->cost());
         }
         logging.progress().add_stage(task->cost());
@@ -261,13 +261,17 @@ bool Proof::on_point(int index, arithmetic::Giant& X)
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
+    MultipointExp* task = dynamic_cast<MultipointExp*>(_task.get());
+    if (task == nullptr)
+        return;
+
     double timer = 0;
     Giant tail;
     if (Li())
     {
         File* file_checkpoint_a(file_checkpoint.add_child("a", file_checkpoint.fingerprint()));
         File* file_recoverypoint_a(file_recoverypoint.add_child("a", file_recoverypoint.fingerprint()));
-        logging.info("Verifying certificate of %s, %d+%d iterations.\n", input.display_text().data(), _taskA->exp().bitlen() - 1, _M);
+        logging.info("Verifying certificate of %s, complexity = %d+%d.\n", input.display_text().data(), (int)logging.progress().costs()[0], (int)logging.progress().costs()[1]);
 
         LiCheckExp* taskACheck = dynamic_cast<LiCheckExp*>(_taskA.get());
         if (taskACheck != nullptr)
@@ -283,21 +287,17 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
         file_recoverypoint_a->clear();
     }
     else
-        logging.info("Verifying certificate of %s, %d iterations.\n", input.display_text().data(), _M);
+        logging.info("Verifying certificate of %s, complexity = %d.\n", input.display_text().data(), (int)logging.progress().cost_total());
 
-    MultipointExp* task = dynamic_cast<MultipointExp*>(_task.get());
-    if (task != nullptr)
+    GerbiczCheckExp* taskCheck = dynamic_cast<GerbiczCheckExp*>(_task.get());
+    if (taskCheck != nullptr)
+        taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
+    else
+        task->init_smooth(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
+    if (task->state() == nullptr)
     {
-        GerbiczCheckExp* taskCheck = dynamic_cast<GerbiczCheckExp*>(_task.get());
-        if (taskCheck != nullptr)
-            taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
-        else
-            task->init_smooth(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
-        if (task->state() == nullptr)
-        {
-            task->init_state(new BaseExp::State(0, std::move(_r_count)));
-            task->state()->set_written();
-        }
+        task->init_state(new BaseExp::State(0, std::move(_r_count)));
+        task->state()->set_written();
     }
     _task->run();
     timer += _task->timer();
