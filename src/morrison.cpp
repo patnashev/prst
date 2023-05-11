@@ -258,10 +258,15 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                 if (tmp == 0 || tmp*tmp < input.gb())
                     continue;
 
-                Product taskP(Gs.begin(), Gs.end());
-                taskP.init(&input, &gwstate, &logging);
-                taskP.run();
-                G = std::move(taskP.result());
+                if (Gs.size() > 1)
+                {
+                    Product taskP(Gs.begin(), Gs.end());
+                    taskP.init(&input, &gwstate, &logging);
+                    taskP.run();
+                    G = std::move(taskP.result());
+                }
+                else
+                    G = std::move(Gs[0]);
             }
 
             logging.info("Checking gcd with factors {%s}.\n", factors.data());
