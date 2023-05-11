@@ -131,6 +131,9 @@ int main(int argc, char *argv[])
             .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
             .end()
             .on_check(force_fermat, true)
+        .group("-factors")
+            .check("all", params.AllFactors, true)
+            .end()
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
@@ -303,7 +306,6 @@ int main(int argc, char *argv[])
         }
         else if (morrison)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, morrison->factors());
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".p", fingerprint);
             morrison->run(input, gwstate, file_checkpoint, file_params, logging);

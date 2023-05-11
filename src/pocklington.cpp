@@ -13,29 +13,8 @@ int genProthBase(Giant& k, uint32_t n);
 
 Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proof* proof) : Fermat(Fermat::POCKLINGTON, input, params, logging, proof)
 {
-    int i, j;
-    std::vector<std::pair<Giant, int>> factors;
-    factors.reserve(input.b_factors().size());
-    for (i = 0; i < input.b_factors().size(); i++)
-        factors.emplace_back(power(input.b_factors()[i].first, input.b_factors()[i].second), i);
-    std::sort(factors.begin(), factors.end(), [](const std::pair<Giant, int>& a, const std::pair<Giant, int>& b) { return a.first > b.first; });
+    int i;
     Giant tmp;
-    tmp = 1;
-    for (j = 0; j < factors.size() && tmp*tmp < input.gb(); j++)
-        tmp *= factors[j].first;
-    _tasks.reserve(j);
-    for (i = 0; i < j; i++)
-    {
-        _tasks.emplace_back(factors[i].second);
-        Giant& b = input.b_factors()[factors[i].second].first;
-        _factors += (!_factors.empty() ? ", " : "") + b.to_string();
-        tmp = input.gb()/b;
-        if (tmp != 1)
-        {
-            _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
-            _tasks.back().taskCheck.reset(new CarefulExp(b));
-        }
-    }
 
     if (input.is_base2())
     {
@@ -45,6 +24,32 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
         _a = genProthBase(_input_base2->gk(), _input_base2->n());
         if (!_task->smooth())
             params.maxmulbyconst = _a;
+
+        _tasks.emplace_back(0);
+        tmp = input.gb()/2;
+        if (tmp != 1)
+        {
+            _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
+            _tasks.back().taskCheck.reset(new CarefulExp(2));
+        }
+    }
+    else
+    {
+        _tasks.reserve(input.b_factors().size());
+        for (i = 0; i < input.b_factors().size(); i++)
+        {
+            _tasks.emplace_back(i);
+            Giant& b = input.b_factors()[i].first;
+            tmp = input.gb()/b;
+            if (tmp != 1)
+            {
+                _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
+                _tasks.back().taskCheck.reset(new CarefulExp(b));
+            }
+        }
+
+        if (params.AllFactors)
+            _all_factors = params.AllFactors.value();
     }
 }
 
@@ -53,18 +58,22 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     if (_input_base2)
         logging.info("Proth test of %s = %s, a = %d, complexity = %d.\n", input.display_text().data(), _input_base2->display_text().data(), _a, (int)logging.progress().cost_total());
     else
-        logging.info("Pocklington test of %s, a = %d, factors = {%s}, complexity = %d.\n", input.display_text().data(), _a, _factors.data(), (int)logging.progress().cost_total());
+        logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
+
+    Giant done;
+    done = 1;
 
     File* checkpoint = &file_checkpoint;
     File* recoverypoint = &file_recoverypoint;
     Giant tmp;
-    while (_tasks.size() > 0)
+    while (!_tasks.empty())
     {
         if (!success())
             return;
         std::vector<Giant> G;
         G.reserve(_tasks.size());
+        std::string factors;
 
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
@@ -95,12 +104,16 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                     logging.result(_prime, "%s is not prime. Proth RES64: %s.\n", input.display_text().data(), _res64.data());
                     logging.result_save(input.input_text() + " is not prime. Proth RES64: " + _res64 + ".\n");
                 }
+                else
+                    _prime = true;
                 break;
             }
             if (tmp != 1)
             {
                 tmp -= 1;
                 G.emplace_back(std::move(tmp));
+                done *= power(input.b_factors()[it->index].first, input.b_factors()[it->index].second);
+                factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->index].first.to_string();
                 it = _tasks.erase(it);
             }
             else
@@ -120,6 +133,10 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
             else
                 tmp = std::move(G[0]);
+
+            logging.set_prefix(input.display_text() + " ");
+            logging.info("Checking gcd with factors {%s}.\n", factors.data());
+            logging.set_prefix("");
             tmp.gcd(*gwstate.N);
             if (tmp != 1)
             {
@@ -130,7 +147,12 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
         }
 
-        if (_tasks.size() > 0)
+        if (_tasks.empty() || (!_all_factors && done*done >= input.gb()))
+        {
+            _prime = true;
+            break;
+        }
+        else
         {
             if (proof == nullptr)
             {
@@ -162,19 +184,15 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 gwstate.handle.fft_count = fft_count;
             }
 
-            std::string factors;
-            for (auto it = _tasks.begin(); it != _tasks.end(); it++)
-                factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->index].first.to_string();
-            logging.warning("Restarting Pocklington test of %s, a = %d, factors = {%s}.\n", input.display_text().data(), _a, factors.data());
+            logging.warning("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
             checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));
             recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
             Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, nullptr);
         }
     }
 
-    if (_success)
+    if (_prime)
     {
-        _prime = true;
         logging.result(_prime, "%s is prime!\n", input.display_text().data());
         logging.result_save(input.input_text() + " is prime!\n");
     }

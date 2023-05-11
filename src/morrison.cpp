@@ -25,32 +25,25 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
 
     if (params.CheckStrong)
         logging.warning("Strong check is not implemented in Morrison test. Use -fermat first.\n");
-
-    tmp = 1;
-    factors.reserve(input.b_factors().size());
-    for (i = 0; i < input.b_factors().size(); i++)
-        if (input.b_factors()[i].first != 2)
-            factors.emplace_back(power(input.b_factors()[i].first, input.b_factors()[i].second), i);
-        else
-        {
-            tmp = power(input.b_factors()[i].first, input.b_factors()[i].second);
-            _factors = "2";
-        }
-    std::sort(factors.begin(), factors.end(), [](const std::pair<Giant, int>& a, const std::pair<Giant, int>& b) { return a.first > b.first; });
-    for (i = 0; i < factors.size() && tmp*tmp < input.gb(); i++)
-    {
-        tmp *= factors[i].first;
-        _factors += (!_factors.empty() ? ", " : "") + input.b_factors()[factors[i].second].first.to_string();
-    }
+    if (params.AllFactors)
+        _all_factors = params.AllFactors.value();
 
     Giant N = input.value();
     _negQ = N.bit(0) && N.bit(1);
     _task.reset(new LucasMul(_negQ));
     if (!_negQ)
         _task->mul_prime(2, 1, 0);
+
+    if (input.b_factors()[0].first != 2 || N.bitlen() >= 2*input.b_factors()[0].second)
+    {
+        _factor_tasks.reserve(input.b_factors().size());
+        for (i = 0; i < input.b_factors().size(); i++)
+            if (input.b_factors()[i].first != 2)
+                _factor_tasks.emplace_back(i);
+    }
+
     if (_factor_tasks.size() > 0)
         _taskCheck.reset(new LucasMul(_negQ));
-
     if (_factor_tasks.size() > 1)
         for (i = 0; i < _factor_tasks.size(); i++)
         {
@@ -144,7 +137,6 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
             if (checkpoint)
                 checkpoint->clear();
         }
-        restart = true;
 
         Giant tmp;
         tmp = _P*4;
@@ -160,10 +152,11 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         }
 
         logging.set_prefix("");
-        logging.info("Morrison test of %s, P = %d, Q = %d, factors = {%s}, complexity = %d.\n", input.display_text().data(), _P, _negQ ? -1 : 1, _factors.data(), (int)logging.progress().cost_total());
+        logging.info("%sMorrison test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
         logging.set_prefix(input.display_text() + " ");
         if (gwstate.information_only)
             exit(0);
+        restart = true;
 
         checkpoint = file_checkpoint.add_child(std::to_string(_P), File::unique_fingerprint(file_checkpoint.fingerprint(), std::to_string(_P)));
         _task->init(&input, &gwstate, checkpoint, &logging, _P);
@@ -213,6 +206,14 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         if (_factor_tasks.size() > 0)
         {
             Giant G;
+            tmp = 1;
+            std::string factors;
+            if (input.b_factors()[0].first == 2)
+            {
+                tmp = power(input.b_factors()[0].first, input.b_factors()[0].second);
+                factors = "2";
+            }
+
             if (_factor_tasks.size() == 1)
             {
                 G = std::move(_task->state()->V());
@@ -220,6 +221,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     G -= 2;
                 if (G == 0)
                     continue;
+                factors += (!factors.empty() ? ", " : "") + input.b_factors()[_factor_tasks[0].index].first.to_string();
             }
             else
             {
@@ -231,8 +233,12 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     ftask.taskFactor->run();
                     if (ftask.taskFactor->state()->V() == (_negQ ? 0 : 2))
                     {
-                        Gs.clear();
-                        break;
+                        if (_all_factors)
+                        {
+                            tmp = 0;
+                            break;
+                        }
+                        continue;
                     }
                     ftask.taskCheck->init(&input, &gwstate, nullptr, &logging);
                     ftask.taskCheck->init_state(new LucasMul::State(0, 0, ftask.taskFactor->state()->V(), ftask.taskFactor->state()->parity()));
@@ -240,14 +246,16 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     if (ftask.taskCheck->state()->V() != (_negQ ? 0 : 2))
                     {
                         logging.warning("Arithmetic error, restarting.");
-                        Gs.clear();
+                        tmp = 0;
                         break;
                     }
                     Gs.push_back(std::move(ftask.taskFactor->state()->V()));
                     if (!_negQ)
                         Gs.back() -= 2;
+                    tmp *= power(input.b_factors()[ftask.index].first, input.b_factors()[ftask.index].second);
+                    factors += (!factors.empty() ? ", " : "") + input.b_factors()[ftask.index].first.to_string();
                 }
-                if (Gs.empty())
+                if (tmp == 0 || tmp*tmp < input.gb())
                     continue;
 
                 Product taskP(Gs.begin(), Gs.end());
@@ -256,6 +264,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                 G = std::move(taskP.result());
             }
 
+            logging.info("Checking gcd with factors {%s}.\n", factors.data());
             G.gcd(*gwstate.N);
             logging.progress().update(0, 0);
             if (G != 1) // Q=1: 19*2130-1, Q=-1: 225*5516-1

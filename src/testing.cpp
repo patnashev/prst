@@ -59,6 +59,9 @@ int testing_main(int argc, char *argv[])
                 .end()
                 .on_check(params.CheckStrong, true)
             .end()
+        .group("-factors")
+            .check("all", params.AllFactors, true)
+            .end()
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
@@ -355,20 +358,15 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
     params.Check = global_params.Check;
     params.CheckNear = global_params.CheckNear;
     params.CheckStrong = global_params.CheckStrong;
+    params.AllFactors = global_params.AllFactors;
 
     uint32_t fingerprint = input.fingerprint();
     std::unique_ptr<Pocklington> pocklington;
     std::unique_ptr<Morrison> morrison;
     if (input.c() == 1)
-    {
         pocklington.reset(new Pocklington(input, params, logging, nullptr));
-        fingerprint = File::unique_fingerprint(fingerprint, pocklington->factors());
-    }
     if (input.c() == -1)
-    {
         morrison.reset(new Morrison(input, params, logging));
-        fingerprint = File::unique_fingerprint(fingerprint, morrison->factors());
-    }
     File file_checkpoint("prst_c", fingerprint);
     File file_recoverypoint("prst_r", fingerprint);
     File file_params("prst_p", fingerprint);

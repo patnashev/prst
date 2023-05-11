@@ -80,7 +80,6 @@ public:
 
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 
-    const std::string& factors() { return _factors; }
     bool success() { return _success; }
     bool prime() { return _prime; }
     std::string& res64() { return _res64; }
@@ -96,7 +95,7 @@ protected:
     };
 
 protected:
-    std::string _factors;
+    bool _all_factors = false;
     std::unique_ptr<LucasMul> _task;
     std::unique_ptr<LucasMul> _taskCheck;
     std::vector<FactorTask> _factor_tasks;

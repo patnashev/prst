@@ -28,4 +28,6 @@ public:
 
     std::optional<bool> RootOfUnityCheck;
     std::optional<int> RootOfUnitySecurity;
+
+    std::optional<bool> AllFactors;
 };
