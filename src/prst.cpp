@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
     bool supportLLR2 = false;
     bool force_fermat = false;
     InputNum input;
+    std::vector<Giant> factors;
     int log_level = Logging::LEVEL_WARNING;
     std::string log_file;
 
@@ -132,6 +133,36 @@ int main(int argc, char *argv[])
             .end()
             .on_check(force_fermat, true)
         .group("-factors")
+            .list("list", ' ', ',', false)
+                .value_code([&](const char* param) {
+                        Giant tmp;
+                        tmp = param;
+                        if (tmp == 0)
+                            return false;
+                        if (tmp != 1)
+                            factors.push_back(std::move(tmp));
+                        return true;
+                    })
+                .end()
+            .value_code("file", ' ', [&](const char* param) {
+                    File factor_file(param, 0);
+                    factor_file.read_buffer();
+                    if (factor_file.buffer().empty())
+                        printf("factor file not found: %s.\n", param);
+                    else
+                    {
+                        std::unique_ptr<TextReader> reader(factor_file.get_textreader());
+                        Giant tmp;
+                        std::string factor;
+                        while (reader->read_textline(factor))
+                        {
+                            tmp = factor;
+                            if (tmp != 0 && tmp != 1)
+                                factors.push_back(std::move(tmp));
+                        }
+                    }
+                    return true;
+                })
             .check("all", params.AllFactors, true)
             .end()
         .group("-time")
@@ -200,12 +231,15 @@ int main(int argc, char *argv[])
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
         printf("\t-fermat [a <a>]\n");
+        printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]]\n");
         printf("\t-proof save <count> [name <proof> <product>] [keep]\n");
         printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [cert <name>] [keep]\n");
         printf("\t-proof cert {<name> | default}\n");
         return 0;
     }
+    for (auto& f : factors)
+        input.add_factor(f);
 
     Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
     if (!log_file.empty())

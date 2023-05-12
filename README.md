@@ -48,6 +48,10 @@ Options: -v
          -fermat [a <a>]
                  forces Fermat probabilistic test, optionally supplying starting value,
                  a = 3 by default.
+         -factors [list <factor>,...] [file <filename>] [all]
+                 sets list of prime factors to be used by Pocklington or Morrison tests.
+                 reads the list from helper file, one factor per line.
+                 forces Pocklington and Morrison tests to use all factors instead of half.
          -check [{near | always | never}] [strong [count <count>] [L <L>]]
                  enables/disables roundoff checking, by default only when close
                  to switching to the next transform size.
