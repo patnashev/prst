@@ -62,7 +62,8 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
         }
         else
             _task->mul_giant(input.gk(), 1);
-
+    if (input.b_cofactor())
+        _task->mul_giant(*input.b_cofactor(), input.n());
     
     for (i = 0; i < input.b_factors().size(); i++)
     {
