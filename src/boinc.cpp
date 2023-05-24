@@ -190,7 +190,7 @@ int boinc_main(int argc, char *argv[])
         .value_number("-t", 0, gwstate.thread_count, 1, 256)
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
         .value_number("--nthreads", ' ', gwstate.thread_count, 1, 256)  // alias for '-t', set by Boinc
-        .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
+        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
         .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
         .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
         .group("-fft")

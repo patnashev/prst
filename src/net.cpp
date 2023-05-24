@@ -397,7 +397,7 @@ int net_main(int argc, char *argv[])
     Config cnfg;
     cnfg.ignore("-net")
         .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("-spin", ' ', gwstate.spin_threads, 1, 256)
+        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
         .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
         .value_string("-i", ' ', worker_id)
         .group("-time")
