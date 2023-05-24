@@ -1,0 +1,22 @@
+EXE_BOINC = prst_boinc
+
+BOINC_DIR = ../../../../boinc/src
+BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
+BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc
+
+all_boinc: $(EXE_BOINC)
+.PHONY: all_boinc
+
+include Makefile
+
+$(EXE_BOINC): $(COMPOBJS_COMMON) prst_boinc.o bow.o boinc.o
+	$(CC) -o $@ $^ $(LIB_GWNUM) $(DUMMY2) $(BOINC_LIB) $(LIBS2)
+
+prst_boinc.o: prst.cpp
+	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
+
+boinc.o: boinc.cpp
+	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
+
+bow.o: bow/bow.cpp
+	$(CXX) -o $@ -c $(CXXFLAGS) $(BOINC_INC) $<
