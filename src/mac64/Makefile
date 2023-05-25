@@ -1,23 +1,27 @@
 # Makefile for Linux
 
 EXE       = prst
-LIB_GWNUM = /Users/daohe/CLionProjects/prst/framework/gwnum/mac64/__newbuild/gwnum/gwnum.a
+LIB_GWNUM = ../../framework/gwnum/mac64/gwnum.a
 
 COMPOBJS_COMMON = md5.o arithmetic.o group.o giant.o lucas.o config.o inputnum.o integer.o logging.o file.o task.o exp.o fermat.o pocklington.o morrison.o proof.o testing.o support.o
 COMPOBJS        = $(COMPOBJS_COMMON) prst.o
 
 # Source directories
 
-VPATH    = ..:../../framework:../../framework/arithmetic
+VPATH     = ..:../../framework:../../framework/arithmetic
 
-LIBS2    = -lm -lpthread -lstdc++
-#CC       = /usr/local/bin/gcc-12 -isysroot MacOSX10.9.sdk -mmacosx-version-min=10.9 -Wl, -rpath, /usr/local/opt/gcc@10/lib/gcc/10/
-CC       = /usr/local/bin/gcc-12 -mmacosx-version-min=10.9
-#CXX      = /usr/local/bin/g++-12 -isysroot MacOSX10.9.sdk -mmacosx-version-min=10.9 -Wl, -rpath, /usr/local/opt/gcc@10/lib/gcc/10/
-CXX      = /usr/local/bin/g++-12 -mmacosx-version-min=10.9
-LDFLAGS  = -isysroot MacOSX10.9.sdk/
-CFLAGS   = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DX86_64 -O0 -g -std=c99     -Wall -Wextra
-CXXFLAGS = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DX86_64 -O0 -g -std=gnu++17 -Wall -Wextra
+# See README.md for how to get macOS SDK
+LFLAGS    = # -isysroot MacOSX10.9.sdk/
+
+DUMMY2    =
+LIBS2     = -lm -lpthread -lstdc++ /usr/local/lib/libgmp.a  # link against .a file directly to avoid using .dylib
+
+CC        = /usr/local/bin/gcc-12 -mmacosx-version-min=10.9
+CXX       = /usr/local/bin/g++-12 -mmacosx-version-min=10.9
+CFLAGS    = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -O2 -std=c99     -Wall -Wextra
+CXXFLAGS  = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
+
+# the code is too noisy for all warnings
 CXXFLAGS += -Wno-sign-compare
 
 #########################################################################
@@ -25,7 +29,7 @@ CXXFLAGS += -Wno-sign-compare
 all: $(EXE)
 
 $(EXE): $(COMPOBJS)
-	$(CC) $(LDFLAGS) -o $@ $(COMPOBJS) $(LIB_GWNUM) $(LIBS2)
+	$(CC) $(LFLAGS) -o $@ $(COMPOBJS) $(LIB_GWNUM) $(LIBS2)
 
 clean:
 	rm -f $(EXE) $(COMPOBJS)
