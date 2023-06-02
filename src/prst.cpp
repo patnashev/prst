@@ -55,8 +55,9 @@ int main(int argc, char *argv[])
     //  3 proof product
     //  4 certificate
     //  5 strong check placeholder
-    //  6 proof state
+    //  6 proof checkpoint
     //  7 Morrison test params
+    //  8 serialized checkpoint
 
     GWState gwstate;
     Params params;
@@ -266,7 +267,7 @@ int main(int argc, char *argv[])
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
-    auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::State::TYPE)
+    auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
     {
         if (supportLLR2)
             file.reset(new LLR2File(filename, gwstate.fingerprint, type));

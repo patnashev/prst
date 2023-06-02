@@ -79,14 +79,14 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         {
             if (it->taskFactor)
             {
-                it->taskFactor->init(&input, &gwstate, &logging, std::move(_Xm1));
+                it->taskFactor->init(&input, &gwstate, &logging, std::move(*_task->result()));
                 it->taskFactor->run();
-                _Xm1 = std::move(it->taskFactor->X0());
-                tmp = std::move(it->taskFactor->state()->X());
+                *_task->result() = std::move(it->taskFactor->X0());
+                tmp = std::move(*it->taskFactor->result());
 
                 it->taskCheck->init(&input, &gwstate, &logging, std::move(tmp));
                 it->taskCheck->run();
-                if (it->taskCheck->state()->X() != 1)
+                if (*it->taskCheck->result() != 1)
                 {
                     logging.warning("Arithmetic error, restarting.");
                     continue;
@@ -94,7 +94,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 tmp = std::move(it->taskCheck->X0());
             }
             else
-                tmp = _Xm1;
+                tmp = *_task->result();
             if (_input_base2)
             {
                 tmp += 1;
@@ -159,11 +159,10 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 logging.progress().add_stage(_task->cost());
                 logging.progress().update(0, (int)gwstate.handle.fft_count/2);
                 logging.progress_save();
-                BaseExp::State state(_task->smooth() ? _n : _task->exp().bitlen() - 1, std::move(_Xm1));
                 if (dynamic_cast<StrongCheckMultipointExp*>(_task.get()) != nullptr)
-                    recoverypoint->write(state);
+                    recoverypoint->write(*_task->state());
                 else
-                    checkpoint->write(state);
+                    checkpoint->write(*_task->state());
             }
             else
             {

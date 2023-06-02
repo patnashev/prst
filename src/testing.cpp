@@ -432,10 +432,10 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     InputNum input;
     int proof_count = 4;
     Giant tmp, root;
-    BaseExp::State point1;
-    BaseExp::State point2;
-    BaseExp::State point3;
-    BaseExp::State point4;
+    BaseExp::StateSerialized point1;
+    BaseExp::StateSerialized point2;
+    BaseExp::StateSerialized point3;
+    BaseExp::StateValue point4;
 
     input.parse("3*2^353+1");
 
@@ -460,6 +460,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     gwstate.maxmulbyconst = fermat.a();
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
+    GWArithmetic gw(gwstate);
 
     auto finally = [&]
     {
@@ -475,12 +476,13 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
 
         file_proofpoint.children()[1]->read(point1);
-        tmp = std::move(point1.X());
-        point1.X() = Giant::rnd(gwstate.N->bitlen());
-        file_proofpoint.children()[1]->write(point1);
-        point1.X() = std::move(tmp);
-        file_proofproduct.clear(true);
+        GWNum X(gw);
+        X = Giant::rnd(gwstate.N->bitlen());
+        BaseExp::StateSerialized point;
+        point.set(point1.iteration(), X);
+        file_proofpoint.children()[1]->write(point);
 
+        file_proofproduct.clear(true);
         proof.run(input, gwstate, logging, nullptr);
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
 
@@ -508,7 +510,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
             throw TaskAbortException();
         }
 
-        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging, false);
+        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging, proof.Li());
         proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
@@ -522,7 +524,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
             proof_root.run(input, gwstate, logging.level() > Logging::LEVEL_INFO ? noLogging : logging, &fermat.result());
         }
         catch (const TaskAbortException&) {}
-        if (proof_root.taskRoot()->state()->X() != 1)
+        if (*proof_root.taskRoot()->result() != 1)
         {
             logging.error("Roots of unity check failed to detect the attack.\n");
             throw TaskAbortException();
@@ -535,20 +537,25 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         FastExp task(tmp << input.n());
         task.init(&input, &gwstate, nullptr, &logging, fermat.a());
         task.run();
-        root = std::move(task.state()->X());
+        GWNum R(gw);
+        R = *task.result();
 
         file_proofpoint.children()[4]->read(point4);
-        tmp = std::move(point4.X());
-        point4.X() = tmp*root%*gwstate.N;
-        file_proofpoint.children()[4]->write(point4);
-        point4.X() = std::move(tmp);
-        root = square(std::move(root))%*gwstate.N;
-        tmp = std::move(point1.X());
-        point1.X() = tmp*root%*gwstate.N;
-        file_proofpoint.children()[1]->write(point1);
-        point1.X() = std::move(tmp);
-        file_proofproduct.clear(true);
+        GWNum X(gw);
+        point4.to_GWNum(X);
+        X *= R;
+        BaseExp::StateValue pointv;
+        pointv.set(point4.iteration(), X);
+        file_proofpoint.children()[4]->write(pointv);
 
+        R.square();
+        point1.to_GWNum(X);
+        X *= R;
+        BaseExp::StateSerialized point;
+        point.set(point1.iteration(), X);
+        file_proofpoint.children()[1]->write(point);
+
+        file_proofproduct.clear(true);
         test_attack(fermat);
     }
     catch (const TaskAbortException&)
@@ -562,16 +569,26 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         FastExp task(input.gk() << (input.n() - 2));
         task.init(&input, &gwstate, nullptr, &logging, fermat.a());
         task.run();
-        root = std::move(task.state()->X());
+        GWNum R(gw);
+        R = *task.result();
 
-        point4.X() = std::move(point4.X())*root%*gwstate.N;
-        file_proofpoint.children()[4]->write(point4);
+        GWNum X(gw);
+        point4.to_GWNum(X);
+        X *= R;
+        BaseExp::StateValue pointv;
+        pointv.set(point4.iteration(), X);
+        file_proofpoint.children()[4]->write(pointv);
+
         file_proofpoint.children()[2]->read(point2);
-        point2.X() = std::move(point2.X())*root%*gwstate.N;
-        file_proofpoint.children()[2]->write(point2);
-        file_proofpoint.children()[1]->write(point1);
-        file_proofproduct.clear(true);
+        point2.to_GWNum(X);
+        X *= R;
+        BaseExp::StateSerialized point;
+        point.set(point2.iteration(), X);
+        file_proofpoint.children()[2]->write(point);
 
+        file_proofpoint.children()[1]->write(point1);
+
+        file_proofproduct.clear(true);
         test_attack(fermat);
     }
     catch (const TaskAbortException&)
@@ -607,18 +624,27 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         FastExp task(power(input.gb()/3, 3)*power(input.gb(), input.n() - 3));
         task.init(&input, &gwstate, nullptr, &logging, fermat2.a());
         task.run();
-        root = std::move(task.state()->X());
+        GWNum R(gw);
+        R = *task.result();
 
         file_proofpoint.children()[4]->read(point4);
-        point4.X() = std::move(point4.X())*root%*gwstate.N;
-        file_proofpoint.children()[4]->write(point4);
-        root = square(std::move(root))%*gwstate.N;
-        root = square(std::move(root))%*gwstate.N;
-        file_proofpoint.children()[3]->read(point3);
-        point3.X() = std::move(point3.X())*root%*gwstate.N;
-        file_proofpoint.children()[3]->write(point3);
-        file_proofproduct.clear(true);
+        GWNum X(gw);
+        point4.to_GWNum(X);
+        X *= R;
+        BaseExp::StateValue pointv;
+        pointv.set(point4.iteration(), X);
+        file_proofpoint.children()[4]->write(pointv);
 
+        R.square();
+        R.square();
+        file_proofpoint.children()[3]->read(point3);
+        point3.to_GWNum(X);
+        X *= R;
+        BaseExp::StateSerialized point;
+        point.set(point3.iteration(), X);
+        file_proofpoint.children()[3]->write(point);
+
+        file_proofproduct.clear(true);
         test_attack(fermat2);
     }
     catch (const TaskAbortException&)
@@ -632,9 +658,9 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
-    params.ProofPointsPerCheck = 1;
-    proof.points().clear();
+    proof = Proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
     Fermat fermat3(Fermat::AUTO, input, params, logging, &proof);
+    proof_build = Proof(Proof::BUILD, proof_count, input, params, file_cert, logging);
     proof_build.points() = proof.points();
 
     fingerprint = input.fingerprint();
@@ -655,20 +681,26 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         FastExp task((input.value() - 1)/3);
         task.init(&input, &gwstate, nullptr, &logging, 2);
         task.run();
-        root = std::move(task.state()->X());
+        GWNum R(gw);
+        R = *task.result();
 
         file_proofpoint.children()[4]->read(point4);
-        point4.X() = std::move(point4.X())*root%*gwstate.N;
-        file_proofpoint.children()[4]->write(point4);
-        file_proofpoint.children()[3]->read(point3);
-        point3.X() = std::move(point3.X())*root%*gwstate.N;
-        file_proofpoint.children()[3]->write(point3);
-        root = square(std::move(root))%*gwstate.N;
-        file_proofpoint.children()[2]->read(point2);
-        point2.X() = std::move(point2.X())*root%*gwstate.N;
-        file_proofpoint.children()[2]->write(point2);
-        file_proofproduct.clear(true);
+        GWNum X(gw);
+        point4.to_GWNum(X);
+        X *= R;
+        BaseExp::StateValue pointv;
+        pointv.set(point4.iteration(), X);
+        file_proofpoint.children()[4]->write(pointv);
 
+        R.square();
+        file_proofpoint.children()[1]->read(point1);
+        point1.to_GWNum(X);
+        X *= R;
+        BaseExp::StateSerialized point;
+        point.set(point1.iteration(), X);
+        file_proofpoint.children()[1]->write(point);
+
+        file_proofproduct.clear(true);
         test_attack(fermat3);
     }
     catch (const TaskAbortException&)

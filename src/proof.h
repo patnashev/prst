@@ -22,7 +22,6 @@ public:
     public:
         static const char TYPE = 3;
         Product() : TaskState(TYPE) { }
-        void mimic_type(int type) { _type = type; }
         void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; }
         int depth() { return _iteration; }
         arithmetic::Giant& X() { return _X; }
@@ -64,13 +63,13 @@ public:
         void set(int iteration, T& Y, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _Y = Y; _h = h; }
         template<class T, class S>
         void set(int iteration, S& X, T& Y, arithmetic::Giant& exp, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _X = X; _Y = Y; _exp = exp; _h = h; }
-        arithmetic::Giant& X() { return _X; }
+        arithmetic::SerializedGWNum& X() { return _X; }
         arithmetic::Giant& Y() { return _Y; }
         arithmetic::Giant& exp() { return _exp; }
         std::vector<arithmetic::Giant>& h() { return _h; }
 
     private:
-        arithmetic::Giant _X;
+        arithmetic::SerializedGWNum _X;
         arithmetic::Giant _Y;
         arithmetic::Giant _exp;
         std::vector<arithmetic::Giant> _h;
@@ -85,7 +84,7 @@ public:
     void init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputNum& input, Logging& logging, int a);
     void read_point(int index, TaskState& state, Logging& logging);
     void read_product(int index, TaskState& state, Logging& logging);
-    bool on_point(int index, arithmetic::Giant& X);
+    bool on_point(int index, BaseExp::State* state);
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
     void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
     double cost();
@@ -132,11 +131,9 @@ protected:
 class ProofSave : public InputTask
 {
 public:
-    ProofSave(Proof& proof) : _proof(proof)
-    {
-    }
+    ProofSave() { }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
+    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging, Proof* proof);
 
     Proof::State* state() { return static_cast<Proof::State*>(Task::state()); }
 
@@ -148,17 +145,15 @@ protected:
     void read_point(int index, TaskState& state);
 
 protected:
-    Proof& _proof;
+    Proof* _proof;
 };
 
 class ProofBuild : public InputTask
 {
 public:
-    ProofBuild(Proof& proof, const std::string& security_seed) : _proof(proof), _security_seed(security_seed)
-    {
-    }
+    ProofBuild(const std::string& security_seed) : _security_seed(security_seed) { }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging);
+    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging, Proof* proof);
 
     Proof::State* state() { return static_cast<Proof::State*>(Task::state()); }
     bool security() { return !_security_seed.empty(); }
@@ -171,7 +166,7 @@ protected:
     void done() override;
 
 protected:
-    Proof& _proof;
+    Proof* _proof;
     std::string _security_seed;
     arithmetic::Giant _rnd_seed;
     std::string _raw_res64;

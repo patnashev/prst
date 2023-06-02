@@ -14,18 +14,41 @@ public:
     class State : public TaskState
     {
     public:
-        static const char TYPE = 1;
-        State() : TaskState(TYPE) { }
-        State(int iteration, const arithmetic::Giant& X) : TaskState(TYPE) { TaskState::set(iteration); _X = X; }
-        State(int iteration, arithmetic::Giant&& X) : TaskState(TYPE) { TaskState::set(iteration); _X = std::move(X); }
-        template<class T>
-        void set(int iteration, T& X) { TaskState::set(iteration); _X = X; }
-        arithmetic::Giant& X() { return _X; }
-        bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_X); }
-        void write(Writer& writer) override { TaskState::write(writer); writer.write(_X); }
+        State(char type) : TaskState(type) { }
+        virtual void set(int iteration, arithmetic::GWNum& X) = 0;
+        virtual void to_GWNum(arithmetic::GWNum& X) = 0;
+    };
+    class StateSerialized : public State
+    {
+    public:
+        static const char TYPE = 8;
+        StateSerialized() : State(TYPE) { }
+        void set(int iteration, arithmetic::GWNum& X) override { TaskState::set(iteration); _serialized_value = X; }
+        void to_GWNum(arithmetic::GWNum& X) override { X = _serialized_value; }
+        bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_serialized_value); }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_serialized_value); }
 
     private:
-        arithmetic::Giant _X;
+        arithmetic::SerializedGWNum _serialized_value;
+    };
+    class StateValue : public State
+    {
+    public:
+        static const char TYPE = 1;
+        StateValue() : State(TYPE) { }
+        void set(int iteration, arithmetic::GWNum& X) override { TaskState::set(iteration); _giant_value = X; }
+        void to_GWNum(arithmetic::GWNum& X) override { X = _giant_value; }
+        bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_giant_value); }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_giant_value); }
+
+        template<class T>
+        StateValue(int iteration, T&& X) : State(TYPE) { TaskState::set(iteration); _giant_value = std::forward<T>(X); }
+        template<class T>
+        void set(int iteration, T&& X) { TaskState::set(iteration); _giant_value = std::forward<T>(X); }
+        arithmetic::Giant& value() { return _giant_value; }
+
+    private:
+        arithmetic::Giant _giant_value;
     };
 
 public:
@@ -35,17 +58,24 @@ public:
     virtual ~BaseExp() { }
 
     virtual State* state() { return static_cast<State*>(Task::state()); }
-    virtual double cost() { return _exp.bitlen(); }
+    virtual arithmetic::Giant* result() { StateValue* value; if (state() == nullptr || state()->iteration() != iterations() || (value = dynamic_cast<StateValue*>(state())) == nullptr) return nullptr; return &value->value(); }
+    template<class... Args>
+    void commit_execute(int iteration, Args&&... args)
+    {
+        if (iteration == iterations())
+            Task::commit_execute<StateValue>(iteration, std::forward<Args>(args)...);
+        else
+            Task::commit_execute<StateSerialized>(iteration, std::forward<Args>(args)...);
+    }
 
+    virtual double cost() { return _exp.bitlen(); }
+    
     bool smooth() { return _smooth; }
     arithmetic::Giant& b() { return _smooth ? _exp : *(arithmetic::Giant*)nullptr; }
     arithmetic::Giant& exp() { return _exp; }
     arithmetic::Giant& tail() { return _tail; }
     arithmetic::Giant& X0() { return !_smooth ? _X0 : *(arithmetic::Giant*)nullptr; }
     uint32_t x0() { return !_smooth ? _x0 : 0; }
-
-protected:
-    void done() override;
 
 protected:
     bool _smooth;
@@ -104,7 +134,7 @@ class MultipointExp : public BaseExp
 {
 public:
     template<class T>
-    MultipointExp(T&& exp, bool smooth, const std::vector<int>& points, std::function<bool(int, arithmetic::Giant&)> on_point) : BaseExp(), _points(points), _on_point(on_point)
+    MultipointExp(T&& exp, bool smooth, const std::vector<int>& points, std::function<bool(int, State*)> on_point) : BaseExp(), _points(points), _on_point(on_point)
     {
         _exp = std::forward<T>(exp);
         _smooth = smooth;
@@ -173,7 +203,7 @@ protected:
 
 protected:
     std::vector<int> _points;
-    std::function<bool(int, arithmetic::Giant&)> _on_point;
+    std::function<bool(int, State*)> _on_point;
 
     std::unique_ptr<arithmetic::GWNum> _X;
     std::vector<arithmetic::GWNum> _U;
@@ -254,26 +284,22 @@ public:
     public:
         static const int TYPE = 2;
         StrongCheckState() : TaskState(TYPE) { }
-        void set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D);
+        void set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D) { TaskState::set(iteration); _recovery = recovery; _X = X; _D = D; }
         int recovery() { return _recovery; }
-        arithmetic::Giant& X() { return _X; }
-        arithmetic::Giant& D() { return _D; }
-        std::unique_ptr<arithmetic::GWNum>& gwX() { return _gwX; }
-        std::unique_ptr<arithmetic::GWNum>& gwD() { return _gwD; }
+        arithmetic::SerializedGWNum& X() { return _X; }
+        arithmetic::SerializedGWNum& D() { return _D; }
         bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_recovery) && reader.read(_X) && reader.read(_D); }
         void write(Writer& writer) override { TaskState::write(writer); writer.write(_recovery); writer.write(_X); writer.write(_D); }
 
     private:
         int _recovery;
-        arithmetic::Giant _X;
-        arithmetic::Giant _D;
-        std::unique_ptr<arithmetic::GWNum> _gwX;
-        std::unique_ptr<arithmetic::GWNum> _gwD;
+        arithmetic::SerializedGWNum _X;
+        arithmetic::SerializedGWNum _D;
     };
 
 public:
     template<class T>
-    StrongCheckMultipointExp(T&& exp, bool smooth, const std::vector<int>& points, int L, int L2, std::function<bool(int, arithmetic::Giant&)> on_point) : MultipointExp(std::forward<T>(exp), smooth, points, on_point), _L(L), _L2(L2)
+    StrongCheckMultipointExp(T&& exp, bool smooth, const std::vector<int>& points, int L, int L2, std::function<bool(int, State*)> on_point) : MultipointExp(std::forward<T>(exp), smooth, points, on_point), _L(L), _L2(L2)
     {
     }
 
@@ -351,7 +377,7 @@ protected:
 class GerbiczCheckExp : public StrongCheckMultipointExp
 {
 public:
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, arithmetic::Giant&)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<int>(), 0, 0, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, State*)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<int>(), 0, 0, on_point)
     {
         if (n < count)
         {
@@ -449,7 +475,7 @@ public:
         InputTask::init(input, gwstate, nullptr, nullptr, logging, (int)(_last - _first));
     }
 
-    arithmetic::Giant& result() { return static_cast<BaseExp::State*>(state())->X(); }
+    arithmetic::Giant& result() { return static_cast<BaseExp::StateValue*>(state())->value(); }
 
 protected:
     void setup() override { }
@@ -467,9 +493,9 @@ protected:
         else
         {
             i = state()->iteration();
-            P = static_cast<BaseExp::State*>(state())->X();
+            P = static_cast<BaseExp::StateValue*>(state())->value();
         }
-        for (IT it = _first + i; it != _last; it++, i++, commit_execute<BaseExp::State>(i, P))
+        for (IT it = _first + i; it != _last; it++, i++, commit_execute<BaseExp::StateValue>(i, P))
         {
             X = *it;
             gw().carefully().mul(X, P, P, 0);
