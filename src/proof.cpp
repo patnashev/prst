@@ -217,9 +217,9 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
             return;
         }
         BaseExp::State* tmp_state;
-        if (_points[point].check && (tmp_state = BaseExp::State::read_file(_file_points[point], state.get(), state_serialized.get())) != nullptr && state->iteration() == _points[point].pos)
+        if (_points[point].check && (tmp_state = BaseExp::State::read_file(_file_points[point], state.get(), state_serialized.get())) != nullptr && tmp_state->iteration() == _points[point].pos)
         {
-            if (task->state() == nullptr || task->state()->iteration() < state->iteration())
+            if (task->state() == nullptr || task->state()->iteration() < tmp_state->iteration())
             {
                 task->init_state(tmp_state);
                 if (tmp_state == state.get())
