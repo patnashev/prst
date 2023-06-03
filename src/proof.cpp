@@ -107,6 +107,7 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
         else
             params.ProofPointsPerCheck = _count/params.StrongCount.value();
     int points_per_check = params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1;
+    bool value_points = input.type() != input.KBNC || input.k() == 0 || input.b() == 0 || input.b() == 2;
 
     /*if (input.b() != 2 && params.ProofPointsPerCheck && !Li())
     {
@@ -129,26 +130,24 @@ void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging
             _M = (iters - iters%(params.StrongL.value()*points_per_check))/points_per_check;
         _points.reserve(_count + 2);
         for (i = 0; i <= _count; i++)
-            _points.push_back(i*_M*(i%points_per_check == 0 || i == _count ? 1 : -1));
+            _points.emplace_back(i*_M, i%points_per_check == 0 || i == _count, value_points || i == _count);
     }
     else*/
     {
         _points.reserve(_count + 1);
-        _points.push_back(0);
+        _points.emplace_back(0);
         for (int i = 1; i < _count; i++)
         {
             _M = iterations;
-            _points.push_back(0);
+            _points.emplace_back(0, i%points_per_check == 0, value_points);
             for (int j = _count/2; j > 0 && (i & (j*2 - 1)) != 0; j >>= 1)
             {
                 _M /= 2;
                 if ((i & j) != 0)
-                    _points.back() += _M;
+                    _points.back().pos += _M;
                 if ((iterations & (_count/j/2)) != 0)
-                    _points.back()++;
+                    _points.back().pos++;
             }
-            if (i%points_per_check != 0)
-                _points.back() *= -1;
         }
         _points.push_back(iterations);
     }
@@ -217,16 +216,17 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
         {
             return;
         }
-        if (_points[point] >= 0 && _file_points[point]->read(*state) && state->iteration() == _points[point])
+        BaseExp::State* tmp_state;
+        if (_points[point].check && (tmp_state = BaseExp::State::read_file(_file_points[point], state.get(), state_serialized.get())) != nullptr && state->iteration() == _points[point].pos)
         {
             if (task->state() == nullptr || task->state()->iteration() < state->iteration())
-                task->init_state(state.release());
-            return;
-        }
-        if (_points[point] >= 0 && _file_points[point]->read(*state_serialized) && state_serialized->iteration() == _points[point])
-        {
-            if (task->state() == nullptr || task->state()->iteration() < state_serialized->iteration())
-                task->init_state(state_serialized.release());
+            {
+                task->init_state(tmp_state);
+                if (tmp_state == state.get())
+                    state.release();
+                if (tmp_state == state_serialized.get())
+                    state_serialized.release();
+            }
             return;
         }
         point--;
@@ -236,12 +236,24 @@ void Proof::init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputN
 
 void Proof::read_point(int index, TaskState& state, Logging& logging)
 {
-    if (!_file_points[index]->read(state) || state.iteration() != abs(_points[index]))
+    if (!_file_points[index]->read(state) || state.iteration() != _points[index].pos)
     {
         logging.error("%s is missing or corrupt.\n", _file_points[index]->filename().data());
         throw TaskAbortException();
     }
     _file_points[index]->free_buffer();
+}
+
+BaseExp::State* Proof::read_point(int index, BaseExp::StateValue* state_value, BaseExp::StateSerialized* state_serialized, Logging& logging)
+{
+    BaseExp::State* state = BaseExp::State::read_file(_file_points[index], state_value, state_serialized);
+    if (state == nullptr || state->iteration() != _points[index].pos)
+    {
+        logging.error("%s is missing or corrupt.\n", _file_points[index]->filename().data());
+        throw TaskAbortException();
+    }
+    _file_points[index]->free_buffer();
+    return state;
 }
 
 void Proof::read_product(int index, TaskState& state, Logging& logging)
@@ -392,11 +404,6 @@ void ProofSave::done()
     _logging->set_prefix("");
 }
 
-void ProofSave::read_point(int index, TaskState& state)
-{
-    _proof->read_point(index, state, *_logging);
-}
-
 void hash_giant(Giant& gin, Giant& gout)
 {
     MD5_CTX context;
@@ -447,7 +454,8 @@ void exp_gw(GWArithmetic& gw, Giant& exp, GWNum& X, GWNum& X0, int options)
 void ProofSave::execute()
 {
     int t, i, j, k;
-    Proof::Product state_d;
+    Proof::Product product;
+    BaseExp::StateValue state_v;
     BaseExp::StateSerialized state_s;
     GWNum Y(gw());
     GWNum D(gw());
@@ -461,26 +469,24 @@ void ProofSave::execute()
 
     if (state() == nullptr)
     {
-        BaseExp::StateValue point;
-        read_point(_proof->count(), point);
-        _state.reset(new Proof::State(0, std::move(point.value())));
+        _proof->read_point(_proof->count(), state_v, *_logging);
+        _state.reset(new Proof::State(0, std::move(state_v.value())));
     }
     Y = state()->Y();
     h = state()->h();
 
     for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, Y, h))
     {
-        if (_proof->file_products()[i]->read(state_d))
+        if (_proof->file_products()[i]->read(product))
         {
             _proof->file_products()[i]->free_buffer();
-            D = state_d.X();
+            D = product.value();
         }
         else
         {
             if (i == 0)
             {
-                read_point(_proof->count()/2, state_s);
-                state_s.to_GWNum(D);
+                _proof->read_point(_proof->count()/2, &state_v, &state_s, *_logging)->to_GWNum(D);
             }
             else
             {
@@ -489,8 +495,7 @@ void ProofSave::execute()
                 for (j = 0; j < (1 << i); j++)
                 {
                     k = (1 + j*2) << (t - i - 1);
-                    read_point(k, state_s);
-                    state_s.to_GWNum(D);
+                    _proof->read_point(k, &state_v, &state_s, *_logging)->to_GWNum(D);
 
                     for (k = 1; k <= i; k++)
                     {
@@ -510,15 +515,15 @@ void ProofSave::execute()
                 }
                 check();
             }
-            state_d.set(i, D);
+            product.set(i, D);
 
-            _proof->file_products()[i]->write(state_d);
+            _proof->file_products()[i]->write(product);
             _proof->file_products()[i]->free_buffer();
             on_state();
         }
 
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
-        hash_giants(_gwstate->fingerprint, state()->Y(), state_d.X(), h[i]);
+        hash_giants(_gwstate->fingerprint, state()->Y(), product.value(), h[i]);
         make_prime(h[i]);
 
         gw().fft(D, D);
@@ -555,7 +560,7 @@ void ProofBuild::done()
 void ProofBuild::execute()
 {
     int M, t, i, j, k;
-    Proof::Product state_d;
+    Proof::Product product;
     GWNum X(gw());
     GWNum Y(gw());
     GWNum D(gw());
@@ -570,7 +575,7 @@ void ProofBuild::execute()
     if (_proof->Li())
     {
         len = _proof->r_exp().bitlen() - 1;
-        _proof->r_exp().arithmetic().substr(_proof->r_exp(), len - abs(_proof->points()[1]), abs(_proof->points()[1]), a_power);
+        _proof->r_exp().arithmetic().substr(_proof->r_exp(), len - _proof->points()[1].pos, _proof->points()[1].pos, a_power);
     }
 
     if (state() == nullptr)
@@ -584,13 +589,13 @@ void ProofBuild::execute()
     a_power = state()->exp();
     h = state()->h();
 
-    M = _proof->points()[_proof->count()] >> state()->iteration();
+    M = _proof->points()[_proof->count()].pos >> state()->iteration();
     for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, X, Y, a_power, h), M >>= 1)
     {
-        _proof->read_product(i, state_d, *_logging);
-        D = state_d.X();
+        _proof->read_product(i, product, *_logging);
+        D = product.value();
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
-        hash_giants(_gwstate->fingerprint, state()->Y(), state_d.X(), h[i]);
+        hash_giants(_gwstate->fingerprint, state()->Y(), product.value(), h[i]);
         make_prime(h[i]);
 
         if (_proof->Li())
@@ -601,7 +606,7 @@ void ProofBuild::execute()
             for (j = 0; j < (1 << i); j++)
             {
                 k = (1 + j*2) << (t - i - 1);
-                _proof->r_exp().arithmetic().substr(_proof->r_exp(), len - abs(_proof->points()[k + 1]), abs(_proof->points()[k + 1]) - abs(_proof->points()[k]), exp);
+                _proof->r_exp().arithmetic().substr(_proof->r_exp(), len - _proof->points()[k + 1].pos, _proof->points()[k + 1].pos - _proof->points()[k].pos, exp);
                 for (k = 1; k <= i; k++)
                     if ((j & (1 << (k - 1))) == 0)
                     {

@@ -259,7 +259,7 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
     Proof proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
     Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
 
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count]));
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
     File file_checkpoint("prst_c", fingerprint);
@@ -431,11 +431,6 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     params.RootOfUnityCheck = false;
     InputNum input;
     int proof_count = 4;
-    Giant tmp, root;
-    BaseExp::StateSerialized point1;
-    BaseExp::StateSerialized point2;
-    BaseExp::StateSerialized point3;
-    BaseExp::StateValue point4;
 
     input.parse("3*2^353+1");
 
@@ -446,7 +441,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
     proof_build.points() = proof.points();
 
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count]));
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
     File file_checkpoint("prst_c", fingerprint);
@@ -471,15 +466,20 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         file_recoverypoint.clear(true);
         gwstate.done();
     };
+
+    std::vector<std::unique_ptr<BaseExp::State>> points;
+    points.emplace_back();
     try
     {
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
 
-        file_proofpoint.children()[1]->read(point1);
+        for (int i = 1; i <= proof_count; i++)
+            points.emplace_back(BaseExp::State::read_file(file_proofpoint.children()[i].get()));
+        
         GWNum X(gw);
         X = Giant::rnd(gwstate.N->bitlen());
         BaseExp::StateSerialized point;
-        point.set(point1.iteration(), X);
+        point.set(points[1]->iteration(), X);
         file_proofpoint.children()[1]->write(point);
 
         file_proofproduct.clear(true);
@@ -533,6 +533,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     try
     {
+        Giant tmp;
         tmp = 1;
         FastExp task(tmp << input.n());
         task.init(&input, &gwstate, nullptr, &logging, fermat.a());
@@ -540,19 +541,18 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         GWNum R(gw);
         R = *task.result();
 
-        file_proofpoint.children()[4]->read(point4);
         GWNum X(gw);
-        point4.to_GWNum(X);
+        points[4]->to_GWNum(X);
         X *= R;
         BaseExp::StateValue pointv;
-        pointv.set(point4.iteration(), X);
+        pointv.set(points[4]->iteration(), X);
         file_proofpoint.children()[4]->write(pointv);
 
         R.square();
-        point1.to_GWNum(X);
+        points[1]->to_GWNum(X);
         X *= R;
         BaseExp::StateSerialized point;
-        point.set(point1.iteration(), X);
+        point.set(points[1]->iteration(), X);
         file_proofpoint.children()[1]->write(point);
 
         file_proofproduct.clear(true);
@@ -573,20 +573,19 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         R = *task.result();
 
         GWNum X(gw);
-        point4.to_GWNum(X);
+        points[4]->to_GWNum(X);
         X *= R;
         BaseExp::StateValue pointv;
-        pointv.set(point4.iteration(), X);
+        pointv.set(points[4]->iteration(), X);
         file_proofpoint.children()[4]->write(pointv);
 
-        file_proofpoint.children()[2]->read(point2);
-        point2.to_GWNum(X);
+        points[2]->to_GWNum(X);
         X *= R;
         BaseExp::StateSerialized point;
-        point.set(point2.iteration(), X);
+        point.set(points[2]->iteration(), X);
         file_proofpoint.children()[2]->write(point);
 
-        file_proofpoint.children()[1]->write(point1);
+        file_proofpoint.children()[1]->write(*points[1]);
 
         file_proofproduct.clear(true);
         test_attack(fermat);
@@ -608,7 +607,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat2.a()) + "." + std::to_string(proof.points()[proof_count]));
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat2.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     file_proofpoint = File("prst_proof", fingerprint);
     file_proofproduct = File("prst_prod", fingerprint);
     file_checkpoint = File("prst_c", fingerprint);
@@ -627,22 +626,21 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         GWNum R(gw);
         R = *task.result();
 
-        file_proofpoint.children()[4]->read(point4);
-        GWNum X(gw);
-        point4.to_GWNum(X);
-        X *= R;
         BaseExp::StateValue pointv;
-        pointv.set(point4.iteration(), X);
+        file_proofpoint.children()[4]->read(pointv);
+        GWNum X(gw);
+        pointv.to_GWNum(X);
+        X *= R;
+        pointv.set(pointv.iteration(), X);
         file_proofpoint.children()[4]->write(pointv);
 
         R.square();
         R.square();
-        file_proofpoint.children()[3]->read(point3);
-        point3.to_GWNum(X);
+        std::unique_ptr<BaseExp::State> point(BaseExp::State::read_file(file_proofpoint.children()[3].get()));
+        point->to_GWNum(X);
         X *= R;
-        BaseExp::StateSerialized point;
-        point.set(point3.iteration(), X);
-        file_proofpoint.children()[3]->write(point);
+        point->set(point->iteration(), X);
+        file_proofpoint.children()[3]->write(*point);
 
         file_proofproduct.clear(true);
         test_attack(fermat2);
@@ -665,7 +663,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat3.a()) + "." + std::to_string(proof.points()[proof_count]));
+    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat3.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     file_proofpoint = File("prst_proof", fingerprint);
     file_proofproduct = File("prst_prod", fingerprint);
     file_checkpoint = File("prst_c", fingerprint);
@@ -684,21 +682,20 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         GWNum R(gw);
         R = *task.result();
 
-        file_proofpoint.children()[4]->read(point4);
-        GWNum X(gw);
-        point4.to_GWNum(X);
-        X *= R;
         BaseExp::StateValue pointv;
-        pointv.set(point4.iteration(), X);
+        file_proofpoint.children()[4]->read(pointv);
+        GWNum X(gw);
+        pointv.to_GWNum(X);
+        X *= R;
+        pointv.set(pointv.iteration(), X);
         file_proofpoint.children()[4]->write(pointv);
 
         R.square();
-        file_proofpoint.children()[1]->read(point1);
-        point1.to_GWNum(X);
+        std::unique_ptr<BaseExp::State> point(BaseExp::State::read_file(file_proofpoint.children()[1].get()));
+        point->to_GWNum(X);
         X *= R;
-        BaseExp::StateSerialized point;
-        point.set(point1.iteration(), X);
-        file_proofpoint.children()[1]->write(point);
+        point->set(point->iteration(), X);
+        file_proofpoint.children()[1]->write(*point);
 
         file_proofproduct.clear(true);
         test_attack(fermat3);

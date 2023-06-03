@@ -65,6 +65,7 @@ int main(int argc, char *argv[])
     int proof_count = 0;
     std::string proof_cert;
     bool proof_keep = false;
+    std::optional<bool> proof_write;
     bool supportLLR2 = false;
     bool force_fermat = false;
     InputNum input;
@@ -95,6 +96,7 @@ int main(int argc, char *argv[])
                         .value_string(params.ProofProductFilename)
                         .end()
                     .check("keep", proof_keep, true)
+                    .value_enum("write", ' ', proof_write, Enum<bool>().add("fast", false).add("small", true))
                     .end()
                 .ex_case()
                     .value_number("build", ' ', proof_count, 2, 1048576)
@@ -347,10 +349,13 @@ int main(int argc, char *argv[])
         }
         else if (proof)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
             newFile(file_proofpoint, !params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
             newFile(file_proofproduct, !params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint, Proof::Product::TYPE);
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+            if (proof_write)
+                for (int i = 1; i < proof_count; i++)
+                    fermat->task()->points()[i].value = proof_write.value();
 
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);

@@ -192,6 +192,9 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         }
         else
         {
+            if (proof->points().back().pos != _n)
+                proof->points().emplace_back(_n);
+
             if (!CheckStrong)
                 _task.reset(new MultipointExp(input.gb(), true, proof->points(), on_point));
             else

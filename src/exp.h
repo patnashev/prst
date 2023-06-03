@@ -11,12 +11,17 @@
 class BaseExp : public InputTask
 {
 public:
+    class StateSerialized;
+    class StateValue;
     class State : public TaskState
     {
     public:
         State(char type) : TaskState(type) { }
         virtual void set(int iteration, arithmetic::GWNum& X) = 0;
         virtual void to_GWNum(arithmetic::GWNum& X) = 0;
+        static State* read_file(File* file);
+        static State* read_file(File* file, StateValue* value, StateSerialized* serialized);
+        static State* cast(bool value, std::unique_ptr<TaskState>& state);
     };
     class StateSerialized : public State
     {
@@ -133,8 +138,18 @@ protected:
 class MultipointExp : public BaseExp
 {
 public:
+    struct Point
+    {
+        Point(int pos_, bool check_ = true, bool value_ = true) : pos(pos_), check(check_), value(value_) {}
+
+        int pos;
+        bool check;
+        bool value;
+    };
+
+public:
     template<class T>
-    MultipointExp(T&& exp, bool smooth, const std::vector<int>& points, std::function<bool(int, State*)> on_point) : BaseExp(), _points(points), _on_point(on_point)
+    MultipointExp(T&& exp, bool smooth, const std::vector<Point>& points, std::function<bool(int, State*)> on_point) : BaseExp(), _points(points), _on_point(on_point)
     {
         _exp = std::forward<T>(exp);
         _smooth = smooth;
@@ -187,7 +202,7 @@ public:
     double cost() override;
     int _W = 5;
     int _max_size = -1;
-    std::vector<int>& points() { return _points; }
+    std::vector<Point>& points() { return _points; }
 
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging);
@@ -202,7 +217,7 @@ protected:
     arithmetic::GWNum& X() { return *_X; }
 
 protected:
-    std::vector<int> _points;
+    std::vector<Point> _points;
     std::function<bool(int, State*)> _on_point;
 
     std::unique_ptr<arithmetic::GWNum> _X;
@@ -212,9 +227,9 @@ protected:
 class SmoothExp : public MultipointExp
 {
 public:
-    SmoothExp(arithmetic::Giant& b, int n) : MultipointExp(b, true, std::vector<int>(), nullptr)
+    SmoothExp(arithmetic::Giant& b, int n) : MultipointExp(b, true, std::vector<Point>(), nullptr)
     {
-        _points.push_back(n);
+        _points.emplace_back(n);
     }
 
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging)
@@ -233,9 +248,9 @@ class FastExp : public MultipointExp
 {
 public:
     template<class T>
-    FastExp(T&& exp) : MultipointExp(std::forward<T>(exp), false, std::vector<int>(), nullptr)
+    FastExp(T&& exp) : MultipointExp(std::forward<T>(exp), false, std::vector<Point>(), nullptr)
     {
-        _points.push_back(_exp.bitlen() - 1);
+        _points.emplace_back(_exp.bitlen() - 1);
     }
 
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, Logging* logging, uint32_t x0)
@@ -256,9 +271,9 @@ class SlidingWindowExp : public MultipointExp
 {
 public:
     template<class T>
-    SlidingWindowExp(T&& exp) : MultipointExp(std::forward<T>(exp), false, std::vector<int>(), nullptr)
+    SlidingWindowExp(T&& exp) : MultipointExp(std::forward<T>(exp), false, std::vector<Point>(), nullptr)
     {
-        _points.push_back(_exp.bitlen() - 1);
+        _points.emplace_back(_exp.bitlen() - 1);
     }
 
     template<class T>
@@ -299,7 +314,7 @@ public:
 
 public:
     template<class T>
-    StrongCheckMultipointExp(T&& exp, bool smooth, const std::vector<int>& points, int L, int L2, std::function<bool(int, State*)> on_point) : MultipointExp(std::forward<T>(exp), smooth, points, on_point), _L(L), _L2(L2)
+    StrongCheckMultipointExp(T&& exp, bool smooth, const std::vector<Point>& points, int L, int L2, std::function<bool(int, State*)> on_point) : MultipointExp(std::forward<T>(exp), smooth, points, on_point), _L(L), _L2(L2)
     {
     }
 
@@ -347,7 +362,7 @@ public:
         init(input, gwstate, file, file_recovery, logging);
     }
 
-    State* state() override { return _state_recovery.get(); }
+    State* state() override { return static_cast<State*>(_state_recovery.get()); }
     StrongCheckState* state_check() { return dynamic_cast<StrongCheckState*>(Task::state()); }
     arithmetic::GWNum& R() { return *_R; }
     arithmetic::GWNum& D() { return *_D; }
@@ -366,8 +381,8 @@ protected:
 protected:
     File* _file_recovery = nullptr;
     bool _file_recovery_empty = true;
-    std::unique_ptr<State> _state_recovery;
-    std::unique_ptr<State> _tmp_state_recovery;
+    std::unique_ptr<TaskState> _state_recovery;
+    std::unique_ptr<TaskState> _tmp_state_recovery;
     int _recovery_op = 0;
 
     std::unique_ptr<arithmetic::GWNum> _R;
@@ -377,7 +392,7 @@ protected:
 class GerbiczCheckExp : public StrongCheckMultipointExp
 {
 public:
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, State*)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<int>(), 0, 0, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, State*)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<Point>(), 0, 0, on_point)
     {
         if (n < count)
         {
@@ -393,9 +408,9 @@ public:
             _L2 -= _L2%L;
         }
         for (int i = 0; i <= count && _L2*i <= n; i++)
-            _points.push_back(_L2*i);
-        if (_points.back() != n)
-            _points.push_back(n);
+            _points.emplace_back(_L2*i, true, _L2*i == n);
+        if (_points.back().pos != n)
+            _points.emplace_back(n);
     }
 
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging)
@@ -414,7 +429,7 @@ class LiCheckExp : public StrongCheckMultipointExp
 {
 public:
     template<class T>
-    LiCheckExp(T&& exp, int count, int L = 0) : StrongCheckMultipointExp(std::forward<T>(exp), false, std::vector<int>(), 0, 0, nullptr)
+    LiCheckExp(T&& exp, int count, int L = 0) : StrongCheckMultipointExp(std::forward<T>(exp), false, std::vector<Point>(), 0, 0, nullptr)
     {
         int n = _exp.bitlen() - 1;
         if (n < count)
@@ -431,9 +446,9 @@ public:
             _L2 -= _L2%L;
         }
         for (int i = 0; i <= count && _L2*i <= n; i++)
-            _points.push_back(_L2*i);
-        if (_points.back() != n)
-            _points.push_back(n);
+            _points.emplace_back(_L2*i, true, _L2*i == n);
+        if (_points.back().pos != n)
+            _points.emplace_back(n);
     }
 
     using StrongCheckMultipointExp::init_small;
