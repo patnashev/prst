@@ -314,7 +314,7 @@ int boinc_main(int argc, char *argv[])
         }
         else if (proof)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
             file_proofpoint.reset(new File(params.ProofPointFilename, fingerprint));
             file_proofproduct.reset(new File(params.ProofProductFilename, fingerprint));
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
