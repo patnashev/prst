@@ -83,6 +83,9 @@ public:
     uint32_t x0() { return !_smooth ? _x0 : 0; }
 
 protected:
+    void done() override;
+
+protected:
     bool _smooth;
     arithmetic::Giant _exp;
     arithmetic::Giant _tail;
@@ -516,6 +519,8 @@ protected:
             gw().carefully().mul(X, P, P, 0);
         }
 
+        if (_input->need_mod())
+            _input->mod(result(), result());
         done();
     }
 

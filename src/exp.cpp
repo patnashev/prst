@@ -66,6 +66,12 @@ BaseExp::State* BaseExp::State::cast(bool value, std::unique_ptr<TaskState>& sta
     return cast_state;
 }
 
+void BaseExp::done()
+{
+    InputTask::done();
+    if (_input->need_mod())
+        _input->mod(*result(), *result());
+}
 
 void CarefulExp::init(InputNum* input, GWState* gwstate, Logging* logging)
 {
@@ -156,6 +162,8 @@ void MultipointExp::init_state(State* state)
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
+    if (result() != nullptr && _input->need_mod())
+        _input->mod(*result(), *result());
 }
 
 void MultipointExp::setup()
@@ -462,6 +470,8 @@ void StrongCheckMultipointExp::init_state(State* state)
     }
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
+    if (result() != nullptr && _input->need_mod())
+        _input->mod(*result(), *result());
 }
 
 void StrongCheckMultipointExp::write_state()
