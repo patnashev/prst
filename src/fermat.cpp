@@ -124,8 +124,9 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
     }
 
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
+    bool smooth = (input.b() == 2 && log2(input.gk()) < 1000);
     Giant exp;
-    if ((proof == nullptr && (!CheckStrong || input.b() != 2)) || (proof != nullptr && proof->Li()))
+    if ((proof == nullptr && (!CheckStrong || !smooth)) || (proof != nullptr && proof->Li()))
     {
         if (input.b() == 2)
             exp = input.gk() << _n;
@@ -143,7 +144,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
     else if (proof == nullptr)
     {
         int checks = params.StrongCount ? params.StrongCount.value() : 16;
-        if (input.b() == 2)
+        if (smooth)
         {
             _task.reset(new GerbiczCheckExp(input.gb(), _n, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
 

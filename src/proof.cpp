@@ -19,7 +19,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
     }
 
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
-    _Li = forceLi ? forceLi.value() : input.b() != 2;
+    _Li = forceLi ? forceLi.value() : !(input.b() == 2 && log2(input.gk()) < 1000);
 
     if (op == SAVE)
         _task.reset(new ProofSave());
