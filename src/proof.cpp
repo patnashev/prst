@@ -532,8 +532,8 @@ void ProofSave::execute()
     }
     tree.clear();
 
-    if (_input->need_mod())
-        _input->mod(state()->Y(), state()->Y());
+    if (_gwstate->need_mod())
+        _gwstate->mod(state()->Y(), state()->Y());
     done();
 }
 
@@ -632,8 +632,8 @@ void ProofBuild::execute()
         exp_gw(gw().carefully(), h[i], D, T = D, 0);
         gw().carefully().mul(D, Y, Y, 0);
     }
-    if (_input->need_mod())
-        _input->mod(state()->Y(), state()->Y());
+    if (_gwstate->need_mod())
+        _gwstate->mod(state()->Y(), state()->Y());
 
     D = _proof->r_0();
     if (!_rnd_seed.empty())
@@ -651,8 +651,8 @@ void ProofBuild::execute()
 
         commit_execute<Proof::State>(t + 1, X, Y, a_power, h);
     }
-    if (_input->need_mod())
-        _input->mod(state()->Y(), state()->Y());
+    if (_gwstate->need_mod())
+        _gwstate->mod(state()->Y(), state()->Y());
 
     if (state()->Y() == 0)
     {

@@ -519,8 +519,8 @@ protected:
             gw().carefully().mul(X, P, P, 0);
         }
 
-        if (_input->need_mod())
-            _input->mod(result(), result());
+        if (_gwstate->need_mod())
+            _gwstate->mod(result(), result());
         done();
     }
 
