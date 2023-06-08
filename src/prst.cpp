@@ -257,13 +257,14 @@ int main(int argc, char *argv[])
         {
             logging.result(true, "%s is prime!\n", input.display_text().data());
             logging.result_save(input.input_text() + " is prime!\n");
+            return 1;
         }
         else
         {
             logging.result(false, "%s is not prime.\n", input.display_text().data());
             logging.result_save(input.input_text() + " is not prime.\n");
+            return 0;
         }
-        return 0;
     }
 
     std::unique_ptr<File> file_proofpoint;
@@ -328,6 +329,7 @@ int main(int argc, char *argv[])
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
+    bool success = false;
     try
     {
         File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
@@ -346,6 +348,7 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".p", fingerprint);
             morrison->run(input, gwstate, file_checkpoint, file_params, logging);
+            success = morrison->success();
         }
         else if (proof)
         {
@@ -360,6 +363,7 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
+            success = fermat->success();
 
             if (!proof_keep)
             {
@@ -382,6 +386,7 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
+            success = fermat->success();
         }
 
         file_progress.clear();
@@ -392,5 +397,5 @@ int main(int argc, char *argv[])
 
     gwstate.done();
 
-    return 0;
+    return success ? 1 : 0;
 }

@@ -489,7 +489,9 @@ int net_main(int argc, char *argv[])
         InputNum input;
         if (net.task()->n > 0)
         {
-            if (net.task()->sb == "!" || net.task()->sb == "#")
+            if (net.task()->cyclotomic != 0)
+                input.parse("Phi(" + std::to_string(net.task()->cyclotomic) + "," + net.task()->sk + "*" + (net.task()->sb == "!" || net.task()->sb == "#" ? std::to_string(net.task()->n) + net.task()->sb : net.task()->sb + "^" + std::to_string(net.task()->n)) + ")");
+            else if (net.task()->sb == "!" || net.task()->sb == "#")
                 input.parse(net.task()->sk + "*" + std::to_string(net.task()->n) + net.task()->sb + (net.task()->c >= 0 ? "+" : "") + std::to_string(net.task()->c));
             else
                 input.init(net.task()->sk, net.task()->sb, net.task()->n, net.task()->c);
