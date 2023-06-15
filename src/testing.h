@@ -47,6 +47,7 @@ public:
         res64 = t.res64;
         cert64 = t.cert64;
     }
+    virtual ~Test() { }
 
     double cost() { double len = log2(input.gb())*input.n(); return len*std::sqrt(len)*(input.b() != 2 ? 1.2 : 1.0); }
     virtual void run(Logging& logging, Params& global_params, arithmetic::GWState& global_state);

@@ -333,7 +333,7 @@ public:
         _tail = std::forward<T>(tail);
         init(input, gwstate, file, file_recovery, logging);
     }
-    virtual void init_state(State* state);
+    virtual void init_state(State* state) override;
 
     void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0)
     {

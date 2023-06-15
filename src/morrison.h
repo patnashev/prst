@@ -22,7 +22,7 @@ public:
         int index() { return _index; }
         arithmetic::Giant& V() { return _V; }
         bool parity() { return _parity; }
-        bool read(Reader& reader) override { int parity; bool res = TaskState::read(reader) && reader.read(_index) && reader.read(_V) && reader.read(parity); _parity = parity == 1; return res; }
+        bool read(Reader& reader) override { int parity = 0; bool res = TaskState::read(reader) && reader.read(_index) && reader.read(_V) && reader.read(parity); _parity = parity == 1; return res; }
         void write(Writer& writer) override { TaskState::write(writer); writer.write(_index); writer.write(_V); writer.write(_parity ? 1 : 0); }
 
     private:
