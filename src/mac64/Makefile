@@ -11,13 +11,16 @@ COMPOBJS        = $(COMPOBJS_COMMON) prst.o
 VPATH     = ..:../../framework:../../framework/arithmetic
 
 # See README.md for how to get macOS SDK
-LFLAGS    = # -isysroot MacOSX10.9.sdk/
+LFLAGS    = # -isysroot MacOSX10.7.sdk/ -mmacosx-version-min=10.7
 
 DUMMY2    =
 LIBS2     = -lm -lpthread -lstdc++ /usr/local/lib/libgmp.a  # link against .a file directly to avoid using .dylib
 
-CC        = /usr/local/bin/gcc-12 -mmacosx-version-min=10.9
-CXX       = /usr/local/bin/g++-12 -mmacosx-version-min=10.9
+#CC        = /usr/local/bin/gcc-12 -mmacosx-version-min=10.9
+#CC        = /usr/local/bin/gcc-12
+#CXX       = /usr/local/bin/g++-12
+CC = gcc
+CXX = g++
 CFLAGS    = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -O2 -std=c99     -Wall -Wextra
 CXXFLAGS  = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
 
