@@ -10,10 +10,67 @@
 
 using namespace arithmetic;
 
+BaseExp::State* BaseExp::State::read_file(File* file)
+{
+    if (file == nullptr)
+        return nullptr;
+    std::unique_ptr<Reader> reader(file->get_reader());
+    if (!reader)
+        return nullptr;
+    std::unique_ptr<State> state;
+    if (reader->type() == StateValue::TYPE)
+        state.reset(new StateValue());
+    else if (reader->type() == StateSerialized::TYPE)
+        state.reset(new StateSerialized());
+    else
+        return nullptr;
+    if (!state->read(*reader))
+        return nullptr;
+    state->set_written();
+    return state.release();
+}
+
+BaseExp::State* BaseExp::State::read_file(File* file, StateValue* value, StateSerialized* serialized)
+{
+    if (file == nullptr)
+        return nullptr;
+    std::unique_ptr<Reader> reader(file->get_reader());
+    if (!reader)
+        return nullptr;
+    State* state;
+    if (reader->type() == StateValue::TYPE)
+        state = value;
+    else if (reader->type() == StateSerialized::TYPE)
+        state = serialized;
+    else
+        return nullptr;
+    if (!state->read(*reader))
+        return nullptr;
+    state->set_written();
+    return state;
+}
+
+BaseExp::State* BaseExp::State::cast(bool value, std::unique_ptr<TaskState>& state)
+{
+    State* cast_state;
+    if (value)
+    {
+        if (!state || (cast_state = dynamic_cast<StateValue*>(state.get())) == nullptr)
+            state.reset(cast_state = new StateValue());
+    }
+    else
+    {
+        if (!state || (cast_state = dynamic_cast<StateSerialized*>(state.get())) == nullptr)
+            state.reset(cast_state = new StateSerialized());
+    }
+    return cast_state;
+}
+
 void BaseExp::done()
 {
     InputTask::done();
-    _logging->set_prefix("");
+    if (_gwstate->need_mod())
+        _gwstate->mod(*result(), *result());
 }
 
 void CarefulExp::init(InputNum* input, GWState* gwstate, Logging* logging)
@@ -23,17 +80,17 @@ void CarefulExp::init(InputNum* input, GWState* gwstate, Logging* logging)
     GWASSERT(_x0 <= (uint32_t)gwstate->maxmulbyconst);
     BaseExp::init(input, gwstate, nullptr, nullptr, logging, _exp.bitlen() - 1 + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE*2/3;
-    _logging->set_prefix(input->display_text() + " ");
-    if (state() != nullptr)
-        _logging->info("restarting at %.1f%%.\n", 100.0*state()->iteration()/iterations());
     if (_exp == 1 && _x0 > 0)
-        set_state<State>(0, _x0);
+        set_state<StateValue>(0, _x0);
     if (_exp == 1 && !_X0.empty())
-        set_state<State>(0, _X0);
+        set_state<StateValue>(0, _X0);
 }
 
 void CarefulExp::execute()
 {
+    if (result() != nullptr)
+        return;
+
     int i, len;
 
     len = _exp.bitlen() - 1;
@@ -54,9 +111,9 @@ void CarefulExp::execute()
     else
     {
         i = state()->iteration();
-        X = state()->X();
+        state()->to_GWNum(X);
     }
-    for (; i < len; i++, commit_execute<State>(i, X))
+    for (; i < len; i++, commit_execute(i, X))
     {
         gw().carefully().square(X, X, (_x0 > 0 && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0));
         if (!_X0.empty() && _exp.bit(len - i - 1))
@@ -68,7 +125,7 @@ void CarefulExp::execute()
         T = _tail;
         gw().carefully().mul(T, X, X, 0);
         i++;
-        commit_execute<State>(i, X);
+        commit_execute(i, X);
     }
 
     done();
@@ -79,19 +136,19 @@ void MultipointExp::init(InputNum* input, GWState* gwstate, File* file, Logging*
     GWASSERT(smooth() || _x0 != 0 || !_X0.empty());
     GWASSERT(!smooth() || (_x0 == 0 && _X0.empty()));
     GWASSERT(_x0 <= (uint32_t)gwstate->maxmulbyconst);
-    BaseExp::init(input, gwstate, file, nullptr, logging, _points.back() + (!_tail.empty() ? 1 : 0));
+    BaseExp::init(input, gwstate, file, nullptr, logging, _points.back().pos + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE;
     if (smooth() && b() != 2)
         _state_update_period = (int)(_state_update_period/log2(b()));
     if (_error_check)
         _logging->info("max roundoff check enabled.\n");
-    State* state = read_state<State>(file);
+    State* state = State::read_file(file);
     if (state != nullptr)
         init_state(state);
-    if (_points.back() == 0 && _x0 > 0)
-        set_state<State>(0, _x0);
-    if (_points.back() == 0 && !_X0.empty())
-        set_state<State>(0, _X0);
+    if (_points.back().pos == 0 && _x0 > 0)
+        set_state<StateValue>(0, _x0);
+    if (_points.back().pos == 0 && !_X0.empty())
+        set_state<StateValue>(0, _X0);
 }
 
 void MultipointExp::init_state(State* state)
@@ -103,9 +160,10 @@ void MultipointExp::init_state(State* state)
     }
     _state.reset(state);
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
-    _logging->set_prefix(_input->display_text() + " ");
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
+    if (result() != nullptr && _gwstate->need_mod())
+        _gwstate->mod(*result(), *result());
 }
 
 void MultipointExp::setup()
@@ -131,9 +189,13 @@ void MultipointExp::release()
 
 void MultipointExp::execute()
 {
+    if (result() != nullptr)
+        return;
+
     int i, next_point;
     int len;
     Giant tmp;
+    State* tmp_state;
     int last_power = -1;
 
     len = _exp.bitlen() - 1;
@@ -146,59 +208,59 @@ void MultipointExp::execute()
             X() = _X0;
         if (_x0 > 0)
             X() = _x0;
-        tmp = _x0;
-        init_state(new State(0, !_X0.empty() ? _X0 : tmp));
+        tmp_state = new StateSerialized();
+        tmp_state->set(0, X());
+        init_state(tmp_state);
         state()->set_written();
     }
     else
     {
         GWASSERT(state() != nullptr);
         i = state()->iteration();
-        X() = state()->X();
+        state()->to_GWNum(X());
     }
     if (i < 30)
         gwset_carefully_count(gw().gwdata(), 30 - i);
 
-    for (next_point = 0; next_point < _points.size() && i >= _points[next_point]; next_point++);
+    for (next_point = 0; next_point < _points.size() && i >= _points[next_point].pos; next_point++);
     for (; next_point < _points.size(); next_point++)
     {
         if ((smooth() && b() == 2) || (!smooth() && _x0 > 0))
         {
-            for (; i < _points[next_point]; i++)
+            for (; i < _points[next_point].pos; i++)
             {
-                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point]));
-                if (i + 1 != _points[next_point])
-                    commit_execute<State>(i + 1, X());
+                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos));
+                if (i + 1 != _points[next_point].pos)
+                    commit_execute(i + 1, X());
             }
         }
         else if (smooth())
         {
-            if (last_power != _points[next_point] - i)
+            if (last_power != _points[next_point].pos - i)
             {
-                last_power = _points[next_point] - i;
+                last_power = _points[next_point].pos - i;
                 tmp = b();
                 tmp.power(last_power);
             }
             sliding_window(tmp);
-            i = _points[next_point];
+            i = _points[next_point].pos;
         }
         else if (!_X0.empty())
         {
-            slide(_exp, i, _points[next_point], true);
-            i = _points[next_point];
+            slide(_exp, i, _points[next_point].pos, true);
+            i = _points[next_point].pos;
         }
 
         check();
-        if (!_tmp_state)
-            _tmp_state.reset(new State());
-        static_cast<State*>(_tmp_state.get())->set(i, X());
+        tmp_state = State::cast(_points[next_point].value, _tmp_state);
+        tmp_state->set(i, X());
         if (_on_point != nullptr)
         {
-            _logging->progress().update(_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+            _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
             _logging->progress_save();
-            if (_on_point(next_point, static_cast<State*>(_tmp_state.get())->X()))
+            if (_on_point(next_point, tmp_state))
             {
-                _tmp_state->set_written();
+                tmp_state->set_written();
                 _last_write = std::chrono::system_clock::now();
             }
         }
@@ -211,7 +273,7 @@ void MultipointExp::execute()
         T = _tail;
         gw().carefully().mul(T, X(), X(), 0);
         i++;
-        commit_execute<State>(i, X());
+        commit_execute(i, X());
     }
 
     done();
@@ -270,7 +332,7 @@ void MultipointExp::slide(const arithmetic::Giant& exp, int start, int end, bool
             gw().mul(_U[ui/2], X(), X(), GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(i > len - end));
         }
         if (commit && i >= len - end)
-            commit_execute<State>(len - i - 1, X());
+            commit_execute(len - i - 1, X());
     }
 }
 
@@ -300,20 +362,20 @@ double MultipointExp::cost()
 {
     bool simple = dynamic_cast<SlidingWindowExp*>(this) == nullptr;
     if ((smooth() && b() == 2) || (!smooth() && simple))
-        return _points.back();
+        return _points.back().pos;
     else if (smooth())
     {
         double log2b = log2(b());
         int W;
         int first = 0;
-        if (_points[0] == 0)
+        if (_points[0].pos == 0)
             first = 1;
-        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*_points[first]*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*_points[first]*(1 + 1/(W + 2.0)); W++);
-        double cost = ((1 << (W - 1)) + log2b*_points[first]*(1 + 1/(W + 1.0)));
+        for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*_points[first].pos*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*_points[first].pos*(1 + 1/(W + 2.0)); W++);
+        double cost = ((1 << (W - 1)) + log2b*_points[first].pos*(1 + 1/(W + 1.0)));
         if (_points.size() > 1 + first)
         {
             cost *= (_points.size() - 1 - first);
-            int last = _points[_points.size() - 1] - _points[_points.size() - 2];
+            int last = _points[_points.size() - 1].pos - _points[_points.size() - 2].pos;
             for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*last*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*last*(1 + 1/(W + 2.0)); W++);
             cost += ((1 << (W - 1)) + log2b*last*(1 + 1/(W + 1.0)));
         }
@@ -324,7 +386,7 @@ double MultipointExp::cost()
         int len = _exp.bitlen() - 1;
         int W;
         for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + len*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + len*(1 + 1/(W + 2.0)); W++);
-        return (1 << (W - 1)) + _points.back()*(1 + 1/(W + 1.0));
+        return (1 << (W - 1)) + _points.back().pos*(1 + 1/(W + 1.0));
     }
 }
 
@@ -347,7 +409,7 @@ void StrongCheckMultipointExp::Gerbicz_params(int iters, double log2b, int& L, i
 
 double StrongCheckMultipointExp::cost()
 {
-    int n = _points.back();
+    int n = _points.back().pos;
     bool simple = dynamic_cast<LiCheckExp*>(this) == nullptr || dynamic_cast<FastLiCheckExp*>(this) != nullptr;
     if ((smooth() && b() == 2) || (!smooth() && simple))
         return n + n/_L + n/_L2*(_L + (!smooth() ? (_L + std::log2(_L2/_L)) : 0));
@@ -372,8 +434,8 @@ void StrongCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fil
     GWASSERT(smooth() || _x0 != 0 || !_X0.empty());
     GWASSERT(!smooth() || (_x0 == 0 && _X0.empty()));
     GWASSERT(_x0 <= (uint32_t)gwstate->maxmulbyconst);
-    GWASSERT(_points.back() > 0);
-    BaseExp::init(input, gwstate, file, read_state<StrongCheckState>(file), logging, _points.back() + (!_tail.empty() ? 1 : 0));
+    GWASSERT(_points.back().pos > 0);
+    BaseExp::init(input, gwstate, file, read_state<StrongCheckState>(file), logging, _points.back().pos + (!_tail.empty() ? 1 : 0));
     _state_update_period = MULS_PER_STATE_UPDATE;
     if (smooth() && b() != 2)
         _state_update_period = (int)(_state_update_period/log2(b()));
@@ -384,7 +446,7 @@ void StrongCheckMultipointExp::init(InputNum* input, GWState* gwstate, File* fil
         _logging->info("max roundoff check enabled.\n");
     _file_recovery = file_recovery;
     _state_recovery.reset();
-    State* state_recovery = read_state<State>(file_recovery);
+    State* state_recovery = State::read_file(file_recovery);
     if (state_recovery != nullptr)
         init_state(state_recovery);
     _file_recovery_empty = state_recovery == nullptr;
@@ -399,7 +461,6 @@ void StrongCheckMultipointExp::init_state(State* state)
         return;
     }
     _logging->progress().update(0, (int)_gwstate->handle.fft_count/2);
-    _logging->set_prefix(_input->display_text() + " ");
     _state_recovery.reset(state);
     _recovery_op = 0;
     if (!_state || (state_check() != nullptr ? state_check()->recovery() : _state->iteration()) != _state_recovery->iteration())
@@ -409,18 +470,8 @@ void StrongCheckMultipointExp::init_state(State* state)
     }
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
-}
-
-void StrongCheckMultipointExp::StrongCheckState::set(int iteration, int recovery, arithmetic::GWNum& X, arithmetic::GWNum& D)
-{
-    TaskState::set(iteration);
-    _recovery = recovery;
-    if (!_gwX)
-        _gwX.reset(new GWNum(X.arithmetic()));
-    *_gwX = X;
-    if (!_gwD)
-        _gwD.reset(new GWNum(D.arithmetic()));
-    *_gwD = D;
+    if (result() != nullptr && _gwstate->need_mod())
+        _gwstate->mod(*result(), *result());
 }
 
 void StrongCheckMultipointExp::write_state()
@@ -429,22 +480,6 @@ void StrongCheckMultipointExp::write_state()
     {
         _file_recovery->write(*_state_recovery);
         _file_recovery_empty = false;
-    }
-    if (state_check() != nullptr)
-    {
-        try
-        {
-            if (state_check()->gwX())
-                state_check()->X() = *state_check()->gwX();
-            if (state_check()->gwD())
-                state_check()->D() = *state_check()->gwD();
-        }
-        catch (const ArithmeticException&)
-        {
-            _state.reset(new TaskState(5));
-            _state->set(_state_recovery->iteration());
-            throw;
-        }
     }
     Task::write_state();
 }
@@ -456,19 +491,6 @@ void StrongCheckMultipointExp::setup()
         _R.reset(new GWNum(gw()));
     if (!_D)
         _D.reset(new GWNum(gw()));
-    if (state_check() != nullptr)
-    {
-        if (!state_check()->gwX())
-        {
-            state_check()->gwX().reset(new GWNum(gw()));
-            *state_check()->gwX() = state_check()->X();
-        }
-        if (!state_check()->gwD())
-        {
-            state_check()->gwD().reset(new GWNum(gw()));
-            *state_check()->gwD() = state_check()->D();
-        }
-    }
 }
 
 void StrongCheckMultipointExp::release()
@@ -476,35 +498,21 @@ void StrongCheckMultipointExp::release()
     _recovery_op = 0;
     _R.reset();
     _D.reset();
-    if (state_check() != nullptr)
-    {
-        try
-        {
-            if (state_check()->gwX())
-                state_check()->X() = *state_check()->gwX();
-            state_check()->gwX().reset();
-            if (state_check()->gwD())
-                state_check()->D() = *state_check()->gwD();
-            state_check()->gwD().reset();
-        }
-        catch (const ArithmeticException&)
-        {
-            _state.reset(new TaskState(5));
-            _state->set(_state_recovery->iteration());
-        }
-    }
-    _tmp_state.reset();
     MultipointExp::release();
 }
 
 void StrongCheckMultipointExp::execute()
 {
+    if (result() != nullptr)
+        return;
+
     int i, j, next_point, next_check;
     int len, l;
     Giant exp;
     int last_power = -1;
     Giant tmp;
     Giant tmp2;
+    State* tmp_state;
 
     len = _exp.bitlen() - 1;
     GWNum X0(gw());
@@ -519,15 +527,16 @@ void StrongCheckMultipointExp::execute()
             R() = X0;
         if (_x0 > 0)
             R() = _x0;
-        tmp = _x0;
-        init_state(new State(0, !_X0.empty() ? _X0 : tmp));
+        tmp_state = new StateSerialized();
+        tmp_state->set(0, R());
+        init_state(tmp_state);
         state()->set_written();
     }
     else
     {
         GWASSERT(state() != nullptr);
         i = state()->iteration();
-        R() = state()->X();
+        state()->to_GWNum(R());
     }
     if (state_check() == nullptr)
     {
@@ -537,19 +546,19 @@ void StrongCheckMultipointExp::execute()
     else
     {
         i = state_check()->iteration();
-        X() = *state_check()->gwX();
-        D() = *state_check()->gwD();
+        X() = state_check()->X();
+        D() = state_check()->D();
     }
     if (i < 30)
         gwset_carefully_count(gw().gwdata(), 30 - i);
 
-    for (next_point = 0; next_point < _points.size() && state()->iteration() >= abs(_points[next_point]); next_point++);
+    for (next_point = 0; next_point < _points.size() && state()->iteration() >= _points[next_point].pos; next_point++);
     while (next_point < _points.size())
     {
-        for (next_check = next_point; _points[next_check] < 0; next_check++);
+        for (next_check = next_point; !_points[next_check].check; next_check++);
         int L = _L;
         int L2 = _L2;
-        while ((_points[next_check] - state()->iteration()) < L2 && L > 1)
+        while ((_points[next_check].pos - state()->iteration()) < L2 && L > 1)
         {
             if (L == 3)
                 L = 2;
@@ -557,7 +566,7 @@ void StrongCheckMultipointExp::execute()
                 L /= 2;
             L2 = L*L;
             last_power = -1;
-            for (next_check = next_point; _points[next_check] < 0; next_check++);
+            for (next_check = next_point; !_points[next_check].check; next_check++);
         }
         if (i - state()->iteration() > L2)
         {
@@ -568,23 +577,26 @@ void StrongCheckMultipointExp::execute()
             _state->set(i);
         }
         else
-            for (; next_point < next_check && i >= abs(_points[next_point]); next_point++);
+            for (; next_point < next_check && i >= _points[next_point].pos; next_point++);
 
         if ((smooth() && b() == 2) || (!smooth() && _x0 > 0))
         {
-            for (j = i - state()->iteration(); j < L2; j++, i++, commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
+            for (j = i - state()->iteration(); j < L2; j++, i++, Task::commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
             {
-                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != abs(_points[next_point]) && j + 1 != L2));
-                if (j + 1 != L2 && i + 1 == -_points[next_point])
+                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos && j + 1 != L2));
+                if (j + 1 != L2 && i + 1 == _points[next_point].pos && !_points[next_point].check)
                 {
                     check();
-                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                     _logging->progress_save();
-                    tmp = X();
                     if (_on_point != nullptr)
-                        _on_point(next_point, tmp);
-                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-                    set_state<StrongCheckState>(i + 1, state()->iteration(), X(), D());
+                    {
+                        tmp_state = State::cast(_points[next_point].value, _tmp_state_recovery);
+                        tmp_state->set(_points[next_point].pos, X());
+                        _on_point(next_point, tmp_state);
+                    }
+                    _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    set_state<StrongCheckState>(_points[next_point].pos, state()->iteration(), X(), D());
                     next_point++;
                 }
                 if (j + 1 != L2 && (j + 1)%L == 0)
@@ -594,7 +606,7 @@ void StrongCheckMultipointExp::execute()
         else if (smooth())
         {
             GWASSERT((i - state()->iteration())%L == 0);
-            for (j = i - state()->iteration(); j < L2; j += L, i += L, commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
+            for (j = i - state()->iteration(); j < L2; j += L, i += L, Task::commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
             {
                 if (last_power != L)
                 {
@@ -603,16 +615,19 @@ void StrongCheckMultipointExp::execute()
                     exp.power(last_power);
                 }
                 sliding_window(exp);
-                if (j + L != L2 && i + L == -_points[next_point])
+                if (j + L != L2 && i + L == _points[next_point].pos && !_points[next_point].check)
                 {
                     check();
-                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                     _logging->progress_save();
-                    tmp = X();
                     if (_on_point != nullptr)
-                        _on_point(next_point, tmp);
-                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-                    set_state<StrongCheckState>(i + L, state()->iteration(), X(), D());
+                    {
+                        tmp_state = State::cast(_points[next_point].value, _tmp_state_recovery);
+                        tmp_state->set(_points[next_point].pos, X());
+                        _on_point(next_point, tmp_state);
+                    }
+                    _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    set_state<StrongCheckState>(_points[next_point].pos, state()->iteration(), X(), D());
                     next_point++;
                 }
                 if (j + L != L2)
@@ -622,20 +637,23 @@ void StrongCheckMultipointExp::execute()
         else if(!_X0.empty())
         {
             GWASSERT((i - state()->iteration())%L == 0);
-            for (j = i - state()->iteration(); j < L2; j += L, i += L, commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
+            for (j = i - state()->iteration(); j < L2; j += L, i += L, Task::commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
             {
-                if (_points[next_point] < 0 && i + L >= -_points[next_point])
+                if (i + L >= _points[next_point].pos && !_points[next_point].check)
                 {
-                    slide(_exp, i, -_points[next_point], false);
+                    slide(_exp, i, _points[next_point].pos, false);
                     check();
-                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
                     _logging->progress_save();
-                    tmp = X();
                     if (_on_point != nullptr)
-                        _on_point(next_point, tmp);
-                    _logging->progress().update(-_points[next_point]/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-                    set_state<StrongCheckState>(-_points[next_point], state()->iteration(), X(), D());
-                    slide(_exp, -_points[next_point], i + L, false);
+                    {
+                        tmp_state = State::cast(_points[next_point].value, _tmp_state_recovery);
+                        tmp_state->set(_points[next_point].pos, X());
+                        _on_point(next_point, tmp_state);
+                    }
+                    _logging->progress().update(_points[next_point].pos/(double)iterations(), (int)_gwstate->handle.fft_count/2);
+                    set_state<StrongCheckState>(_points[next_point].pos, state()->iteration(), X(), D());
+                    slide(_exp, _points[next_point].pos, i + L, false);
                     next_point++;
                 }
                 else
@@ -716,17 +734,16 @@ void StrongCheckMultipointExp::execute()
 
         R() = X();
         D() = X();
-        if (!_tmp_state_recovery)
-            _tmp_state_recovery.reset(new State());
-        _tmp_state_recovery->set(i, R());
-        if (i == _points[next_check])
+        tmp_state = State::cast(i == _points[next_check].pos && _points[next_check].value, _tmp_state_recovery);
+        tmp_state->set(i, R());
+        if (i == _points[next_check].pos)
         {
             if (_on_point != nullptr)
             {
                 _logging->progress_save();
-                if (_on_point(next_check, _tmp_state_recovery->X()))
+                if (_on_point(next_check, tmp_state))
                 {
-                    _tmp_state_recovery->set_written();
+                    tmp_state->set_written();
                     _last_write = std::chrono::system_clock::now();
                     if (!_file_recovery_empty)
                     {
@@ -751,7 +768,7 @@ void StrongCheckMultipointExp::execute()
         gw().carefully().mul(D(), R(), R(), 0);
         i++;
         tmp = R();
-        _state_recovery.reset(new State(i, std::move(tmp)));
+        _state_recovery.reset(new StateValue(i, std::move(tmp)));
         _state->set(i);
         on_state();
     }

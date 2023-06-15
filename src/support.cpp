@@ -25,7 +25,7 @@ void LLR2File::read_buffer()
     {
         _buffer[4] = 4;
         _buffer[6] = _type;
-        if (_type == BaseExp::State::TYPE)
+        if (_type == BaseExp::StateValue::TYPE)
             (*(uint32_t*)(_buffer.data() + 12))--;
     }
 }
@@ -36,7 +36,7 @@ void LLR2File::commit_writer(Writer& writer)
     {
         writer.buffer()[4] = 2;
         writer.buffer()[6] = 0;
-        if (_type == BaseExp::State::TYPE)
+        if (_type == BaseExp::StateValue::TYPE)
             (*(uint32_t*)(writer.buffer().data() + 12))++;
         writer.write((uint32_t)0);
         uint32_t checksum = 0;

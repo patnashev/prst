@@ -27,6 +27,7 @@ struct PRSTTask {
     std::string sb;
     int n = 0;
     int c = 0;
+    int cyclotomic = 0;
     std::string proof;
     int count = 0;
     double time = 0.0;
@@ -48,6 +49,7 @@ BOOST_FUSION_ADAPT_STRUCT(
     (auto, sb)
     (auto, n)
     (auto, c)
+    (auto, cyclotomic)
     (auto, proof)
     (auto, count)
     (auto, time)

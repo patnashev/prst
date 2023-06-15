@@ -55,8 +55,9 @@ int main(int argc, char *argv[])
     //  3 proof product
     //  4 certificate
     //  5 strong check placeholder
-    //  6 proof state
+    //  6 proof checkpoint
     //  7 Morrison test params
+    //  8 serialized checkpoint
 
     GWState gwstate;
     Params params;
@@ -64,6 +65,7 @@ int main(int argc, char *argv[])
     int proof_count = 0;
     std::string proof_cert;
     bool proof_keep = false;
+    std::optional<bool> proof_write;
     bool supportLLR2 = false;
     bool force_fermat = false;
     InputNum input;
@@ -94,6 +96,7 @@ int main(int argc, char *argv[])
                         .value_string(params.ProofProductFilename)
                         .end()
                     .check("keep", proof_keep, true)
+                    .value_enum("write", ' ', proof_write, Enum<bool>().add("fast", false).add("small", true))
                     .end()
                 .ex_case()
                     .value_number("build", ' ', proof_count, 2, 1048576)
@@ -254,19 +257,20 @@ int main(int argc, char *argv[])
         {
             logging.result(true, "%s is prime!\n", input.display_text().data());
             logging.result_save(input.input_text() + " is prime!\n");
+            return 1;
         }
         else
         {
             logging.result(false, "%s is not prime.\n", input.display_text().data());
             logging.result_save(input.input_text() + " is not prime.\n");
+            return 0;
         }
-        return 0;
     }
 
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
-    auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::State::TYPE)
+    auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
     {
         if (supportLLR2)
             file.reset(new LLR2File(filename, gwstate.fingerprint, type));
@@ -325,6 +329,7 @@ int main(int argc, char *argv[])
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
+    bool success = false;
     try
     {
         File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
@@ -343,17 +348,22 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".p", fingerprint);
             morrison->run(input, gwstate, file_checkpoint, file_params, logging);
+            success = morrison->success();
         }
         else if (proof)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
             newFile(file_proofpoint, !params.ProofPointFilename.empty() ? params.ProofPointFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".proof", fingerprint);
             newFile(file_proofproduct, !params.ProofProductFilename.empty() ? params.ProofProductFilename : "prst_" + std::to_string(gwstate.fingerprint) + ".prod", fingerprint, Proof::Product::TYPE);
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+            if (proof_write)
+                for (int i = 1; i < proof_count; i++)
+                    fermat->task()->points()[i].value = proof_write.value();
 
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
+            success = fermat->success();
 
             if (!proof_keep)
             {
@@ -376,6 +386,7 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
+            success = fermat->success();
         }
 
         file_progress.clear();
@@ -386,5 +397,5 @@ int main(int argc, char *argv[])
 
     gwstate.done();
 
-    return 0;
+    return success ? 1 : 0;
 }

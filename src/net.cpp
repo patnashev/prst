@@ -244,7 +244,7 @@ void LLR2NetFile::read_buffer()
     {
         _buffer[4] = 4;
         _buffer[6] = _type;
-        if (_type == BaseExp::State::TYPE)
+        if (_type == BaseExp::StateValue::TYPE)
             (*(uint32_t*)(_buffer.data() + 12))--;
     }
 }
@@ -255,7 +255,7 @@ void LLR2NetFile::commit_writer(Writer& writer)
     {
         writer.buffer()[4] = 2;
         writer.buffer()[6] = 0;
-        if (_type == BaseExp::State::TYPE)
+        if (_type == BaseExp::StateValue::TYPE)
             (*(uint32_t*)(writer.buffer().data() + 12))++;
         writer.write((uint32_t)0);
         uint32_t checksum = 0;
@@ -489,7 +489,9 @@ int net_main(int argc, char *argv[])
         InputNum input;
         if (net.task()->n > 0)
         {
-            if (net.task()->sb == "!" || net.task()->sb == "#")
+            if (net.task()->cyclotomic != 0)
+                input.parse("Phi(" + std::to_string(net.task()->cyclotomic) + "," + net.task()->sk + "*" + (net.task()->sb == "!" || net.task()->sb == "#" ? std::to_string(net.task()->n) + net.task()->sb : net.task()->sb + "^" + std::to_string(net.task()->n)) + ")");
+            else if (net.task()->sb == "!" || net.task()->sb == "#")
                 input.parse(net.task()->sk + "*" + std::to_string(net.task()->n) + net.task()->sb + (net.task()->c >= 0 ? "+" : "") + std::to_string(net.task()->c));
             else
                 input.init(net.task()->sk, net.task()->sb, net.task()->n, net.task()->c);
@@ -534,7 +536,7 @@ int net_main(int argc, char *argv[])
             params.FermatBase = std::stoi(net.task()->options["a"]);
 
         std::list<std::unique_ptr<NetFile>> files;
-        auto newFile = [&](const std::string& filename, uint32_t fingerprint, char type = BaseExp::State::TYPE)
+        auto newFile = [&](const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
         {
             if (supportLLR2)
                 return files.emplace_back(new LLR2NetFile(net, filename, gwstate.fingerprint, type)).get();
@@ -579,7 +581,7 @@ int net_main(int argc, char *argv[])
             }
             else if (proof)
             {
-                fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count]));
+                fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
                 File* file_proofpoint = newFile("proof", fingerprint);
                 File* file_proofproduct = newFile("prod", fingerprint, Proof::Product::TYPE);
                 proof->init_files(file_proofpoint, file_proofproduct, file_cert);

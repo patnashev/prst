@@ -27,7 +27,7 @@ public:
     bool success() { return _success; }
     bool prime() { return _prime; }
     std::string& res64() { return _res64; }
-    arithmetic::Giant& result() { return _Xm1.empty() ? _task->state()->X() : _Xm1; }
+    arithmetic::Giant& result() { return *_task->result(); }
 
     CarefulExp* task_tail_simple() { return _task_tail_simple.get(); }
     CarefulExp* task_ak_simple() { return _task_ak_simple.get(); }
@@ -35,15 +35,10 @@ public:
     MultipointExp* task() { return _task.get(); }
 
 protected:
-    bool on_point(int index, arithmetic::Giant& X);
-
-protected:
     int _type;
     int _a;
     int _n;
     Proof* _proof;
-    std::vector<int> _points;
-    arithmetic::Giant _Xm1;
 
     std::unique_ptr<CarefulExp> _task_tail_simple;
     std::unique_ptr<CarefulExp> _task_ak_simple;
