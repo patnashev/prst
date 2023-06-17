@@ -1,1 +1,7 @@
 /src/mac64/MacOSX10.9.sdk/
+/src/mac64/MacOSX10.7.sdk/
+/src/mac64/MacOSX10.10.sdk/
+/src/mac64/MacOSX10.13.sdk/
+/src/mac64/*.o
+/src/mac64/prst
+/src/mac64/prst_boinc
