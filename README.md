@@ -18,7 +18,7 @@ Donate XMR: 453MFNnC7N7NK9iK99FoNh3xZ4wY9yqt1Qk6F62iUZjg6bv6xD3oH3U2EABnUQMmco5B
 view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d460f09b167e0a.
 
 ```
-Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "N"} <options>
+Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "Phi(3,[-]K*B^N)" | "N"} <options>
 Options: -v
                  outputs version information.
          -test
