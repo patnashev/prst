@@ -18,7 +18,7 @@ Donate XMR: 453MFNnC7N7NK9iK99FoNh3xZ4wY9yqt1Qk6F62iUZjg6bv6xD3oH3U2EABnUQMmco5B
 view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d460f09b167e0a.
 
 ```
-Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "Phi(3,[-]K*B^N)" | "N"} <options>
+Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "Phi(3,[-]K*B^N)" | "Hex([-][K*]B^N)" | "N"} <options>
 Options: -v
                  outputs version information.
          -test
@@ -48,6 +48,8 @@ Options: -v
          -fermat [a <a>]
                  forces Fermat probabilistic test, optionally supplying starting value,
                  a = 3 by default.
+         -order <a>
+                 computes multiplicative order of a.
          -factors [list <factor>,...] [file <filename>] [all]
                  sets list of prime factors to be used by Pocklington or Morrison tests.
                  reads the list from helper file, one factor per line.

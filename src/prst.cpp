@@ -17,6 +17,7 @@
 #include "proof.h"
 #include "pocklington.h"
 #include "morrison.h"
+#include "order.h"
 #include "testing.h"
 #include "support.h"
 #include "version.h"
@@ -68,8 +69,10 @@ int main(int argc, char *argv[])
     std::optional<bool> proof_write;
     bool supportLLR2 = false;
     bool force_fermat = false;
-    InputNum input;
+    int order_a = 0;
     std::vector<Giant> factors;
+    InputNum input;
+    bool show_info = false;
     int log_level = Logging::LEVEL_WARNING;
     std::string log_file;
 
@@ -135,6 +138,7 @@ int main(int argc, char *argv[])
             .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
             .end()
             .on_check(force_fermat, true)
+        .value_number("-order", ' ', order_a, 2, INT_MAX)
         .group("-factors")
             .list("list", ' ', ',', false)
                 .value_code([&](const char* param) {
@@ -197,11 +201,23 @@ int main(int argc, char *argv[])
                 print_banner();
                 exit(0);
             })
+        .check_code("-i", [&] {
+                if (!show_info)
+                    input.print_info();
+                show_info = true;
+            })
+        .check_code("-info", [&] {
+                if (!show_info)
+                    input.print_info();
+                show_info = true;
+            })
         .value_code("-q", 0, [&](const char* param) {
                 if (param[0] != '\"' && !isdigit(param[0]))
                     return false;
                 if (!input.parse(param))
                     return false;
+                else if (show_info)
+                    input.print_info();
                 return true;
             })
         .value_code("-ini", ' ', [&](const char* param) {
@@ -216,12 +232,14 @@ int main(int argc, char *argv[])
         .default_code([&](const char* param) {
             if (!input.parse(param))
                 printf("Unknown option %s.\n", param);
+            else if (show_info)
+                input.print_info();
             })
         .parse_args(argc, argv);
 
     if (input.empty())
     {
-        printf("Usage: PRST {\"K*B^N+C\" | \"N!+C\" | \"N#+C\" | \"N\"} <options>\n");
+        printf("Usage: PRST {\"[K*]B^N+C\" | \"N!+C\" | \"N#+C\" | \"Phi(3, [-][K*]B^N)\" | \"Hex([-][K*]B^N)\" | \"N\"} <options>\n");
         printf("Options:\n");
         printf("\t-v\n");
         printf("\t-test\n");
@@ -234,6 +252,7 @@ int main(int argc, char *argv[])
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
         printf("\t-fermat [a <a>]\n");
+        printf("\t-order <a>\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
         printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]]\n");
         printf("\t-proof save <count> [name <proof> <product>] [keep]\n");
@@ -241,6 +260,8 @@ int main(int argc, char *argv[])
         printf("\t-proof cert {<name> | default}\n");
         return 0;
     }
+    if (show_info && !gwstate.information_only)
+        return 0;
     for (auto& f : factors)
         input.add_factor(f);
 
@@ -287,26 +308,38 @@ int main(int argc, char *argv[])
 
     std::unique_ptr<Fermat> fermat;
     std::unique_ptr<Morrison> morrison;
+    std::unique_ptr<Order> order;
 
-    if (proof_op == Proof::CERT)
+    if (order_a != 0)
+    {
+        if (proof_op != Proof::NO_OP)
+            logging.warning("Proofs are not implemented in order mode.\n");
+        if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
+        {
+            logging.error("Order can be computed only for fully factored K*B^N+1 numbers.\n");
+            return 1;
+        }
+        order.reset(new Order(order_a, input, params, logging));
+    }
+    else if (proof_op == Proof::CERT)
     {
     }
     else if (input.c() == 1 && input.b() != 2 && !force_fermat)
     {
-        if (input.is_factorized_half())
+        if (input.is_half_factored())
             fermat.reset(new Pocklington(input, params, logging, proof.get()));
         else
         {
             std::string factors;
-            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                 factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) :  "");
-            logging.warning("Not enough factors of b for Pocklington test. Factorized part: %s.\n", factors.data());
+            logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
             fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
         }
     }
     else if (input.c() == -1 && !force_fermat)
     {
-        if (input.is_factorized_half())
+        if (input.is_half_factored())
         {
             morrison.reset(new Morrison(input, params, logging));
             if (proof_op != Proof::NO_OP)
@@ -315,9 +348,9 @@ int main(int argc, char *argv[])
         else
         {
             std::string factors;
-            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                 factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
-            logging.warning("Not enough factors of b for Morrison test. Factorized part: %s.\n", factors.data());
+            logging.warning("Not enough factors for Morrison test. Factored part: %s.\n", factors.data());
             fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
         }
     }
@@ -336,7 +369,14 @@ int main(int argc, char *argv[])
         file_progress.hash = false;
         logging.file_progress(&file_progress);
 
-        if (proof_op == Proof::CERT)
+        if (order)
+        {
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a));
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a) + ".c", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a) + ".r", fingerprint);
+            order->run(params, input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        }
+        else if (proof_op == Proof::CERT)
         {
             fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.c", fingerprint);
