@@ -102,7 +102,7 @@ int genProthBase(Giant& k, uint32_t n) {
 Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof)
 {
     bool smooth = (input.b() == 2 && log2(input.gk()) < 1000 && log2(input.gk()) < input.n()/4);
-    int n = input.n();
+    uint32_t n = input.n();
     Giant exp;
     Giant exp_fermat;
 

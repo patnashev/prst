@@ -310,7 +310,7 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
         logging.info("Using %s.\n", gwstate.fft_description.data());
 
         Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
-        proof_build.points() = std::move(proof.points());
+        proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
         proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
         logging.progress().add_stage(1);
         logging.progress().add_stage(proof_build.cost());
@@ -439,7 +439,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     Proof proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
     Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
     Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
-    proof_build.points() = proof.points();
+    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
 
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
@@ -598,12 +598,11 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     finally();
 
     input.parse("960^128+1");
-    input.setup(gwstate);
-    logging.info("Using %s.\n", gwstate.fft_description.data());
 
-    proof.points().clear();
+    proof = Proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
     Fermat fermat2(Fermat::AUTO, input, params, logging, &proof);
-    proof_build.points() = proof.points();
+    proof_build = Proof(Proof::BUILD, proof_count, input, params, file_cert, logging);
+    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
@@ -616,6 +615,11 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
+    gwstate.copy(global_state);
+    gwstate.maxmulbyconst = fermat2.a();
+    input.setup(gwstate);
+    logging.info("Using %s.\n", gwstate.fft_description.data());
+
     try
     {
         fermat2.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
@@ -625,6 +629,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         task.run();
         GWNum R(gw);
         R = *task.result();
+        R.square();
 
         BaseExp::StateValue pointv;
         file_proofpoint.children()[4]->read(pointv);
@@ -634,10 +639,20 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         pointv.set(pointv.iteration(), X);
         file_proofpoint.children()[4]->write(pointv);
 
-        R.square();
-        R.square();
-        std::unique_ptr<BaseExp::State> point(BaseExp::State::read_file(file_proofpoint.children()[3].get()));
+        std::unique_ptr<BaseExp::State> point;
+        point.reset(BaseExp::State::read_file(file_proofpoint.children()[2].get()));
         point->to_GWNum(X);
+        X *= R;
+        point->set(point->iteration(), X);
+        file_proofpoint.children()[2]->write(*point);
+
+        R.square();
+        point.reset(BaseExp::State::read_file(file_proofpoint.children()[3].get()));
+        point->to_GWNum(X);
+        X *= R;
+        X *= R;
+        X *= R;
+        X *= R;
         X *= R;
         point->set(point->iteration(), X);
         file_proofpoint.children()[3]->write(*point);
@@ -653,13 +668,11 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     finally();
 
     input.parse("2*5^178-1");
-    input.setup(gwstate);
-    logging.info("Using %s.\n", gwstate.fft_description.data());
 
     proof = Proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
     Fermat fermat3(Fermat::AUTO, input, params, logging, &proof);
     proof_build = Proof(Proof::BUILD, proof_count, input, params, file_cert, logging);
-    proof_build.points() = proof.points();
+    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
@@ -671,6 +684,11 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
+
+    gwstate.copy(global_state);
+    gwstate.maxmulbyconst = fermat3.a();
+    input.setup(gwstate);
+    logging.info("Using %s.\n", gwstate.fft_description.data());
 
     try
     {
