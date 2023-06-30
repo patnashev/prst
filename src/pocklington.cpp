@@ -13,52 +13,35 @@ int genProthBase(Giant& k, uint32_t n);
 
 Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proof* proof) : Fermat(Fermat::POCKLINGTON, input, params, logging, proof)
 {
-    int i;
-    Giant tmp;
+    if (type() != POCKLINGTON)
+        return;
 
-    if (input.is_base2())
+    _tasks.reserve(input.factors().size());
+    for (auto i = 0; i < input.factors().size(); i++)
     {
-        _input_k.reset(new InputNum());
-        _input_base2.reset(new InputNum());
-        input.to_base2(*_input_k, *_input_base2);
-        _a = genProthBase(_input_base2->gk(), _input_base2->n());
-        if (!_task->smooth())
-            params.maxmulbyconst = _a;
-
-        _tasks.emplace_back(0);
-        tmp = input.gb()/2;
+        _tasks.emplace_back(i);
+        Giant& factor = input.factors()[i].first;
+        Giant tmp = _task_fermat_simple->exp()/factor;
         if (tmp != 1)
         {
             _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
-            _tasks.back().taskCheck.reset(new CarefulExp(2));
+            _tasks.back().taskCheck.reset(new CarefulExp(factor));
         }
     }
-    else
-    {
-        _tasks.reserve(input.b_factors().size());
-        for (i = 0; i < input.b_factors().size(); i++)
-        {
-            _tasks.emplace_back(i);
-            Giant& b = input.b_factors()[i].first;
-            tmp = input.gb()/b;
-            if (tmp != 1)
-            {
-                _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
-                _tasks.back().taskCheck.reset(new CarefulExp(b));
-            }
-        }
 
-        if (params.AllFactors)
-            _all_factors = params.AllFactors.value();
-    }
+    if (params.AllFactors)
+        _all_factors = params.AllFactors.value();
 }
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
-    if (_input_base2)
-        logging.info("Proth test of %s = %s, a = %d, complexity = %d.\n", input.display_text().data(), _input_base2->display_text().data(), _a, (int)logging.progress().cost_total());
-    else
-        logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
+    if (type() != POCKLINGTON)
+    {
+        Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
+        return;
+    }
+
+    logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
 
     Giant done;
@@ -95,32 +78,17 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
             else
                 tmp = *_task->result();
-            if (_input_base2)
-            {
-                tmp += 1;
-                if (tmp != 0 && tmp != *gwstate.N)
-                {
-                    _res64 = tmp.to_res64();
-                    logging.result(_prime, "%s is not prime. Proth RES64: %s.\n", input.display_text().data(), _res64.data());
-                    logging.result_save(input.input_text() + " is not prime. Proth RES64: " + _res64 + ".\n");
-                }
-                else
-                    _prime = true;
-                break;
-            }
             if (tmp != 1)
             {
                 tmp -= 1;
                 G.emplace_back(std::move(tmp));
-                done *= power(input.b_factors()[it->index].first, input.b_factors()[it->index].second);
-                factors += (!factors.empty() ? ", " : "") + input.b_factors()[it->index].first.to_string();
+                done *= power(input.factors()[it->index].first, input.factors()[it->index].second);
+                factors += (!factors.empty() ? ", " : "") + input.factors()[it->index].first.to_string();
                 it = _tasks.erase(it);
             }
             else
                 it++;
         }
-        if (_input_base2)
-            break;
 
         if (G.size() > 0)
         {
@@ -147,7 +115,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
         }
 
-        if (_tasks.empty() || (!_all_factors && done*done >= input.gb()))
+        if (_tasks.empty() || (!_all_factors && done*done >= *gwstate.N))
         {
             _prime = true;
             break;

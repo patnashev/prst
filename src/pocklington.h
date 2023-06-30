@@ -21,7 +21,5 @@ protected:
 
 protected:
     bool _all_factors = false;
-    std::unique_ptr<InputNum> _input_k;
-    std::unique_ptr<InputNum> _input_base2;
     std::vector<FactorTask> _tasks;
 };

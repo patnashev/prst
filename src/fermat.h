@@ -31,18 +31,17 @@ public:
 
     CarefulExp* task_tail_simple() { return _task_tail_simple.get(); }
     CarefulExp* task_ak_simple() { return _task_ak_simple.get(); }
-    CarefulExp* task_b_simple() { return _task_b_simple.get(); }
+    CarefulExp* task_fermat_simple() { return _task_fermat_simple.get(); }
     MultipointExp* task() { return _task.get(); }
 
 protected:
     int _type;
     int _a;
-    int _n;
     Proof* _proof;
 
     std::unique_ptr<CarefulExp> _task_tail_simple;
     std::unique_ptr<CarefulExp> _task_ak_simple;
-    std::unique_ptr<CarefulExp> _task_b_simple;
+    std::unique_ptr<CarefulExp> _task_fermat_simple;
     std::unique_ptr<MultipointExp> _task;
 
     bool _success = false;

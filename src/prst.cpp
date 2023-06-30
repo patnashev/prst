@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
     else if (proof_op == Proof::CERT)
     {
     }
-    else if (input.c() == 1 && input.b() != 2 && !force_fermat)
+    else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
         if (input.is_half_factored())
             fermat.reset(new Pocklington(input, params, logging, proof.get()));

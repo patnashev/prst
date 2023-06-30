@@ -78,7 +78,7 @@ int genProthBase(Giant& k, uint32_t n) {
             if (!is_prime(p))
                 continue;
             kmodp = k%p;
-            if (!kmodp)
+            if (!kmodp && (n > 1 || p%4 != 3))
                 continue;
             tpnmp = twopownmodm(n, p, &orderp, &nmodorderp);
             Nmodp = (kmodp*tpnmp+1)%p;
@@ -88,6 +88,8 @@ int genProthBase(Giant& k, uint32_t n) {
             if ((jNp = jacobi(Nmodp, p)) > 1) {
                 return (-jNp);
             }
+            if (n == 1 && p%4 == 3)
+                jNp = -jNp;
             if (jNp != -1)
                 continue;
             return (p);
@@ -99,44 +101,108 @@ int genProthBase(Giant& k, uint32_t n) {
 
 Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof)
 {
-    if ((type == AUTO || type == PROTH) && input.b() == 2 && input.c() == 1 && log2(input.gk()) < input.n())
-        _type = PROTH;
-    else if (type == POCKLINGTON)
-        _type = POCKLINGTON;
-    else
-        _type = FERMAT;
+    bool smooth = (input.b() == 2 && log2(input.gk()) < 1000 && log2(input.gk()) < input.n()/4);
+    int n = input.n();
+    Giant exp;
+    Giant exp_fermat;
 
-    _a = params.FermatBase ? params.FermatBase.value() : 3;
-    if (_type == PROTH)
+    if (input.type() != InputNum::KBNC || input.c() != 1)
+        type = FERMAT;
+
+    if (type != FERMAT)
     {
-        _a = genProthBase(input.gk(), input.n());
-        if (_a < 0)
+        Giant exp_pocklington;
+        exp = 1;
+        exp_pocklington = 1;
+        exp_fermat = 1;
+        n = 0;
+
+        for (auto& factor : input.factors())
+            if (factor.first == 2)
+                n = input.factors()[0].second;
+            else
+            {
+                Giant divisor;
+                if (type == POCKLINGTON)
+                {
+                    exp_fermat *= factor.first;
+                    if (factor.second > 1)
+                    {
+                        divisor = power(factor.first, factor.second - 1);
+                        exp_pocklington *= divisor;
+                        divisor *= factor.first;
+                    }
+                    else
+                        divisor = factor.first;
+                }
+                else
+                    divisor = power(factor.first, factor.second);
+                exp *= divisor;
+            }
+        GWASSERT(n != 0);
+        if (!input.cofactor().empty())
         {
-            logging.result(false, "%s is not prime, divisible by %d.\n", input.display_text().data(), -_a);
-            logging.result_save(input.input_text() + " is not prime, divisible by " + std::to_string(-_a) + ".\n");
+            exp *= input.cofactor();
+            if (type == POCKLINGTON)
+                exp_pocklington *= input.cofactor();
         }
+
+        if (log2(exp) < n)
+        {
+            _type = PROTH;
+            n--;
+            exp_fermat = 2;
+        }
+        else if (type == POCKLINGTON)
+        {
+            _type = POCKLINGTON;
+            swap(exp, exp_pocklington);
+            n--;
+            exp_fermat <<= 1;
+        }
+        else
+        {
+            _type = FERMAT;
+            exp_fermat = 1;
+        }
+
+        if (_type == PROTH || (_type == POCKLINGTON && (n + 1 >= input.n() || (params.AllFactors && params.AllFactors.value()))))
+        {
+            _a = genProthBase(_type == POCKLINGTON ? exp_pocklington : exp, n + 1);
+            if (_a < 0)
+            {
+                logging.result(false, "%s is not prime, divisible by %d.\n", input.display_text().data(), -_a);
+                logging.result_save(input.input_text() + " is not prime, divisible by " + std::to_string(-_a) + ".\n");
+            }
+        }
+        else
+            _a = params.FermatBase ? params.FermatBase.value() : 3;
+
+        if (exp_fermat != 1)
+            _task_fermat_simple.reset(new CarefulExp(std::move(exp_fermat)));
+
+        if (!smooth)
+            exp <<= n;
     }
-    _n = input.n();
-    if (_type == PROTH || _type == POCKLINGTON)
+    else
     {
-        _n--;
-        _task_b_simple.reset(new CarefulExp(input.gb()));
+        _type = FERMAT;
+        if (smooth)
+            exp = input.gk();
+        else
+            exp = input.value() - 1;
+        _a = params.FermatBase ? params.FermatBase.value() : 3;
     }
 
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
-    bool smooth = (input.b() == 2 && log2(input.gk()) < 1000);
-    Giant exp;
-    if ((proof == nullptr && (!CheckStrong || !smooth)) || (proof != nullptr && proof->Li()))
-    {
-        if (input.b() == 2)
-            exp = input.gk() << _n;
-        else
-            exp = input.gk()*power(input.gb(), _n);
-        exp += input.c() - 1;
-    }
 
     if (proof == nullptr && !CheckStrong)
     {
+        if (smooth)
+        {
+            exp <<= n;
+            exp += input.c() - 1;
+        }
         _task.reset(new FastExp(std::move(exp)));
         logging.progress().add_stage(_task->exp().bitlen());
         params.maxmulbyconst = _a;
@@ -146,12 +212,12 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         int checks = params.StrongCount ? params.StrongCount.value() : 16;
         if (smooth)
         {
-            _task.reset(new GerbiczCheckExp(input.gb(), _n, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+            _task.reset(new GerbiczCheckExp(input.gb(), n, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
 
             if (input.c() != 1)
                 _task_tail_simple.reset(new CarefulExp(abs(input.c() - 1)));
-            if (input.k() != 1)
-                _task_ak_simple.reset(new CarefulExp(input.gk()));
+            if (exp != 1)
+                _task_ak_simple.reset(new CarefulExp(std::move(exp)));
         }
         else
         {
@@ -163,10 +229,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
     else
     {
         auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2);
-        if (proof->Li())
-            proof->calc_points(exp.bitlen() - 1, input, params, logging);
-        else
-            proof->calc_points(_n, input, params, logging);
+        proof->calc_points(smooth ? n : exp.bitlen() - 1, smooth, input, params, logging);
         int L = 0, L2 = 0;
         if (CheckStrong)
         {
@@ -193,8 +256,8 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         }
         else
         {
-            if (proof->points().back().pos != _n)
-                proof->points().emplace_back(_n);
+            if (proof->points().back().pos != n)
+                proof->points().emplace_back(n);
 
             if (!CheckStrong)
                 _task.reset(new MultipointExp(input.gb(), true, proof->points(), on_point));
@@ -205,8 +268,8 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
 
             if (input.c() != 1)
                 _task_tail_simple.reset(new CarefulExp(abs(input.c() - 1)));
-            if (input.k() != 1)
-                _task_ak_simple.reset(new CarefulExp(input.gk()));
+            if (exp != 1)
+                _task_ak_simple.reset(new CarefulExp(std::move(exp)));
         }
         logging.progress().add_stage(_task->cost());
         logging.progress().add_stage(proof->cost());
@@ -217,8 +280,8 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         _task_tail_simple->set_error_check(false, true);
     if (_task_ak_simple)
         _task_ak_simple->set_error_check(false, true);
-    if (_task_b_simple)
-        _task_b_simple->set_error_check(false, true);
+    if (_task_fermat_simple)
+        _task_fermat_simple->set_error_check(false, true);
 }
 
 void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
@@ -294,11 +357,11 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
 
     _task->run();
 
-    if (_task_b_simple)
+    if (_task_fermat_simple)
     {
-        _task_b_simple->init(&input, &gwstate, &logging, *_task->result());
-        _task_b_simple->run();
-        if (*_task_b_simple->result() == 1)
+        _task_fermat_simple->init(&input, &gwstate, &logging, *_task->result());
+        _task_fermat_simple->run();
+        if (*_task_fermat_simple->result() == 1)
             _success = true;
     }
     else if (*_task->result() == 1)
@@ -317,10 +380,10 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     }
     else if (type() == PROTH || !_success)
     {
-        if (type() == PROTH || !_task_b_simple)
+        if (type() == PROTH || !_task_fermat_simple)
             _res64 = _task->result()->to_res64();
         else
-            _res64 = _task_b_simple->result()->to_res64();
+            _res64 = _task_fermat_simple->result()->to_res64();
         logging.result(_prime, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
         logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
     }

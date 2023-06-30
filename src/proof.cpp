@@ -10,7 +10,7 @@
 
 using namespace arithmetic;
 
-Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging, std::optional<bool> forceLi) : _op(op), _count(count)
+Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging) : _op(op), _count(count)
 {
     if ((op == SAVE || op == BUILD) && (count & (count - 1)) != 0)
     {
@@ -19,7 +19,6 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
     }
 
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
-    _Li = forceLi ? forceLi.value() : !(input.b() == 2 && log2(input.gk()) < 1000);
 
     if (op == SAVE)
         _task.reset(new ProofSave());
@@ -28,12 +27,13 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
     if (op == CERT)
     {
         Certificate cert;
-        if (!file_cert.read(cert) || (Li() && cert.a_power() == 0))
+        if (!file_cert.read(cert))
         {
             logging.error("Invalid certificate file.\n");
             exit(0);
         }
         file_cert.free_buffer();
+        _Li = (cert.a_power() != 0);
         _M = cert.power();
         _r_count = std::move(cert.X());
         _r_0 = std::move(cert.a_base());
@@ -99,8 +99,10 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         _taskRoot->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
 }
 
-void Proof::calc_points(int iterations, InputNum& input, Params& params, Logging& logging)
+void Proof::calc_points(int iterations, bool smooth, InputNum& input, Params& params, Logging& logging)
 {
+    _Li = !smooth;
+
     if (params.CheckStrong && params.CheckStrong.value() && params.StrongCount)
         if (params.StrongCount.value() > _count)
             params.ProofChecksPerPoint = params.StrongCount.value()/_count;

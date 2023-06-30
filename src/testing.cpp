@@ -510,7 +510,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
             throw TaskAbortException();
         }
 
-        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging, proof.Li());
+        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging);
         proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
