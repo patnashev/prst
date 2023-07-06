@@ -115,7 +115,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
         }
 
-        if (_tasks.empty() || (!_all_factors && done*done >= *gwstate.N))
+        if (_tasks.empty() || (!_all_factors && done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
+            (done.bitlen()*2 > gwstate.N->bitlen() + 10 || square(done) > *gwstate.N)))
         {
             _prime = true;
             break;
