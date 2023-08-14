@@ -522,6 +522,8 @@ int net_main(int argc, char *argv[])
         int proof_op = Proof::NO_OP;
         if (net.task()->proof == "save")
             proof_op = Proof::SAVE;
+        if (net.task()->proof == "build")
+            proof_op = Proof::BUILD;
         if (net.task()->proof == "cert")
             proof_op = Proof::CERT;
         int proof_count = net.task()->count;

@@ -65,20 +65,22 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
     if ((op == BUILD && (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())) || op == ROOT)
     {
         Giant exp;
+        exp = 1;
         if (input.c() == 1)
         {
-            exp = input.gk();
             int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 64;
-            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
+            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                 if (it->first == 2)
                     exp <<= security;
                 else
-                    for (double bitlen = 0, log2factor = log2(it->first); bitlen < security; bitlen += log2factor)
+                {
+                    double bitlen = 0, log2factor = log2(it->first);
+                    for (int i = 0; i < it->second && bitlen < security; i++, bitlen += log2factor)
                         exp *= it->first;
+                }
         }
         else
         {
-            exp = 1;
             int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 24;
             logging.info("Factorizing N-1 for roots of unity check");
             double timer = getHighResTimer();
