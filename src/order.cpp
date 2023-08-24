@@ -11,13 +11,14 @@ using namespace arithmetic;
 
 Order::Order(int a, InputNum& input, Params& params, Logging& logging) : _a(a)
 {
-    params.maxmulbyconst = a;
     _factors = input.factors();
+    create_tasks(params, logging, false);
 
-    create_tasks(params, false);
+    if (_task)
+        params.maxmulbyconst = a;
 }
 
-void Order::create_tasks(Params& params, bool restart)
+void Order::create_tasks(Params& params, Logging& logging, bool restart)
 {
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
     int checks = params.StrongCount ? params.StrongCount.value() : 16;
@@ -60,10 +61,16 @@ void Order::create_tasks(Params& params, bool restart)
     }
     if (exp == 1)
         _task.reset();
-    else if (CheckStrong && exp.bitlen() > 100)
-        _task.reset(new FastLiCheckExp(exp, checks));
     else
-        _task.reset(new FastExp(exp));
+    {
+        if (CheckStrong && exp.bitlen() > 100)
+            _task.reset(new FastLiCheckExp(exp, checks));
+        else
+            _task.reset(new FastExp(exp));
+        logging.progress().add_stage(_task->cost());
+    }
+    for (auto& task_smooth : _tasks_smooth)
+        logging.progress().add_stage(task_smooth->cost());
 
     _tasks.clear();
     exp = 1;
@@ -103,6 +110,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
 
             _task->run();
             sub_val = *_task->result();
+            logging.progress().next_stage();
         }
         for (auto& task_smooth : _tasks_smooth)
         {
@@ -116,6 +124,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
 
             task_smooth->run();
             sub_val = *task_smooth->result();
+            logging.progress().next_stage();
         }
 
         if (sub_val == 1)
@@ -125,7 +134,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
                     it = _factors.erase(it);
                 else
                     it->second -= _sub;
-            create_tasks(params, true);
+            create_tasks(params, logging, true);
             continue;
         }
 
@@ -180,7 +189,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
         }
 
         if (!_factors.empty())
-            create_tasks(params, true);
+            create_tasks(params, logging, true);
     }
 
     Giant order_div;

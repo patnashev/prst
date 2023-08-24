@@ -604,6 +604,7 @@ int net_main(int argc, char *argv[])
         }
 
         gwstate.done();
+        gwstate.known_factors = 1;
 
         net.upload_wait();
         if (net.task()->aborted)

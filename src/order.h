@@ -15,7 +15,7 @@ public:
     void run(Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 
 protected:
-    void create_tasks(Params& params, bool restart);
+    void create_tasks(Params& params, Logging& logging, bool restart);
 
     class FactorTask
     {
