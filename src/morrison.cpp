@@ -153,7 +153,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         }
 
         logging.set_prefix("");
-        logging.info("%sMorrison test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
+        logging.info("%sMorrison%s test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", input.b() == 2 ? " (LLR)" : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
         logging.set_prefix(input.display_text() + " ");
         if (gwstate.information_only)
             exit(0);

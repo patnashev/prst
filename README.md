@@ -9,8 +9,8 @@ The following primality tests are currently implemented:
 - Fermat probabilistic test. Works for any number, although the result is not definitive.
 - Proth test of k*2^n+1 numbers.
 - Pocklington test of k*b^n+1 numbers.
-- LLR test of k*2^n-1 numbers.
 - Morrison test of k*b^n-1 numbers.
+- LLR test of k*2^n-1 numbers, as a [special case](https://eprint.iacr.org/2023/195) of the Morrison test.
 
 The utility can provide a high level of reliability by employing several overlapping error checks and a verification mechanism based on secure mathematical algorithms.
 
