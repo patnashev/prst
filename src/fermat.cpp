@@ -6,6 +6,7 @@
 #include "cpuid.h"
 #include "fermat.h"
 #include "integer.h"
+#include "exception.h"
 
 using namespace arithmetic;
 
@@ -290,7 +291,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     _success = false;
     _res64 = "";
     Giant ak;
-    ak = _a;
+    ak = _a; // smooth exp is not using mulbyconst
     if (_a < 0)
         return;
 
@@ -310,13 +311,24 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             tail = _a*_a;
         else
         {
-            _task_tail_simple->init(&input, &gwstate, &logging, ak);
+            _task_tail_simple->init_giant(&input, &gwstate, &logging, ak);
             _task_tail_simple->run();
             tail = std::move(*_task_tail_simple->result());
         }
         if (input.c() < 0)
         {
-            tail.inv(*gwstate.N);
+            try
+            {
+                tail.inv(*gwstate.N);
+            }
+            catch (const NoInverseException& ex)
+            {
+                std::string factor = ex.divisor.to_string();
+                logging.set_prefix("");
+                logging.result(false, "%s is not prime, divisible by %s.\n", input.display_text().data(), factor.data());
+                logging.result_save(input.input_text() + " is not prime, divisible by " + factor + ".\n");
+                return;
+            }
             if (input.c() == -1 && _a < 46341)
                 GWASSERT(tail*(_a*_a)%*gwstate.N == 1);
         }
@@ -337,7 +349,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     {
         if (_task_ak_simple)
         {
-            _task_ak_simple->init(&input, &gwstate, &logging, std::move(ak));
+            _task_ak_simple->init_giant(&input, &gwstate, &logging, std::move(ak));
             _task_ak_simple->run();
             ak = std::move(*_task_ak_simple->result());
         }
@@ -359,7 +371,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
 
     if (_task_fermat_simple)
     {
-        _task_fermat_simple->init(&input, &gwstate, &logging, *_task->result());
+        _task_fermat_simple->init_giant(&input, &gwstate, &logging, *_task->result());
         _task_fermat_simple->run();
         if (*_task_fermat_simple->result() == 1)
             _success = true;

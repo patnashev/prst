@@ -104,7 +104,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
         {
             logging.info("raising to power %s.\n", _task_exp_str.data());
             if (FastExp* task = dynamic_cast<FastExp*>(_task.get()))
-                task->init_small(&input, &gwstate, nullptr, &logging, _a);
+                task->init(&input, &gwstate, nullptr, &logging, _a);
             if (FastLiCheckExp* task = dynamic_cast<FastLiCheckExp*>(_task.get()))
                 task->init(&input, &gwstate, nullptr, nullptr, &logging, _a);
 
@@ -140,7 +140,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
 
         logging.info("computing order for each factor.\n");
 
-        _task_check->init(&input, &gwstate, &logging, std::move(sub_val));
+        _task_check->init_giant(&input, &gwstate, &logging, std::move(sub_val));
         _task_check->run();
         sub_val = std::move(_task_check->X0());
         if (*_task_check->result() != 1)
@@ -155,7 +155,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
             auto it = _factors.begin();
             for (; it != _factors.end() && it->first != factor.b; it++);
 
-            factor.task_sub->init(&input, &gwstate, &logging, std::move(sub_val));
+            factor.task_sub->init_giant(&input, &gwstate, &logging, std::move(sub_val));
             factor.task_sub->run();
             sub_val = std::move(factor.task_sub->X0());
 
@@ -172,7 +172,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
             int ord = factor.ord;
             for (int i = 0; i < factor.n && cur_val != 1; i++, ord++)
             {
-                factor.task_factor->init(&input, &gwstate, &logging, std::move(cur_val));
+                factor.task_factor->init_giant(&input, &gwstate, &logging, std::move(cur_val));
                 factor.task_factor->run();
                 cur_val = std::move(*factor.task_factor->result());
             }

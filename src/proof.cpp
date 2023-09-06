@@ -39,27 +39,40 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         _r_0 = std::move(cert.a_base());
         int checks = params.StrongCount ? params.StrongCount.value() : 1;
 
-        Giant b = input.gb();
-        if (Li())
-            b = 2;
         MultipointExp* task;
-        if (!CheckStrong)
-            _task.reset(task = new SmoothExp(b, _M));
+        if (!Li())
+        {
+            Giant b = input.gb();
+            if (!CheckStrong)
+                _task.reset(task = new SmoothExp(b, _M));
+            else
+                _task.reset(task = new GerbiczCheckExp(b, _M, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+        }
         else
-            _task.reset(task = new GerbiczCheckExp(b, _M, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+        {
+            Giant exp = std::move(cert.a_power());
+            if (exp.bitlen() > _M)
+            {
+                if (!CheckStrong)
+                    _taskA.reset(new SlidingWindowExp(exp >> _M));
+                else
+                    _taskA.reset(new LiCheckExp(exp >> _M, 1, 0));
+                if (params.SlidingWindow)
+                    _taskA->_W = params.SlidingWindow.value();
+                logging.progress().add_stage(_taskA->cost());
+                exp.arithmetic().substr(exp, 0, _M, exp);
+            }
+            Giant tmp;
+            tmp = 1;
+            tmp <<= _M;
+            exp += tmp; // TODO: setbit
+            if (!CheckStrong)
+                _task.reset(task = new SlidingWindowExp(std::move(exp)));
+            else
+                _task.reset(task = new LiCheckExp(std::move(exp), checks, params.StrongL ? params.StrongL.value() : 0));
+        }
         if (params.SlidingWindow)
             task->_W = params.SlidingWindow.value();
-
-        if (Li())
-        {
-            if (!CheckStrong)
-                _taskA.reset(new SlidingWindowExp(std::move(cert.a_power())));
-            else
-                _taskA.reset(new LiCheckExp(std::move(cert.a_power()), checks, params.StrongL ? params.StrongL.value() : 0));
-            if (params.SlidingWindow)
-                _taskA->_W = params.SlidingWindow.value();
-            logging.progress().add_stage(_taskA->cost());
-        }
         logging.progress().add_stage(task->cost());
     }
     if ((op == BUILD && (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())) || op == ROOT)
@@ -287,53 +300,63 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
     if (task == nullptr)
         return;
 
-    double timer = 0;
-    Giant tail;
+    logging.info("Verifying certificate of %s, complexity = %d.\n", input.display_text().data(), (int)logging.progress().cost_total());
+    if (gwstate.information_only)
+        exit(0);
+    logging.set_prefix(input.display_text() + " ");
+
     if (Li())
     {
-        File* file_checkpoint_a(file_checkpoint.add_child("a", file_checkpoint.fingerprint()));
-        File* file_recoverypoint_a(file_recoverypoint.add_child("a", file_recoverypoint.fingerprint()));
-        logging.info("Verifying certificate of %s, complexity = %d+%d.\n", input.display_text().data(), (int)logging.progress().costs()[0], (int)logging.progress().costs()[1]);
-        logging.set_prefix(input.display_text() + " ");
+        LiCheckExp* taskCheck;
+        Giant r = std::move(_r_count);
 
-        LiCheckExp* taskACheck = dynamic_cast<LiCheckExp*>(_taskA.get());
-        if (taskACheck != nullptr)
-            taskACheck->init(&input, &gwstate, file_checkpoint_a, file_recoverypoint_a, &logging, std::move(_r_0));
+        if (_taskA)
+        {
+            taskCheck = dynamic_cast<LiCheckExp*>(_taskA.get());
+            if (taskCheck != nullptr)
+                taskCheck->init(&input, &gwstate, nullptr, nullptr, &logging, std::move(_r_0), std::move(r));
+            else
+                _taskA->init_giant(&input, &gwstate, nullptr, &logging, std::move(_r_0), std::move(r));
+            _taskA->run();
+            logging.progress().next_stage();
+            _r_0 = std::move(_taskA->X0());
+            r = std::move(*_taskA->result());
+        }
+
+        taskCheck = dynamic_cast<LiCheckExp*>(_task.get());
+        if (taskCheck != nullptr)
+            taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(_r_0));
         else
-            _taskA->init(&input, &gwstate, file_checkpoint_a, &logging, std::move(_r_0));
-        _taskA->run();
-        timer = _taskA->timer();
-        tail = std::move(*_taskA->result());
-
-        logging.progress().next_stage();
-        file_checkpoint_a->clear();
-        file_recoverypoint_a->clear();
+            task->init_giant(&input, &gwstate, &file_checkpoint, &logging, std::move(_r_0));
+        if (task->state() == nullptr)
+        {
+            task->init_state(new BaseExp::StateValue(0, std::move(r)));
+            task->state()->set_written();
+        }
     }
     else
     {
-        logging.info("Verifying certificate of %s, complexity = %d.\n", input.display_text().data(), (int)logging.progress().cost_total());
-        logging.set_prefix(input.display_text() + " ");
+        GerbiczCheckExp* taskCheck = dynamic_cast<GerbiczCheckExp*>(_task.get());
+        if (taskCheck != nullptr)
+            taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging);
+        else
+            task->init_smooth(&input, &gwstate, &file_checkpoint, &logging);
+        if (task->state() == nullptr)
+        {
+            task->init_state(new BaseExp::StateValue(0, std::move(_r_count)));
+            task->state()->set_written();
+        }
     }
 
-    GerbiczCheckExp* taskCheck = dynamic_cast<GerbiczCheckExp*>(_task.get());
-    if (taskCheck != nullptr)
-        taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
-    else
-        task->init_smooth(&input, &gwstate, &file_checkpoint, &logging, std::move(tail));
-    if (task->state() == nullptr)
-    {
-        task->init_state(new BaseExp::StateValue(0, std::move(_r_count)));
-        task->state()->set_written();
-    }
-    _task->run();
-    timer += _task->timer();
+    task->run();
+
     logging.set_prefix("");
+    logging.progress().next_stage();
 
     _res64 = task->result()->to_res64();
-    logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), timer);
-    logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)timer) + " s.\n");
+    logging.result(false, "%s certificate RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
+    logging.result_save(input.input_text() + " certificate RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
 
-    logging.progress().next_stage();
     file_checkpoint.clear();
     file_recoverypoint.clear();
 }
@@ -342,7 +365,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging,
 {
     if (_taskRoot && X != nullptr)
     {
-        _taskRoot->init(&input, &gwstate, &logging, std::move(*X));
+        _taskRoot->init_giant(&input, &gwstate, &logging, std::move(*X));
         _taskRoot->run();
         if (*_taskRoot->result() == 1)
         {
@@ -388,9 +411,9 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging,
 double Proof::cost()
 {
     if (op() == SAVE)
-        return count()*depth()*16;
+        return (count() - 1)*64*1.5;
     if (op() == BUILD)
-        return (depth() + (static_cast<ProofBuild*>(_task.get())->security() ? 1 : 0))*2*96;
+        return (depth() + (static_cast<ProofBuild*>(_task.get())->security() ? 1 : 0))*2*64*1.5;
     return 0;
 }
 

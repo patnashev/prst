@@ -62,12 +62,12 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         {
             if (it->taskFactor)
             {
-                it->taskFactor->init(&input, &gwstate, &logging, std::move(*_task->result()));
+                it->taskFactor->init_giant(&input, &gwstate, &logging, std::move(*_task->result()));
                 it->taskFactor->run();
                 *_task->result() = std::move(it->taskFactor->X0());
                 tmp = std::move(*it->taskFactor->result());
 
-                it->taskCheck->init(&input, &gwstate, &logging, std::move(tmp));
+                it->taskCheck->init_giant(&input, &gwstate, &logging, std::move(tmp));
                 it->taskCheck->run();
                 if (*it->taskCheck->result() != 1)
                 {

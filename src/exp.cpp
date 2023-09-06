@@ -412,7 +412,7 @@ double StrongCheckMultipointExp::cost()
     int n = _points.back().pos;
     bool simple = dynamic_cast<LiCheckExp*>(this) == nullptr || dynamic_cast<FastLiCheckExp*>(this) != nullptr;
     if ((smooth() && b() == 2) || (!smooth() && simple))
-        return n + n/_L + n/_L2*(_L + (!smooth() ? (_L + std::log2(_L2/_L)) : 0));
+        return n + n/_L + n/_L2*(!smooth() ? _L + std::log2(_L2/_L) : _L)*1.5;
     else if (smooth())
     {
         double log2b = log2(b());
@@ -425,7 +425,7 @@ double StrongCheckMultipointExp::cost()
         int len = _exp.bitlen() - 1;
         int W;
         for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + len*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + len*(1 + 1/(W + 2.0)); W++);
-        return (1 << (W - 1)) + n*(1 + 1/(W + 1.0)) + n/_L + n/_L2*(_L + (_L + std::log2(_L2/_L))*(1 + 1/(W + 1.0)));
+        return (1 << (W - 1)) + n*(1 + 1/(W + 1.0)) + n/_L + n/_L2*(_L + std::log2(_L2/_L))*(1 + 1/(W + 1.0));
     }
 }
 
@@ -507,7 +507,7 @@ void StrongCheckMultipointExp::execute()
         return;
 
     int i, j, next_point, next_check;
-    int len, l;
+    int len;
     Giant exp;
     int last_power = -1;
     Giant tmp;
@@ -674,7 +674,7 @@ void StrongCheckMultipointExp::execute()
         GWNum T(D());
         gw().carefully().mul(X(), D(), D(), 0);
         swap(T, X());
-        if ((smooth() && b() == 2) || !smooth())
+        if (smooth() && b() == 2)
         {
             for (j = 0; j < L; j++)
                 gw().carefully().square(X(), X(), 0);
@@ -696,8 +696,10 @@ void StrongCheckMultipointExp::execute()
         {
             for (j = 0, tmp = 0; j*L < L2; j++, tmp += tmp2)
                 _exp.arithmetic().substr(_exp, len - state()->iteration() - j*L - L, L, tmp2);
-            if (tmp != 0)
+            if (tmp.bitlen() > L)
             {
+                tmp.arithmetic().shiftright(tmp, L, tmp2);
+                tmp.arithmetic().substr(tmp, 0, L, tmp);
                 GWNum TX(gw());
                 if (!_X0.empty())
                 {
@@ -705,17 +707,32 @@ void StrongCheckMultipointExp::execute()
                     swap(TX, X());
                     //GWArithmetic* tmpgw = _gw;
                     //_gw = &gw().carefully();
-                    slide(tmp, 0, tmp.bitlen() - 1, false);
+                    slide(tmp2, 0, tmp2.bitlen() - 1, false);
                     //_gw = tmpgw;
                     swap(TX, X());
                 }
                 if (_x0 > 0)
                 {
                     TX = _x0;
-                    for (l = tmp.bitlen() - 1, j = 0; j < l; j++)
-                        gw().carefully().square(TX, TX, tmp.bit(l - j - 1) ? GWMUL_MULBYCONST : 0);
+                    for (j = tmp2.bitlen() - 2; j >= 0; j--)
+                        gw().carefully().square(TX, TX, tmp2.bit(j) ? GWMUL_MULBYCONST : 0);
                 }
                 gw().carefully().mul(TX, X(), X(), 0);
+            }
+            if (!_X0.empty())
+            {
+                //GWArithmetic* tmpgw = _gw;
+                //_gw = &gw().carefully();
+                tmp2 = 1;
+                tmp2 <<= L;
+                tmp += tmp2;
+                slide(tmp, 0, L, false);
+                //_gw = tmpgw;
+            }
+            if (_x0 > 0)
+            {
+                for (j = L - 1; j >= 0; j--)
+                    gw().carefully().square(X(), X(), tmp.bit(j) ? GWMUL_MULBYCONST : 0);
             }
         }
         gw().carefully().mul(R(), X(), X(), 0);
