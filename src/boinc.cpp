@@ -279,16 +279,16 @@ int boinc_main(int argc, char *argv[])
     if (proof_op == Proof::CERT)
     {
     }
-    else if (input.c() == 1 && input.b() != 2 && !force_fermat)
+    else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
-        if (input.is_factorized_half())
+        if (input.is_half_factored())
             fermat.reset(new Pocklington(input, params, logging, proof.get()));
         else
         {
             std::string factors;
-            for (auto it = input.b_factors().begin(); it != input.b_factors().end(); it++)
-                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) :  "");
-            logging.warning("Not enough factors of b for Pocklington test. Factorized part: %s.\n", factors.data());
+            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
+                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
+            logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
             fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
         }
     }
