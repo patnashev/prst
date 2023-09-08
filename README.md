@@ -21,6 +21,8 @@ view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d46
 Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "Phi(3,[-]K*B^N)" | "Hex([-][K*]B^N)" | "N"} <options>
 Options: -v
                  outputs version information.
+         -info
+                 outputs number profile.
          -test
                  performs built-in tests.
          -ini <filename>
