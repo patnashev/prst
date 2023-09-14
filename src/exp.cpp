@@ -173,6 +173,7 @@ void MultipointExp::setup()
     if (!smooth() && !_X0.empty() && _U.empty())
     {
         X() = _X0;
+        gwset_carefully_count(gw().gwdata(), 30);
         slide_init(_exp.bitlen() - 1);
         std::vector<arithmetic::GWNum> U;
         U.swap(_U);
@@ -229,7 +230,7 @@ void MultipointExp::execute()
         {
             for (; i < _points[next_point].pos; i++)
             {
-                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos));
+                (i < iterations() - 30 ? gw() : gw().carefully()).square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos));
                 if (i + 1 != _points[next_point].pos)
                     commit_execute(i + 1, X());
             }
@@ -583,7 +584,7 @@ void StrongCheckMultipointExp::execute()
         {
             for (j = i - state()->iteration(); j < L2; j++, i++, Task::commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
             {
-                gw().square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos && j + 1 != L2));
+                (i < iterations() - 30 ? gw() : gw().carefully()).square(X(), X(), (!smooth() && _exp.bit(len - i - 1) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos && j + 1 != L2));
                 if (j + 1 != L2 && i + 1 == _points[next_point].pos && !_points[next_point].check)
                 {
                     check();
@@ -671,9 +672,12 @@ void StrongCheckMultipointExp::execute()
         }
 
         _logging->debug("performing Gerbicz%s check at %d,%d, L2 = %d*%d.\n", !smooth() ? "-Li" : "", next_check, i, L, L2/L);
-        GWNum T(D());
-        gw().carefully().mul(X(), D(), D(), 0);
-        swap(T, X());
+        tmp_state = State::cast(i == _points[next_check].pos && _points[next_check].value, _tmp_state_recovery);
+        tmp_state->set(i, X());
+        GWNum T(gw());
+        tmp_state->to_GWNum(T);
+        gw().carefully().mul(T, D(), X(), 0);
+        swap(X(), D());
         if (smooth() && b() == 2)
         {
             for (j = 0; j < L; j++)
@@ -751,8 +755,6 @@ void StrongCheckMultipointExp::execute()
 
         R() = X();
         D() = X();
-        tmp_state = State::cast(i == _points[next_check].pos && _points[next_check].value, _tmp_state_recovery);
-        tmp_state->set(i, R());
         if (i == _points[next_check].pos)
         {
             if (_on_point != nullptr)
