@@ -15,6 +15,7 @@
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup.hpp>
 
+#define RESTC_CPP_SANE_DATA_LIMIT (1024 * 1024 * 1024)
 #include "restc-cpp/restc-cpp.h"
 #include "restc-cpp/SerializeJson.h"
 #include "restc-cpp/RequestBuilder.h"
