@@ -59,6 +59,9 @@ int main(int argc, char *argv[])
     //  6 proof checkpoint
     //  7 Morrison test params
     //  8 serialized checkpoint
+    //  9 LucasV checkpoint
+    // 10 LucasUV checkpoint
+    // 11 LucasUV strong check checkpoint
 
     GWState gwstate;
     Params params;
@@ -85,7 +88,7 @@ int main(int argc, char *argv[])
         .group("-fft")
             .value_number("+", 0, gwstate.next_fft_count, 0, 5)
             .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
-            .check("generic", gwstate.force_general_mod, true)
+            .check("generic", gwstate.force_mod_type, 1)
             .check("info", gwstate.information_only, true)
             .end()
         .group("-proof")

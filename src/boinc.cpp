@@ -131,19 +131,19 @@ bool BoincLogging::state_save_flag()
 check_again:
     if (mask & BOW_EVENT_QUIT_NORMAL)
     {
-        error("Exiting - requested by client\n");
+        info("Exiting - requested by client\n");
         Task::abort();
         return true;    // notice abort ASAP
     }
     else if (mask & BOW_EVENT_QUIT_HBT)
     {
-        error("Exiting - lost connection with Boinc client\n");
+        info("Exiting - lost connection with Boinc client\n");
         Task::abort();
         return true;    // notice abort ASAP
     }
     else if (mask & BOW_EVENT_ABORT)
     {
-        error("Boinc requested us to abort\n");
+        info("Boinc requested us to abort\n");
         throw TaskAbortException();
     }
     else if (mask & BOW_EVENT_SUSPENDED)
@@ -196,7 +196,7 @@ int boinc_main(int argc, char *argv[])
         .group("-fft")
             .value_number("+", 0, gwstate.next_fft_count, 0, 5)
             .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
-            .check("generic", gwstate.force_general_mod, true)
+            .check("generic", gwstate.force_mod_type, 1)
             .end()
         .group("-proof")
             .exclusive()

@@ -301,8 +301,10 @@ void NetContext::upload_wait()
 
 void NetContext::upload(NetFile* file)
 {
+    if (_task->aborted)
+        return;
     _upload_queue.push_back(file);
-    if (_uploadF.valid() || _task->aborted)
+    if (_uploadF.valid())
         return;
 
     _uploadF = _putter->ProcessWithPromise([this](Context& ctx) {
@@ -320,6 +322,7 @@ void NetContext::upload(NetFile* file)
                 if (_upload_queue.empty() || _task->aborted)
                 {
                     _uploadF = std::future<void>();
+                    _upload_queue.clear();
                     return;
                 }
                 file = _upload_queue.front();

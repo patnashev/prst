@@ -103,7 +103,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 tmp = std::move(G[0]);
 
             logging.set_prefix(input.display_text() + " ");
-            logging.info("Checking gcd with factors {%s}.\n", factors.data());
+            logging.result(false, "Checking gcd with factors {%s}.\n", factors.data());
             logging.set_prefix("");
             tmp.gcd(*gwstate.N);
             if (tmp != 1)
@@ -126,7 +126,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             if (proof == nullptr)
             {
                 logging.progress().add_stage(_task->cost());
-                logging.progress().update(0, (int)gwstate.handle.fft_count/2);
+                logging.progress().update(0, 0);
                 logging.progress_save();
                 if (dynamic_cast<StrongCheckMultipointExp*>(_task.get()) != nullptr)
                     recoverypoint->write(*_task->state());
@@ -145,11 +145,9 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             std::string sa = std::to_string(_a);
             if (!_task->smooth())
             {
-                double fft_count = gwstate.handle.fft_count;
                 gwstate.done();
                 gwstate.maxmulbyconst = _a;
                 input.setup(gwstate);
-                gwstate.handle.fft_count = fft_count;
             }
 
             logging.warning("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
