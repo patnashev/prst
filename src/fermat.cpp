@@ -140,7 +140,13 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
                     divisor = power(factor.first, factor.second);
                 exp *= divisor;
             }
-        GWASSERT(n != 0);
+        if (n == 0)
+        {
+            _a = -2;
+            logging.result(false, "%s is not prime, divisible by 2.\n", input.display_text().data());
+            logging.result_save(input.input_text() + " is not prime, divisible by 2.\n");
+            return;
+        }
         if (!input.cofactor().empty())
         {
             exp *= input.cofactor();
@@ -174,6 +180,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
             {
                 logging.result(false, "%s is not prime, divisible by %d.\n", input.display_text().data(), -_a);
                 logging.result_save(input.input_text() + " is not prime, divisible by " + std::to_string(-_a) + ".\n");
+                return;
             }
         }
         else
@@ -305,6 +312,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
     logging.set_prefix(input.display_text() + " ");
 
     Giant tail;
+    Giant tail_check;
     if (_task_tail_simple)
     {
         if (input.c() == -1 && _a < 46341)
@@ -315,28 +323,29 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
             _task_tail_simple->run();
             tail = std::move(*_task_tail_simple->result());
         }
-        if (input.c() < 0)
+        tail_check = ak;
+        try
         {
-            try
-            {
-                tail.inv(*gwstate.N);
-            }
-            catch (const NoInverseException& ex)
-            {
-                std::string factor = ex.divisor.to_string();
-                logging.set_prefix("");
-                logging.result(false, "%s is not prime, divisible by %s.\n", input.display_text().data(), factor.data());
-                logging.result_save(input.input_text() + " is not prime, divisible by " + factor + ".\n");
-                return;
-            }
-            if (input.c() == -1 && _a < 46341)
-                GWASSERT(tail*(_a*_a)%*gwstate.N == 1);
+            tail_check.inv(*gwstate.N);
         }
+        catch (const NoInverseException& ex)
+        {
+            std::string factor = ex.divisor.to_string();
+            logging.set_prefix("");
+            logging.result(false, "%s is not prime, divisible by %s.\n", input.display_text().data(), factor.data());
+            logging.result_save(input.input_text() + " is not prime, divisible by " + factor + ".\n");
+            return;
+        }
+        _task_tail_simple->init_giant(&input, &gwstate, &logging, tail_check);
+        _task_tail_simple->run();
+        tail_check = std::move(*_task_tail_simple->result());
+        if (input.c() < 1)
+            swap(tail, tail_check);
     }
 
     StrongCheckMultipointExp* taskCheck = dynamic_cast<StrongCheckMultipointExp*>(_task.get());
     if (taskCheck != nullptr && taskCheck->smooth())
-        taskCheck->init_smooth(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail));
+        taskCheck->init_smooth(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(tail), std::move(tail_check));
     else if (taskCheck != nullptr)
         taskCheck->init_small(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, _a, std::move(tail));
     else if (_task->smooth())
@@ -358,7 +367,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         state->set(0, std::move(ak));
         if (proof != nullptr)
         {
-            logging.progress().update(0, (int)gwstate.handle.fft_count/2);
+            logging.progress().update(0, 0);
             logging.progress_save();
             proof->on_point(0, state);
         }

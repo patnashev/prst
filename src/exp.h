@@ -332,6 +332,7 @@ public:
     void init_smooth(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging)
     {
         GWASSERT(smooth());
+        _tail.arithmetic().free(_tail);
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T>
@@ -339,14 +340,22 @@ public:
     {
         GWASSERT(smooth());
         _tail = std::forward<T>(tail);
+        _tail_inv.arithmetic().free(_tail_inv);
         init(input, gwstate, file, file_recovery, logging);
     }
-    virtual void init_state(State* state) override;
-
+    template<class T, class S>
+    void init_smooth(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail, S&& tail_inv)
+    {
+        GWASSERT(smooth());
+        _tail = std::forward<T>(tail);
+        _tail_inv = std::forward<S>(tail_inv);
+        init(input, gwstate, file, file_recovery, logging);
+    }
     void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0)
     {
         GWASSERT(!smooth());
         _x0 = x0;
+        _tail.arithmetic().free(_tail);
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T>
@@ -355,6 +364,7 @@ public:
         GWASSERT(!smooth());
         _x0 = x0;
         _tail = std::forward<T>(tail);
+        _tail_inv.arithmetic().free(_tail_inv);
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T>
@@ -362,6 +372,7 @@ public:
     {
         GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
+        _tail.arithmetic().free(_tail);
         init(input, gwstate, file, file_recovery, logging);
     }
     template<class T, class S>
@@ -370,8 +381,11 @@ public:
         GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
         _tail = std::forward<T>(tail);
+        _tail_inv.arithmetic().free(_tail_inv);
         init(input, gwstate, file, file_recovery, logging);
     }
+
+    virtual void init_state(State* state) override;
 
     State* state() override { return static_cast<State*>(_state_recovery.get()); }
     StrongCheckState* state_check() { return dynamic_cast<StrongCheckState*>(Task::state()); }
@@ -395,6 +409,7 @@ protected:
     std::unique_ptr<TaskState> _state_recovery;
     std::unique_ptr<TaskState> _tmp_state_recovery;
     int _recovery_op = 0;
+    arithmetic::Giant _tail_inv;
 
     std::unique_ptr<arithmetic::GWNum> _R;
     std::unique_ptr<arithmetic::GWNum> _D;
@@ -432,6 +447,11 @@ public:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail)
     {
         init_smooth(input, gwstate, file, file_recovery, logging, std::forward<T>(tail));
+    }
+    template<class T, class S>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& tail, S&& tail_inv)
+    {
+        init_smooth(input, gwstate, file, file_recovery, logging, std::forward<T>(tail), std::forward<S>(tail_inv));
     }
 
 private:
