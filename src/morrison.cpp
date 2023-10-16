@@ -23,57 +23,106 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
     Giant tmp;
     std::vector<std::pair<Giant, int>> factors;
 
-    if (params.CheckStrong)
-        logging.warning("Strong check is not implemented in Morrison test. Use -fermat first.\n");
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
     if (params.AllFactors)
         _all_factors = params.AllFactors.value();
 
-    Giant N = input.value();
-    _negQ = N.bit(0) && N.bit(1);
-    _task.reset(new LucasMul(_negQ));
-    if (!_negQ)
-        _task->mul_prime(2, 1, 0);
+    LucasVMulFast* taskV = nullptr;
+    if (!CheckStrong)
+        _task.reset(taskV = new LucasVMulFast());
 
-    if (input.b_factors()[0].first != 2 || N.bitlen() >= 2*input.b_factors()[0].second)
+    Giant exp;
+    Giant exp_morrison;
+    exp = 1;
+    exp_morrison = 1;
+    int n = 0;
+
+    _factor_tasks.reserve(input.factors().size());
+    for (i = 0; i < input.factors().size(); i++)
     {
-        _factor_tasks.reserve(input.b_factors().size());
-        for (i = 0; i < input.b_factors().size(); i++)
-            if (input.b_factors()[i].first != 2)
-                _factor_tasks.emplace_back(i);
+        auto& factor = input.factors()[i];
+        if (factor.first == 2)
+            n = factor.second;
+        else
+        {
+            if (factor.second > 1)
+            {
+                Giant divisor;
+                if (CheckStrong)
+                {
+                    divisor = power(factor.first, factor.second - 1);
+                    exp_morrison *= divisor;
+                    divisor *= factor.first;
+                }
+                else
+                    divisor = power(factor.first, factor.second);
+                exp *= divisor;
+            }
+            else
+                exp *= factor.first;
+            _factor_tasks.emplace_back(i);
+        }
+    }
+    if (n == 0)
+    {
+        _task.reset();
+        logging.result(false, "%s is not prime, divisible by 2.\n", input.display_text().data());
+        logging.result_save(input.input_text() + " is not prime, divisible by 2.\n");
+        return;
+    }
+    if (!input.cofactor().empty())
+    {
+        exp *= input.cofactor();
+        if (CheckStrong)
+            exp_morrison *= input.cofactor();
+        else
+            taskV->mul_giant(input.cofactor(), 1);
     }
 
-    if (_factor_tasks.size() > 0)
-        _taskCheck.reset(new LucasMul(_negQ));
-    if (_factor_tasks.size() > 1)
-        for (i = 0; i < _factor_tasks.size(); i++)
-        {
-            _factor_tasks[i].taskFactor.reset(new LucasMul(_negQ));
-            _factor_tasks[i].taskCheck.reset(new LucasMul(_negQ));
-        }
-    
-    bool div2 = false;
-    if (input.gk() != 1)
-        if (!input.gk().bit(0) && _negQ)
-        {
-            div2 = true;
-            tmp = input.gk();
-            tmp >>= 1;
-            _task->mul_giant(std::move(tmp), 1);
-        }
-        else
-            _task->mul_giant(input.gk(), 1);
-    if (!input.b_cofactor().empty())
-        _task->mul_giant(input.b_cofactor(), input.n());
-    
-    for (i = 0; i < input.b_factors().size(); i++)
+    if (log2(exp) < n)
     {
-        Giant& b = input.b_factors()[i].first;
-        int n = input.n()*input.b_factors()[i].second;
-        if (!div2 && _negQ && b == 2)
+        _LLR = true;
+        _factor_tasks.clear();
+        if (CheckStrong)
+            exp_morrison = exp;
+    }
+    exp <<= n;
+    exp -= 1;
+    if (n > 1)
+    {
+        _negQ = true;
+        n--;
+    }
+    else
+    {
+        _negQ = false;
+        n++;
+    }
+
+    if (CheckStrong)
+    {
+        exp_morrison <<= n;
+        int checks = params.StrongCount ? params.StrongCount.value() : 16;
+        _task.reset(new LucasUVMulFast(std::move(exp_morrison), checks));
+        params.maxmulbyconst = 2;
+    }
+    else
+        taskV->mul_prime(2, n);
+
+    if (_factor_tasks.size() > 0)
+        _taskCheck.reset(new LucasVMulFast(true));
+    if (_factor_tasks.size() > 1)
+        for (auto& task : _factor_tasks)
         {
-            div2 = true;
-            n--;
+            task.taskFactor.reset(new LucasVMulFast(true));
+            task.taskCheck.reset(new LucasVMulFast(true));
         }
+    for (i = 0; i < input.factors().size(); i++)
+    {
+        Giant& b = input.factors()[i].first;
+        if (b == 2)
+            continue;
+        n = input.factors()[i].second;
         auto factor = std::find_if(_factor_tasks.begin(), _factor_tasks.end(), [&](auto& a) { return a.index == i; });
         if (factor != _factor_tasks.end())
             n--;
@@ -81,10 +130,12 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
         if (b.bitlen() < 32)
         {
             int prime = (int)b.data()[0];
-            int index = n > 0 ? _task->mul_prime(prime, n) : 0;
+            int index = 0;
+            if (taskV && n > 0)
+                index = taskV->mul_prime(prime, n);
             if (factor != _factor_tasks.end())
             {
-                _taskCheck->mul_prime(prime, 1, index);
+                index = _taskCheck->mul_prime(prime, 1, index);
                 if (_factor_tasks.size() > 1)
                     for (auto& task : _factor_tasks)
                         if (task.index == i)
@@ -95,7 +146,8 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
         }
         else
         {
-            _task->mul_giant(b, n);
+            if (taskV && n > 0)
+                taskV->mul_giant(b, n);
             if (factor != _factor_tasks.end())
             {
                 _taskCheck->mul_giant(b, 1);
@@ -108,16 +160,18 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
             }
         }
     }
-    
-    for (_P = 3; kronecker(_P*_P - (_negQ ? -4 : 4), N) == 1; _P++);
-    logging.progress().add_stage(_task->cost());
 
-    GWASSERT(div2 == _negQ);
+    for (_P = (_negQ ? 1 : 3); kronecker(_P*_P - (_negQ ? -4 : 4), exp) == 1; _P++);
+    logging.progress().add_stage(_task->cost());
 }
 
-void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_params, Logging& logging)
+void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, File& file_params, Logging& logging)
 {
+    if (!_task)
+        return;
+
     File* checkpoint = nullptr;
+    File* recoverypoint = nullptr;
     std::unique_ptr<Reader> reader(file_params.get_reader());
     if (reader && reader->type() == 7)
         reader->read(_P);
@@ -153,41 +207,47 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         }
 
         logging.set_prefix("");
-        logging.info("%sMorrison%s test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", input.b() == 2 ? " (LLR)" : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
+        logging.info("%sMorrison%s test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", _LLR ? " (LLR)" : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
         logging.set_prefix(input.display_text() + " ");
         if (gwstate.information_only)
             exit(0);
         restart = true;
 
         checkpoint = file_checkpoint.add_child(std::to_string(_P), File::unique_fingerprint(file_checkpoint.fingerprint(), std::to_string(_P)));
-        _task->init(&input, &gwstate, checkpoint, &logging, _P);
+        if (dynamic_cast<LucasVMulFast*>(_task.get()) != nullptr)
+            dynamic_cast<LucasVMulFast*>(_task.get())->init(&input, &gwstate, checkpoint, &logging, _P, _negQ);
+        if (dynamic_cast<LucasUVMulFast*>(_task.get()) != nullptr)
+        {
+            recoverypoint = file_recoverypoint.add_child(std::to_string(_P), File::unique_fingerprint(file_recoverypoint.fingerprint(), std::to_string(_P)));
+            dynamic_cast<LucasUVMulFast*>(_task.get())->init(&input, &gwstate, checkpoint, recoverypoint, &logging, _P, _negQ);
+        }
         _task->run();
 
-        LucasMul::State* state = _task->state();
+        Giant* result = _task->result();
         if (_taskCheck)
         {
-            _taskCheck->init(&input, &gwstate, nullptr, &logging);
-            _taskCheck->init_state(new LucasMul::State(0, 0, _task->state()->V(), _task->state()->parity()));
+            _taskCheck->init(&input, &gwstate, nullptr, &logging, _negQ);
+            _taskCheck->init_state(new LucasVMulFast::State(0, 0, *result, false));
             _taskCheck->run();
-            state = _taskCheck->state();
+            result = &_taskCheck->state()->V();
         }
         logging.progress().next_stage();
 
-        if (state->V() != (_negQ ? 0 : 2))
+        if (*result != (_negQ ? 0 : 2))
         {
-            LucasMul taskPRP(_negQ);
+            LucasVMulFast taskPRP(true);
             if (_negQ)
             {
-                _res64 = state->V().to_res64();
+                _res64 = result->to_res64();
                 taskPRP.mul_prime(2, 2, 0);
-                taskPRP.init(&input, &gwstate, nullptr, &logging);
-                taskPRP.init_state(new LucasMul::State(0, 0, state->V(), state->parity()));
+                taskPRP.init(&input, &gwstate, nullptr, &logging, _negQ);
+                taskPRP.init_state(new LucasVMulFast::State(0, 0, *result, false));
                 taskPRP.run();
-                state = taskPRP.state();
+                result = &taskPRP.state()->V();
             }
-            if (state->V() != 2)
+            if (*result != 2)
             {
-                _res64 = state->V().to_res64();
+                _res64 = result->to_res64();
                 logging.set_prefix("");
                 logging.result(_success, "%s is not a probable prime. Have you run Fermat test first? RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
                 logging.result_save(input.input_text() + " is not a probable prime. Have you run Fermat test first? RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
@@ -206,58 +266,64 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
 
         if (_factor_tasks.size() > 0)
         {
-            Giant G;
-            tmp = 1;
+            Giant G, done;
+            done = 1;
             std::string factors;
-            if (input.b_factors()[0].first == 2)
-            {
-                tmp = power(input.b_factors()[0].first, input.b_factors()[0].second);
+            if (_negQ)
                 factors = "2";
-            }
 
             if (_factor_tasks.size() == 1)
             {
-                G = std::move(_task->state()->V());
+                G = std::move(*_task->result());
                 if (!_negQ)
                     G -= 2;
                 if (G == 0)
                     continue;
-                factors += (!factors.empty() ? ", " : "") + input.b_factors()[_factor_tasks[0].index].first.to_string();
+                factors += (!factors.empty() ? ", " : "") + input.factors()[_factor_tasks[0].index].first.to_string();
             }
             else
             {
                 std::vector<Giant> Gs;
                 for (auto& ftask : _factor_tasks)
                 {
-                    ftask.taskFactor->init(&input, &gwstate, nullptr, &logging);
-                    ftask.taskFactor->init_state(new LucasMul::State(0, 0, _task->state()->V(), _task->state()->parity()));
+                    ftask.taskFactor->init(&input, &gwstate, nullptr, &logging, _negQ);
+                    ftask.taskFactor->init_state(new LucasVMulFast::State(0, 0, *_task->result(), false));
                     ftask.taskFactor->run();
                     if (ftask.taskFactor->state()->V() == (_negQ ? 0 : 2))
                     {
                         if (_all_factors)
                         {
-                            tmp = 0;
+                            done = 0;
                             break;
                         }
                         continue;
                     }
-                    ftask.taskCheck->init(&input, &gwstate, nullptr, &logging);
-                    ftask.taskCheck->init_state(new LucasMul::State(0, 0, ftask.taskFactor->state()->V(), ftask.taskFactor->state()->parity()));
+                    ftask.taskCheck->init(&input, &gwstate, nullptr, &logging, _negQ);
+                    ftask.taskCheck->init_state(new LucasVMulFast::State(0, 0, ftask.taskFactor->state()->V(), ftask.taskFactor->state()->parity()));
                     ftask.taskCheck->run();
                     if (ftask.taskCheck->state()->V() != (_negQ ? 0 : 2))
                     {
                         logging.warning("Arithmetic error, restarting.");
-                        tmp = 0;
+                        done = 0;
                         break;
                     }
                     Gs.push_back(std::move(ftask.taskFactor->state()->V()));
                     if (!_negQ)
                         Gs.back() -= 2;
-                    tmp *= power(input.b_factors()[ftask.index].first, input.b_factors()[ftask.index].second);
-                    factors += (!factors.empty() ? ", " : "") + input.b_factors()[ftask.index].first.to_string();
+                    done *= power(input.factors()[ftask.index].first, input.factors()[ftask.index].second);
+                    factors += (!factors.empty() ? ", " : "") + input.factors()[ftask.index].first.to_string();
                 }
-                if (tmp == 0 || tmp*tmp < input.gb())
+                if (done == 0)
                     continue;
+                int n = _negQ ? input.factors()[0].second : 0;
+                if ((done.bitlen() + n)*2 + 10 < gwstate.N->bitlen())
+                    continue;
+                if ((done.bitlen() + n)*2 < gwstate.N->bitlen() + 10)
+                {
+                    done <<= n;
+                    if (square(done) < *gwstate.N)
+                        continue;
+                }
 
                 if (Gs.size() > 1)
                 {
@@ -270,7 +336,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     G = std::move(Gs[0]);
             }
 
-            logging.info("Checking gcd with factors {%s}.\n", factors.data());
+            logging.result(false, "Checking gcd with factors {%s}.\n", factors.data());
             G.gcd(*gwstate.N);
             logging.progress().update(0, 0);
             if (G != 1) // Q=1: 19*2130-1, Q=-1: 225*5516-1
@@ -295,152 +361,4 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
     if (checkpoint)
         checkpoint->clear();
     file_params.clear();
-}
-
-int LucasMul::mul_prime(int prime, int n, int index)
-{
-    if (prime < 14)
-        index = 0;
-    else if (index == 0)
-    {
-        if (prime < precomputed_DAC_S_d_len*(log(precomputed_DAC_S_d_len) + log(log(precomputed_DAC_S_d_len))))
-            for (auto it = PrimeIterator::get(); *it != prime && index < precomputed_DAC_S_d_len; index++, it++);
-        if (index == 0 || index >= precomputed_DAC_S_d_len)
-        {
-            int len = 60;
-            index = -get_DAC_S_d(prime, (int)(prime/1.618) - 100, (int)(prime/1.618) + 100, &len);
-        }
-    }
-    _primes.emplace_back(prime, n, index);
-    _progress.reset();
-    return index;
-}
-
-double LucasMul::cost()
-{
-    if (!_progress)
-        progress_init();
-    return _progress->cost_total();
-}
-
-double LucasMul::progress()
-{
-    if (!_progress)
-        progress_init();
-    if (_state)
-        _progress->update(_state->iteration()/(double)iterations(), 0);
-    return _progress->progress_total();
-}
-
-void LucasMul::progress_init()
-{
-    _progress.reset(new Progress());
-    for (auto& giant : _giants)
-        _progress->add_stage(2*giant.first.bitlen()*giant.second);
-    for (auto& prime : _primes)
-    {
-        int len = 60;
-        switch (std::get<0>(prime))
-        {
-        case 2:
-            len = 1; break;
-        case 3:
-            len = 2; break;
-        case 5:
-            len = 3; break;
-        case 7:
-            len = 4; break;
-        case 11:
-            len = 5; break;
-        case 13:
-            len = 6; break;
-        default:
-            int d = std::get<2>(prime) < 0 ? -std::get<2>(prime) : precomputed_DAC_S_d[std::get<2>(prime)];
-            get_DAC_S_d(std::get<0>(prime), d, d + 1, &len);
-        }
-        _progress->add_stage(len*std::get<1>(prime));
-    }
-}
-
-void LucasMul::init(InputNum* input, GWState* gwstate, File* file, Logging* logging)
-{
-    InputTask::init(input, gwstate, file, nullptr, logging, 0);
-    if (_error_check)
-        _logging->info("max roundoff check enabled.\n");
-    State* state = read_state<State>(file);
-    if (state != nullptr)
-        init_state(state);
-}
-
-void LucasMul::init_state(State* state)
-{
-    if (state == nullptr)
-    {
-        _state.reset();
-        return;
-    }
-    _state.reset(state);
-    if (!_progress)
-        progress_init();
-    if (_progress->cur_stage() > state->index())
-        _progress->reset();
-    while (_progress->cur_stage() < state->index())
-        _progress->next_stage();
-    if (state->index() < _giants.size())
-        _iterations = std::get<1>(_giants[state->index()]);
-    else
-        _iterations = std::get<1>(_primes[state->index() - _giants.size()]);
-    _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
-    if (state->index() > 0 || _state->iteration() > 0)
-        _logging->info("restarting at %.1f%%.\n", 100.0*progress());
-}
-
-void LucasMul::setup()
-{
-
-}
-
-void LucasMul::release()
-{
-
-}
-
-void LucasMul::execute()
-{
-    int i;
-    LucasVArithmetic lucas(gw(), _negativeQ);
-
-    GWASSERT(state() != nullptr);
-    LucasV Vn(lucas, state()->V(), state()->parity());
-    LucasV Vn1(lucas);
-
-    int index = state()->index();
-    i = state()->iteration();
-
-    while (index < _giants.size())
-    {
-        _iterations = _giants[index].second;
-        _state_update_period = MULS_PER_STATE_UPDATE/(2*_giants[index].first.bitlen());
-        for (; i < _iterations; i++, commit_execute<State>(i, index, Vn.V(), Vn.parity()))
-            lucas.mul(Vn, _giants[index].first, Vn, Vn1);
-
-        i = 0;
-        index++;
-        _progress->next_stage();
-        set_state<State>(0, index, std::move(state()->V()), state()->parity());
-    }
-
-    while (index - _giants.size() < _primes.size())
-    {
-        auto& prime = _primes[index - _giants.size()];
-        _iterations = std::get<1>(prime);
-        _state_update_period = MULS_PER_STATE_UPDATE/(int)(_progress->costs()[index]/_iterations);
-        for (; i < _iterations; i++, commit_execute<State>(i, index, Vn.V(), Vn.parity()))
-            lucas.mul(Vn, std::get<0>(prime), std::get<2>(prime), Vn);
-
-        i = 0;
-        index++;
-        _progress->next_stage();
-        set_state<State>(0, index, std::move(state()->V()), state()->parity());
-    }
 }

@@ -366,6 +366,7 @@ int main(int argc, char *argv[])
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
     bool success = false;
+    bool failed = false;
     try
     {
         File file_progress("prst_" + std::to_string(gwstate.fingerprint), fingerprint);
@@ -389,8 +390,9 @@ int main(int argc, char *argv[])
         else if (morrison)
         {
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".p", fingerprint);
-            morrison->run(input, gwstate, file_checkpoint, file_params, logging);
+            morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, file_params, logging);
             success = morrison->success();
         }
         else if (proof)
@@ -436,9 +438,10 @@ int main(int argc, char *argv[])
     }
     catch (const TaskAbortException&)
     {
+        failed = true;
     }
 
     gwstate.done();
 
-    return success ? 1 : 0;
+    return success || failed ? 1 : 0;
 }

@@ -396,7 +396,7 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
         }
         if (morrison)
         {
-            morrison->run(input, gwstate, file_checkpoint, file_params, logging);
+            morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, file_params, logging);
             prime = morrison->prime();
             sres64 = morrison->res64();
         }

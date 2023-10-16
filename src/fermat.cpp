@@ -120,7 +120,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
 
         for (auto& factor : input.factors())
             if (factor.first == 2)
-                n = input.factors()[0].second;
+                n = factor.second;
             else
             {
                 Giant divisor;
