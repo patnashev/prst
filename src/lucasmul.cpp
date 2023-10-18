@@ -382,7 +382,7 @@ void LucasUVMulFast::execute()
             else
             {
                 DEBUG_INDEX(iD += iX);
-                D() += X();
+                arithmetic().add(D(), X(), D());
             }
             commit_execute<StrongCheckState>(i, state()->iteration(), X(), D());
         }
@@ -401,7 +401,7 @@ void LucasUVMulFast::execute()
             get_NAF_W(_W, s, naf_w, false);
             s = 0;
             DEBUG_INDEX(iR += iD);
-            R() += D();
+            arithmetic().add(R(), D(), R());
             if (naf_w.size() <= _L)
             {
                 DEBUG_INDEX(swap(iX, iR));
@@ -428,7 +428,7 @@ void LucasUVMulFast::execute()
                 if (j == _L)
                 {
                     DEBUG_INDEX(iX += iR);
-                    X() += R();
+                    arithmetic().add(X(), R(), X());
                 }
             }
             DEBUG_INDEX(swap(iX, iR));
@@ -436,7 +436,7 @@ void LucasUVMulFast::execute()
             DEBUG_INDEX(iX = tmp);
             _tmp_state_recovery->to_LucasUV(X());
             DEBUG_INDEX(iD += iX);
-            D() += X();
+            arithmetic().add(D(), X(), D());
             DEBUG_INDEX(iD -= iR);
             DEBUG_INDEX(GWASSERT(iD == 0));
             gw().carefully().sub(D().V(), R().V(), D().V(), 0);
