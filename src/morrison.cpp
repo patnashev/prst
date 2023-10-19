@@ -97,6 +97,11 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
     {
         _negQ = false;
         n++;
+        if (_all_factors)
+        {
+            logging.error("Can't check all factors if N+1 is not divisible by 4.\n");
+            exit(1);
+        }
     }
 
     if (CheckStrong)
@@ -191,6 +196,8 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
             file_params.commit_writer(*writer);
             if (checkpoint)
                 checkpoint->clear();
+            if (recoverypoint)
+                recoverypoint->clear();
         }
 
         Giant tmp;
