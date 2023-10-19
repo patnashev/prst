@@ -142,6 +142,9 @@ void LucasVMulFast::execute()
     int index = state()->index();
     i = state()->iteration();
 
+    if (!_carefully && index == 0 && i == 0)
+        gwset_carefully_count(gw().gwdata(), 30);
+
     while (index < _giants.size())
     {
         _iterations = _giants[index].second;
@@ -223,10 +226,16 @@ void LucasUVMulFast::init_state(State* state)
     if (result() != nullptr)
     {
         if (_gwstate->need_mod())
-            _gwstate->mod(*result(), *result());
-        *result() <<= 1;
-        if (*result() >= *_gwstate->N)
-            *result() -= *_gwstate->N;
+        {
+            _gwstate->mod(_state_recovery->U(), _state_recovery->U());
+            _gwstate->mod(_state_recovery->V(), _state_recovery->V());
+        }
+        _state_recovery->U() <<= 1;
+        if (_state_recovery->U() >= *_gwstate->N)
+            _state_recovery->U() -= *_gwstate->N;
+        _state_recovery->V() <<= 1;
+        if (_state_recovery->V() >= *_gwstate->N)
+            _state_recovery->V() -= *_gwstate->N;
     }
 }
 
@@ -249,6 +258,7 @@ void LucasUVMulFast::setup()
         _D.reset(new LucasUV(arithmetic()));
     GWASSERT(arithmetic().max_small() > 0);
     for (_W = 2; (1 << _W) - 1 <= arithmetic().max_small(); _W++);
+    _logging->debug("W = %d\n", _W);
 }
 
 void LucasUVMulFast::release()
@@ -313,6 +323,7 @@ void LucasUVMulFast::execute()
         _exp.arithmetic().substr(_exp, j - _L, _L, tmp);
         s += tmp;
     }
+    bool Dinit = (i >= first && pos%_L2 != 0);
 
     arithmetic().set_gw(i < 30 ? gw().carefully() : gw());
 
@@ -344,8 +355,9 @@ void LucasUVMulFast::execute()
             }
         }
 
-        for (j = (i < first ? first - i : _L - (i - first)%_L) - 1; j >= 0; j--, i++)
+        for (j = (i < first ? first - i : _L - (i - first)%_L) - 1; j >= 0; j--, i++, commit_execute<StrongCheckState>(i, state()->iteration(), X(), D()))
         {
+            bool last = (j == 0 && pos%_L2 == 0);
             if (i == 30)
                 arithmetic().set_gw(gw());
             if (pos + j == 30)
@@ -361,33 +373,36 @@ void LucasUVMulFast::execute()
             {
                 DEBUG_INDEX(iX <<= 1);
                 DEBUG_INDEX(iX += naf_w[j]);
-                arithmetic().dbl_add_small(X(), naf_w[j], X(), GWMUL_STARTNEXTFFT);
+                arithmetic().dbl_add_small(X(), naf_w[j], X(), GWMUL_STARTNEXTFFT_IF(!is_last(i) && !last) | (j == 0 && Dinit ? LucasUVArithmetic::LUCASADD_OPTIMIZE : 0));
             }
             else
             {
                 DEBUG_INDEX(iX <<= 1);
-                arithmetic().dbl(X(), X(), GWMUL_STARTNEXTFFT);
+                arithmetic().dbl(X(), X(), GWMUL_STARTNEXTFFT_IF(!is_last(i) && !last) | (j == 0 && Dinit ? LucasUVArithmetic::LUCASADD_OPTIMIZE : 0));
             }
+            if (last)
+                break;
             if (j > 0)
-                commit_execute<StrongCheckState>(i + 1, state()->iteration(), X(), D());
-        }
-
-        if (pos%_L2 != 0)
-        {
-            if (i == first || (pos + _L)%_L2 == 0)
+                continue;
+            last = ((pos - _L)%_L2 == 0);
+            if (Dinit)
             {
-                DEBUG_INDEX(iD = iX);
-                D() = X();
+                DEBUG_INDEX(iD += iX);
+                arithmetic().add(D(), X(), D(), GWMUL_STARTNEXTFFT_IF(!is_last(i) && !last) | (last ? LucasUVArithmetic::LUCASADD_OPTIMIZE : 0));
             }
             else
             {
-                DEBUG_INDEX(iD += iX);
-                arithmetic().add(D(), X(), D());
+                if (state_check() != nullptr)
+                    printf("1\n");
+                DEBUG_INDEX(iD = iX);
+                D() = X();
             }
-            commit_execute<StrongCheckState>(i, state()->iteration(), X(), D());
+            Dinit = true;
         }
-        else
+
+        if (pos%_L2 == 0)
         {
+            i++;
             check();
             _logging->progress().update(i/(double)iterations(), ops());
             if (!_tmp_state_recovery)
@@ -397,11 +412,15 @@ void LucasUVMulFast::execute()
 
             _logging->debug("performing Gerbicz-Li check at %d,%d.\n", i, pos);
             arithmetic().set_gw(gw().carefully());
+
             naf_w.clear();
             get_NAF_W(_W, s, naf_w, false);
             s = 0;
-            DEBUG_INDEX(iR += iD);
-            arithmetic().add(R(), D(), R());
+            if (Dinit)
+            {
+                DEBUG_INDEX(iR += iD);
+                arithmetic().add(R(), D(), R());
+            }
             if (naf_w.size() <= _L)
             {
                 DEBUG_INDEX(swap(iX, iR));
@@ -418,12 +437,12 @@ void LucasUVMulFast::execute()
                 {
                     DEBUG_INDEX(iX <<= 1);
                     DEBUG_INDEX(iX += naf_w[j]);
-                    arithmetic().dbl_add_small(X(), naf_w[j], X(), GWMUL_STARTNEXTFFT);
+                    arithmetic().dbl_add_small(X(), naf_w[j], X(), 0);
                 }
                 else
                 {
                     DEBUG_INDEX(iX <<= 1);
-                    arithmetic().dbl(X(), X(), GWMUL_STARTNEXTFFT);
+                    arithmetic().dbl(X(), X(), 0);
                 }
                 if (j == _L)
                 {
@@ -433,10 +452,19 @@ void LucasUVMulFast::execute()
             }
             DEBUG_INDEX(swap(iX, iR));
             swap(X(), R());
+
             DEBUG_INDEX(iX = tmp);
             _tmp_state_recovery->to_LucasUV(X());
-            DEBUG_INDEX(iD += iX);
-            arithmetic().add(D(), X(), D());
+            if (Dinit)
+            {
+                DEBUG_INDEX(iD += iX);
+                arithmetic().add(D(), X(), D());
+            }
+            else
+            {
+                DEBUG_INDEX(iD = iX);
+                D() = X();
+            }
             DEBUG_INDEX(iD -= iR);
             DEBUG_INDEX(GWASSERT(iD == 0));
             gw().carefully().sub(D().V(), R().V(), D().V(), 0);
@@ -455,6 +483,7 @@ void LucasUVMulFast::execute()
                 arithmetic().set_gw(gw());
             DEBUG_INDEX(iR = iX);
             R() = X();
+            Dinit = false;
             _tmp_state_recovery.swap(_state_recovery);
             _state.reset(new TaskState(5));
             _state->set(_state_recovery->iteration());
@@ -467,7 +496,12 @@ void LucasUVMulFast::execute()
 
     done();
 
-    *result() <<= 1;
-    if (*result() >= *_gwstate->N)
-        *result() -= *_gwstate->N;
+    if (_gwstate->need_mod())
+        _gwstate->mod(_state_recovery->U(), _state_recovery->U());
+    _state_recovery->U() <<= 1;
+    if (_state_recovery->U() >= *_gwstate->N)
+        _state_recovery->U() -= *_gwstate->N;
+    _state_recovery->V() <<= 1;
+    if (_state_recovery->V() >= *_gwstate->N)
+        _state_recovery->V() -= *_gwstate->N;
 }

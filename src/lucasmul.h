@@ -152,7 +152,7 @@ public:
     }
     void init_state(State* state);
 
-    State* state() { return static_cast<State*>(_state_recovery.get()); }
+    State* state() { return _state_recovery.get(); }
     StrongCheckState* state_check() { return dynamic_cast<StrongCheckState*>(Task::state()); }
     arithmetic::Giant* result() override { if (state() == nullptr || state()->iteration() != iterations()) return nullptr; return &state()->V(); }
 
