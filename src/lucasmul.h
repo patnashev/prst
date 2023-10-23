@@ -101,18 +101,18 @@ public:
         static const char TYPE = 10;
         State() : TaskState(TYPE) { }
         template<class T>
-        State(int iteration, T&& U, T&& V, bool parity) : TaskState(TYPE) { TaskState::set(iteration); _U = std::forward<T>(U); _V = std::forward<T>(V); _parity = parity; }
-        void set(int iteration, const arithmetic::LucasUV& X) { TaskState::set(iteration); _U = X.U();  _V = X.V(); _parity = X.parity(); }
-        void to_LucasUV(arithmetic::LucasUV& X) { X.U() = _U; X.V() = _V; X.arithmetic().init(X.U(), X.V(), _parity, true, X); }
-        arithmetic::Giant& U() { return _U; }
-        arithmetic::Giant& V() { return _V; }
+        State(int iteration, T&& Vn, T&& Vn1, bool parity) : TaskState(TYPE) { TaskState::set(iteration); _Vn = std::forward<T>(Vn); _Vn1 = std::forward<T>(Vn1); _parity = parity; }
+        void set(int iteration, const arithmetic::LucasV& Vn, const arithmetic::LucasV& Vn1) { TaskState::set(iteration); _Vn = Vn.V();  _Vn1 = Vn1.V(); _parity = Vn.parity(); }
+        void to_Lucas(arithmetic::LucasV& Vn, arithmetic::LucasV& Vn1) { Vn.V() = _Vn; Vn1.V() = _Vn1; Vn.arithmetic().init(Vn.V(), _parity, Vn); Vn1.arithmetic().init(Vn1.V(), !_parity, Vn1); }
+        arithmetic::Giant& Vn() { return _Vn; }
+        arithmetic::Giant& Vn1() { return _Vn1; }
         bool parity() { return _parity; }
-        bool read(Reader& reader) override { int parity = 0; bool res = TaskState::read(reader) && reader.read(_U) && reader.read(_V) && reader.read(parity); _parity = parity == 1; return res; }
-        void write(Writer& writer) override { TaskState::write(writer); writer.write(_U); writer.write(_V); writer.write(_parity ? 1 : 0); }
+        bool read(Reader& reader) override { int parity = 0; bool res = TaskState::read(reader) && reader.read(_Vn) && reader.read(_Vn1) && reader.read(parity); _parity = parity == 1; return res; }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_Vn); writer.write(_Vn1); writer.write(_parity ? 1 : 0); }
 
     private:
-        arithmetic::Giant _U;
-        arithmetic::Giant _V;
+        arithmetic::Giant _Vn;
+        arithmetic::Giant _Vn1;
         bool _parity;
     };
     class StrongCheckState : public TaskState
@@ -120,20 +120,20 @@ public:
     public:
         static const char TYPE = 11;
         StrongCheckState() : TaskState(TYPE) { }
-        void set(int iteration, int recovery, const arithmetic::LucasUV& X, const arithmetic::LucasUV& D) { TaskState::set(iteration); _recovery = recovery; _XU = X.U(); _XV = X.V(); _Xparity = X.parity(); _DU = D.U(); _DV = D.V(); _Dparity = D.parity(); }
+        void set(int iteration, int recovery, const arithmetic::LucasV& Vn, const arithmetic::LucasV& Vn1, const arithmetic::LucasUV& D) { TaskState::set(iteration); _recovery = recovery; _Vn = Vn.V(); _Vn1 = Vn1.V(); _Vparity = Vn.parity(); _U = D.U(); _V = D.V(); _parity = D.parity(); }
         int recovery() { return _recovery; }
-        void to_LucasUV(arithmetic::LucasUV& X, arithmetic::LucasUV& D) { X.U() = _XU; X.V() = _XV; X.arithmetic().init(X.U(), X.V(), _Xparity, true, X); D.U() = _DU; D.V() = _DV; D.arithmetic().init(D.U(), D.V(), _Dparity, true, D); }
-        bool read(Reader& reader) override { int Xparity = 0, Dparity = 0; bool res = TaskState::read(reader) && reader.read(_recovery) && reader.read(_XU) && reader.read(_XV) && reader.read(Xparity) && reader.read(_DU) && reader.read(_DV) && reader.read(Dparity); _Xparity = Xparity == 1; _Dparity = Dparity == 1; return res; }
-        void write(Writer& writer) override { TaskState::write(writer); writer.write(_recovery); writer.write(_XU); writer.write(_XV); writer.write(_Xparity ? 1 : 0); writer.write(_DU); writer.write(_DV); writer.write(_Dparity ? 1 : 0); }
+        void to_Lucas(arithmetic::LucasV& Vn, arithmetic::LucasV& Vn1, arithmetic::LucasUV& D) { Vn.V() = _Vn; Vn1.V() = _Vn1; Vn.arithmetic().init(Vn.V(), _Vparity, Vn); Vn1.arithmetic().init(Vn1.V(), !_Vparity, Vn1); D.U() = _U; D.V() = _V; D.arithmetic().init(D.U(), D.V(), _parity, true, D); }
+        bool read(Reader& reader) override { int Vparity = 0, parity = 0; bool res = TaskState::read(reader) && reader.read(_recovery) && reader.read(_Vn) && reader.read(_Vn1) && reader.read(Vparity) && reader.read(_U) && reader.read(_V) && reader.read(parity); _Vparity = Vparity == 1; _parity = parity == 1; return res; }
+        void write(Writer& writer) override { TaskState::write(writer); writer.write(_recovery); writer.write(_Vn); writer.write(_Vn1); writer.write(_Vparity ? 1 : 0); writer.write(_U); writer.write(_V); writer.write(_parity ? 1 : 0); }
 
     private:
         int _recovery;
-        arithmetic::SerializedGWNum _XU;
-        arithmetic::SerializedGWNum _XV;
-        bool _Xparity;
-        arithmetic::SerializedGWNum _DU;
-        arithmetic::SerializedGWNum _DV;
-        bool _Dparity;
+        arithmetic::SerializedGWNum _Vn;
+        arithmetic::SerializedGWNum _Vn1;
+        bool _Vparity;
+        arithmetic::SerializedGWNum _U;
+        arithmetic::SerializedGWNum _V;
+        bool _parity;
     };
 
 public:
@@ -154,7 +154,7 @@ public:
 
     State* state() { return _state_recovery.get(); }
     StrongCheckState* state_check() { return dynamic_cast<StrongCheckState*>(Task::state()); }
-    arithmetic::Giant* result() override { if (state() == nullptr || state()->iteration() != iterations()) return nullptr; return &state()->V(); }
+    arithmetic::Giant* result() override { if (state() == nullptr || state()->iteration() != iterations()) return nullptr; return &state()->Vn(); }
 
     void Gerbicz_params(int iters, int& L, int &L2);
     double cost() override { return _exp.bitlen()*2; }
