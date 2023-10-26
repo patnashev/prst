@@ -72,9 +72,9 @@ int main(int argc, char *argv[])
     std::optional<bool> proof_write;
     bool supportLLR2 = false;
     bool force_fermat = false;
-    int order_a = 0;
     std::vector<Giant> factors;
     InputNum input;
+    InputNum order_a;
     bool show_info = false;
     int log_level = Logging::LEVEL_WARNING;
     std::string log_file;
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
             .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
             .end()
             .on_check(force_fermat, true)
-        .value_number("-order", ' ', order_a, 2, INT_MAX)
+        .value_code("-order", ' ', [&](const char* param) { return order_a.parse(param, false) && order_a.value() > 1; })
         .group("-factors")
             .list("list", ' ', ',', false)
                 .value_code([&](const char* param) {
@@ -313,13 +313,13 @@ int main(int argc, char *argv[])
     std::unique_ptr<Morrison> morrison;
     std::unique_ptr<Order> order;
 
-    if (order_a != 0)
+    if (!order_a.empty() && order_a.value() > 1)
     {
         if (proof_op != Proof::NO_OP)
             logging.warning("Proofs are not implemented in order mode.\n");
         if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
         {
-            logging.error("Order can be computed only for fully factored K*B^N+1 numbers.\n");
+            logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
             return 1;
         }
         order.reset(new Order(order_a, input, params, logging));
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
     else if (proof_op == Proof::CERT)
     {
     }
-    else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
+    else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
         if (input.is_half_factored())
             fermat.reset(new Pocklington(input, params, logging, proof.get()));
@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
             fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
         }
     }
-    else if (input.c() == -1 && !force_fermat)
+    else if (input.type() == InputNum::KBNC && input.c() == -1 && !force_fermat)
     {
         if (input.is_half_factored())
         {
@@ -375,10 +375,10 @@ int main(int argc, char *argv[])
 
         if (order)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a));
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a) + ".r", fingerprint);
-            order->run(params, input, gwstate, file_checkpoint, file_recoverypoint, logging);
+            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a.fingerprint()) + ".c", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a.fingerprint()) + ".r", fingerprint);
+            order->run(order_a, params, input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
         else if (proof_op == Proof::CERT)
         {

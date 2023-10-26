@@ -9,22 +9,22 @@
 
 using namespace arithmetic;
 
-Order::Order(int a, InputNum& input, Params& params, Logging& logging) : _a(a)
+Order::Order(InputNum& a, InputNum& input, Params& params, Logging& logging)
 {
     _factors = input.factors();
-    create_tasks(params, logging, false);
+    Giant ga = a.value();
+    create_tasks(ga, params, logging, false);
 
-    if (_task)
-        params.maxmulbyconst = a;
+    if (_task && ga <= GWMULBYCONST_MAX)
+        params.maxmulbyconst = ga.data()[0];
 }
 
-void Order::create_tasks(Params& params, Logging& logging, bool restart)
+void Order::create_tasks(Giant& a, Params& params, Logging& logging, bool restart)
 {
     bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
     int checks = params.StrongCount ? params.StrongCount.value() : 16;
 
     _tasks_smooth.clear();
-    Giant smooth_base;
     Giant exp;
     exp = 1;
     _task_exp_str.clear();
@@ -34,11 +34,25 @@ void Order::create_tasks(Params& params, Logging& logging, bool restart)
             continue;
         if (factor.first == 2 || restart)
         {
-            smooth_base = factor.first;
             if (CheckStrong)
-                _tasks_smooth.emplace_back(new GerbiczCheckExp(factor.first, factor.second - _sub, checks));
+            {
+                _tasks_smooth.emplace_back(new GerbiczCheckExp(factor.first, factor.second - _sub, checks, std::bind(&Order::on_point, this, std::placeholders::_1, std::placeholders::_2)));
+                for (auto& p : _tasks_smooth.back()->points())
+                    p.value = true;
+            }
             else
-                _tasks_smooth.emplace_back(new SmoothExp(factor.first, factor.second - _sub));
+            {
+                int n = factor.second - _sub;
+                int len = n/checks;
+                if (len == 0)
+                    len = 1;
+                std::vector<MultipointExp::Point> points;
+                for (int i = 0; i <= checks && len*i <= n; i++)
+                    points.emplace_back(len*i);
+                if (points.back().pos != n)
+                    points.emplace_back(n);
+                _tasks_smooth.emplace_back(new MultipointExp(factor.first, true, points, std::bind(&Order::on_point, this, std::placeholders::_1, std::placeholders::_2)));
+            }
         }
         else
         {
@@ -63,10 +77,14 @@ void Order::create_tasks(Params& params, Logging& logging, bool restart)
         _task.reset();
     else
     {
-        if (CheckStrong && exp.bitlen() > 100)
-            _task.reset(new FastLiCheckExp(exp, checks));
-        else
+        if (CheckStrong && a <= GWMULBYCONST_MAX)
+            _task.reset(new FastLiCheckExp(exp, exp.bitlen() > 100 ? checks : 1));
+        else if (CheckStrong)
+            _task.reset(new LiCheckExp(exp, exp.bitlen() > 100 ? checks : 1));
+        else if (a <= GWMULBYCONST_MAX)
             _task.reset(new FastExp(exp));
+        else
+            _task.reset(new SlidingWindowExp(exp));
         logging.progress().add_stage(_task->cost());
     }
     for (auto& task_smooth : _tasks_smooth)
@@ -88,41 +106,77 @@ void Order::create_tasks(Params& params, Logging& logging, bool restart)
     }
 }
 
-void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+bool Order::on_point(int index, BaseExp::State* state)
 {
-    logging.info("Computing multiplicative order of %d modulo prime %s.\n", _a, input.display_text().data());
+    if (dynamic_cast<BaseExp::StateValue*>(state)->value() == 1)
+    {
+        _task_break = index;
+        throw TaskAbortException();
+    }
+}
+
+void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+{
+    Giant ga = a.value();
+    logging.info("Computing multiplicative order of %s modulo prime %s.\n", a.display_text().data(), input.display_text().data());
     if (gwstate.information_only)
         exit(0);
-    logging.set_prefix("ord(" + std::to_string(_a) + ") mod " + input.display_text() + " ");
+    logging.set_prefix("ord(" + a.display_text() + ") mod " + input.display_text() + " ");
 
     while (!_factors.empty())
     {
         Giant sub_val;
-        sub_val = _a;
+        sub_val = ga;
 
         if (_task)
         {
             logging.info("raising to power %s.\n", _task_exp_str.data());
             if (FastExp* task = dynamic_cast<FastExp*>(_task.get()))
-                task->init(&input, &gwstate, nullptr, &logging, _a);
+                task->init(&input, &gwstate, nullptr, &logging, ga.data()[0]);
+            if (SlidingWindowExp* task = dynamic_cast<SlidingWindowExp*>(_task.get()))
+                task->init(&input, &gwstate, nullptr, &logging, ga);
             if (FastLiCheckExp* task = dynamic_cast<FastLiCheckExp*>(_task.get()))
-                task->init(&input, &gwstate, nullptr, nullptr, &logging, _a);
+                task->init(&input, &gwstate, nullptr, nullptr, &logging, ga.data()[0]);
+            else if (LiCheckExp* task = dynamic_cast<LiCheckExp*>(_task.get()))
+                    task->init(&input, &gwstate, nullptr, nullptr, &logging, ga);
 
             _task->run();
             sub_val = *_task->result();
             logging.progress().next_stage();
         }
+        if (sub_val == 1 && !_order.empty())
+        {
+            _factors.clear();
+            break;
+        }
         for (auto& task_smooth : _tasks_smooth)
         {
             logging.info("raising to power %s^%d.\n", task_smooth->b().to_string().data(), task_smooth->points().back());
-            if (SmoothExp* task = dynamic_cast<SmoothExp*>(task_smooth.get()))
-                task->init(&input, &gwstate, nullptr, &logging);
             if (GerbiczCheckExp* task = dynamic_cast<GerbiczCheckExp*>(task_smooth.get()))
                 task->init(&input, &gwstate, nullptr, nullptr, &logging);
+            else
+                task_smooth->init_smooth(&input, &gwstate, nullptr, &logging);
             if (task_smooth->state() == nullptr)
                 task_smooth->init_state(new BaseExp::StateValue(0, sub_val));
 
-            task_smooth->run();
+            _task_break = -1;
+            try
+            {
+                task_smooth->run();
+            }
+            catch (const TaskAbortException&)
+            {
+                if (_task_break == -1)
+                    throw;
+            }
+            if (_task_break != -1)
+            {
+                sub_val = 1;
+                auto it = _factors.begin();
+                for (; it != _factors.end() && it->first != task_smooth->exp(); it++);
+                it->second = task_smooth->points()[_task_break].pos;
+                break;
+            }
             sub_val = *task_smooth->result();
             logging.progress().next_stage();
         }
@@ -130,11 +184,9 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
         if (sub_val == 1)
         {
             for (auto it = _factors.begin(); it != _factors.end(); it++)
-                if (it->second <= _sub)
-                    it = _factors.erase(it);
-                else
+                if (it->second > _sub)
                     it->second -= _sub;
-            create_tasks(params, logging, true);
+            create_tasks(ga, params, logging, true);
             continue;
         }
 
@@ -189,7 +241,7 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
         }
 
         if (!_factors.empty())
-            create_tasks(params, logging, true);
+            create_tasks(ga, params, logging, true);
     }
 
     Giant order_div;
@@ -218,12 +270,15 @@ void Order::run(Params& params, InputNum& input, arithmetic::GWState& gwstate, F
         if (it == _order.end())
             order_div *= power(factor.first, factor.second);
     }
-    order += " = (N-1)/";
-    order += order_div.to_string();
+    if (order_div.size() == 1)
+    {
+        order += " = (N-1)/";
+        order += order_div.to_string();
+    }
 
     logging.set_prefix("");
-    logging.result(true, "ord(%d) mod %s = %s.\n", _a, input.display_text().data(), order.data());
-    logging.result_save("ord(" + std::to_string(_a) + ") mod " + input.input_text() + " = " + order + ".\n");
+    logging.result(true, "ord(%s) mod %s = %s.\n", a.display_text().data(), input.display_text().data(), order.data());
+    logging.result_save("ord(" + a.display_text() + ") mod " + input.input_text() + " = " + order + ".\n");
 
     file_checkpoint.clear(true);
     file_recoverypoint.clear(true);

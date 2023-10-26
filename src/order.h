@@ -10,12 +10,13 @@
 class Order
 {
 public:
-    Order(int a, InputNum& input, Params& params, Logging& logging);
+    Order(InputNum& a, InputNum& input, Params& params, Logging& logging);
 
-    void run(Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
+    void run(InputNum& a, Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 
 protected:
-    void create_tasks(Params& params, Logging& logging, bool restart);
+    void create_tasks(arithmetic::Giant& a, Params& params, Logging& logging, bool restart);
+    bool on_point(int index, BaseExp::State* state);
 
     class FactorTask
     {
@@ -29,7 +30,6 @@ protected:
     };
 
 protected:
-    int _a;
     int _sub = 30;
     std::vector<std::pair<arithmetic::Giant, int>> _factors;
     std::vector<std::pair<arithmetic::Giant, int>> _order;
@@ -39,4 +39,5 @@ protected:
     std::vector<std::unique_ptr<MultipointExp>> _tasks_smooth;
     std::unique_ptr<CarefulExp> _task_check;
     std::vector<FactorTask> _tasks;
+    int _task_break;
 };
