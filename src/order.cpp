@@ -21,7 +21,7 @@ Order::Order(InputNum& a, InputNum& input, Params& params, Logging& logging)
 
 void Order::create_tasks(Giant& a, Params& params, Logging& logging, bool restart)
 {
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
     int checks = params.StrongCount ? params.StrongCount.value() : 16;
 
     _tasks_smooth.clear();
@@ -151,6 +151,14 @@ void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWStat
         }
         for (auto& task_smooth : _tasks_smooth)
         {
+            if (sub_val == 1)
+            {
+                auto it = _factors.begin();
+                for (; it != _factors.end() && it->first != task_smooth->exp(); it++);
+                _factors.erase(it);
+                logging.progress().next_stage();
+                continue;
+            }
             logging.info("raising to power %s^%d.\n", task_smooth->b().to_string().data(), task_smooth->points().back());
             if (GerbiczCheckExp* task = dynamic_cast<GerbiczCheckExp*>(task_smooth.get()))
                 task->init(&input, &gwstate, nullptr, nullptr, &logging);
@@ -159,25 +167,21 @@ void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWStat
             if (task_smooth->state() == nullptr)
                 task_smooth->init_state(new BaseExp::StateValue(0, sub_val));
 
-            _task_break = -1;
             try
             {
+                _task_break = -1;
                 task_smooth->run();
+                sub_val = *task_smooth->result();
             }
             catch (const TaskAbortException&)
             {
                 if (_task_break == -1)
                     throw;
-            }
-            if (_task_break != -1)
-            {
                 sub_val = 1;
                 auto it = _factors.begin();
                 for (; it != _factors.end() && it->first != task_smooth->exp(); it++);
                 it->second = task_smooth->points()[_task_break].pos;
-                break;
             }
-            sub_val = *task_smooth->result();
             logging.progress().next_stage();
         }
 

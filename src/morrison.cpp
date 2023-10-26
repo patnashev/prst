@@ -23,7 +23,7 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
     Giant tmp;
     std::vector<std::pair<Giant, int>> factors;
 
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
     if (params.AllFactors)
         _all_factors = params.AllFactors.value();
 

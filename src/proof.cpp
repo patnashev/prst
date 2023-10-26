@@ -18,7 +18,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         exit(0);
     }
 
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
 
     if (op == SAVE)
         _task.reset(new ProofSave());
@@ -118,7 +118,7 @@ void Proof::calc_points(int iterations, bool smooth, InputNum& input, Params& pa
 {
     _Li = !smooth;
 
-    if (params.CheckStrong && params.CheckStrong.value() && params.StrongCount)
+    if (params.StrongCount)
         if (params.StrongCount.value() > _count)
             params.ProofChecksPerPoint = params.StrongCount.value()/_count;
         else

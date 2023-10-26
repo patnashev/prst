@@ -131,11 +131,12 @@ int main(int argc, char *argv[])
                 .ex_case().check_code("never", [&] { params.CheckNear = false; params.Check = false; }).end()
                 .end()
             .group("strong")
+                .check("disable", params.CheckStrong, false)
                 .value_number("count", ' ', params.StrongCount, 1, 1048576)
                 .value_number("L", ' ', params.StrongL, 1, INT_MAX)
                 .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
                 .end()
-                .on_check(params.CheckStrong, true)
+                //.on_check(params.CheckStrong, true)
             .end()
         .group("-fermat")
             .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
@@ -255,9 +256,9 @@ int main(int argc, char *argv[])
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
         printf("\t-fermat [a <a>]\n");
-        printf("\t-order <a>\n");
+        printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
-        printf("\t-check [{near | always| never}] [strong [count <count>] [L <L>]]\n");
+        printf("\t-check [{near | always| never}] [strong [disable] [count <count>] [L <L>]]\n");
         printf("\t-proof save <count> [name <proof> <product>] [keep]\n");
         printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [cert <name>] [keep]\n");
         printf("\t-proof cert {<name> | default}\n");

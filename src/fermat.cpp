@@ -202,7 +202,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         _a = params.FermatBase ? params.FermatBase.value() : 3;
     }
 
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : false;
+    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
 
     if (proof == nullptr && !CheckStrong)
     {
