@@ -113,6 +113,7 @@ bool Order::on_point(int index, BaseExp::State* state)
         _task_break = index;
         throw TaskAbortException();
     }
+    return false;
 }
 
 void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)

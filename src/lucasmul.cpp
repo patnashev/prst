@@ -393,7 +393,7 @@ void LucasUVMulFast::execute()
                 DEBUG_INDEX(swap(iX, iR));
                 swap(X(), R());
             }
-            for (j = (naf_w.size() > _L ? naf_w.size() : _L) - 1; j >= 0; j--)
+            for (j = (naf_w.size() > _L ? (int)naf_w.size() : _L) - 1; j >= 0; j--)
             {
                 if (j >= _L && j == naf_w.size() - 1)
                 {
