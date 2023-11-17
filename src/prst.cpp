@@ -409,7 +409,8 @@ int main(int argc, char *argv[])
             File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
             File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
-            success = fermat->success();
+            if (proof_op != Proof::BUILD)
+                success = fermat->success();
 
             if (!proof_keep)
             {
