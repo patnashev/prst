@@ -489,6 +489,7 @@ void ProofSave::execute()
     GWNum T(gw());
     std::vector<GWNum> tree;
     std::vector<Giant> h;
+    uint32_t fingerprint = _input->fingerprint();
 
     t = _proof->depth();
     tree.reserve(t);
@@ -504,6 +505,8 @@ void ProofSave::execute()
 
     for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, Y, h))
     {
+        if (_gwstate->need_mod())
+            _gwstate->mod(state()->Y(), state()->Y());
         if (_proof->file_products()[i]->read(product))
         {
             _proof->file_products()[i]->free_buffer();
@@ -543,6 +546,8 @@ void ProofSave::execute()
                 check();
             }
             product.set(i, D);
+            if (_gwstate->need_mod())
+                _gwstate->mod(product.value(), product.value());
 
             _proof->file_products()[i]->write(product);
             _proof->file_products()[i]->free_buffer();
@@ -550,7 +555,7 @@ void ProofSave::execute()
         }
 
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
-        hash_giants(_gwstate->fingerprint, state()->Y(), product.value(), h[i]);
+        hash_giants(fingerprint, state()->Y(), product.value(), h[i]);
         make_prime(h[i]);
 
         gw().fft(D, D);
@@ -599,6 +604,7 @@ void ProofBuild::execute()
     Giant a_power;
     std::vector<Giant> tree;
     std::vector<Giant> h;
+    uint32_t fingerprint = _input->fingerprint();
 
     t = _proof->depth();
     if (_proof->Li())
@@ -621,10 +627,12 @@ void ProofBuild::execute()
     M = _proof->points()[_proof->count()].pos >> state()->iteration();
     for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, X, Y, a_power, h), M >>= 1)
     {
+        if (_gwstate->need_mod())
+            _gwstate->mod(state()->Y(), state()->Y());
         _proof->read_product(i, product, *_logging);
         D = product.value();
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
-        hash_giants(_gwstate->fingerprint, state()->Y(), product.value(), h[i]);
+        hash_giants(fingerprint, state()->Y(), product.value(), h[i]);
         make_prime(h[i]);
 
         if (_proof->Li())
@@ -677,9 +685,9 @@ void ProofBuild::execute()
             exp_gw(gw().carefully(), exp, D, T = D, 0);
 
         commit_execute<Proof::State>(t + 1, X, Y, a_power, h);
+        if (_gwstate->need_mod())
+            _gwstate->mod(state()->Y(), state()->Y());
     }
-    if (_gwstate->need_mod())
-        _gwstate->mod(state()->Y(), state()->Y());
 
     if (state()->Y() == 0)
     {
