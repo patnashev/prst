@@ -263,8 +263,8 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
-    File file_checkpoint("prst_c", fingerprint);
-    File file_recoverypoint("prst_r", fingerprint);
+    File file_checkpoint("prst_ckpt", fingerprint);
+    File file_recoverypoint("prst_rcpt", fingerprint);
 
     GWState gwstate;
     gwstate.copy(global_state);
@@ -368,9 +368,9 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
         pocklington.reset(new Pocklington(input, params, logging, nullptr));
     if (input.c() == -1)
         morrison.reset(new Morrison(input, params, logging));
-    File file_checkpoint("prst_c", fingerprint);
-    File file_recoverypoint("prst_r", fingerprint);
-    File file_params("prst_p", fingerprint);
+    File file_checkpoint("prst_ckpt", fingerprint);
+    File file_recoverypoint("prst_rcpt", fingerprint);
+    File file_params("prst_param", fingerprint);
 
     GWState gwstate;
     gwstate.copy(global_state);
@@ -445,8 +445,8 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
-    File file_checkpoint("prst_c", fingerprint);
-    File file_recoverypoint("prst_r", fingerprint);
+    File file_checkpoint("prst_ckpt", fingerprint);
+    File file_recoverypoint("prst_rcpt", fingerprint);
 
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
@@ -610,8 +610,8 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat2.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     file_proofpoint = File("prst_proof", fingerprint);
     file_proofproduct = File("prst_prod", fingerprint);
-    file_checkpoint = File("prst_c", fingerprint);
-    file_recoverypoint = File("prst_r", fingerprint);
+    file_checkpoint = File("prst_ckpt", fingerprint);
+    file_recoverypoint = File("prst_rcpt", fingerprint);
 
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
@@ -680,8 +680,8 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat3.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     file_proofpoint = File("prst_proof", fingerprint);
     file_proofproduct = File("prst_prod", fingerprint);
-    file_checkpoint = File("prst_c", fingerprint);
-    file_recoverypoint = File("prst_r", fingerprint);
+    file_checkpoint = File("prst_ckpt", fingerprint);
+    file_recoverypoint = File("prst_rcpt", fingerprint);
 
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);

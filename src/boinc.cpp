@@ -309,8 +309,8 @@ int boinc_main(int argc, char *argv[])
         if (proof_op == Proof::CERT)
         {
             fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.rcpt", fingerprint);
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
         else if (proof)
@@ -320,14 +320,14 @@ int boinc_main(int argc, char *argv[])
             file_proofproduct.reset(new File(params.ProofProductFilename, fingerprint));
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
 
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
         }
         else if (fermat)
         {
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
         }
     }

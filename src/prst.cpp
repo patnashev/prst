@@ -377,22 +377,22 @@ int main(int argc, char *argv[])
         if (order)
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a.fingerprint()) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a.fingerprint()) + ".r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a.fingerprint()) + ".ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + "." + std::to_string(order_a.fingerprint()) + ".rcpt", fingerprint);
             order->run(order_a, params, input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
         else if (proof_op == Proof::CERT)
         {
             fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.rcpt", fingerprint);
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
         else if (morrison)
         {
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
-            File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".p", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
+            File file_params("prst_" + std::to_string(gwstate.fingerprint) + ".param", fingerprint);
             morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, file_params, logging);
             success = morrison->success();
         }
@@ -406,8 +406,8 @@ int main(int argc, char *argv[])
                 for (int i = 1; i < proof_count; i++)
                     fermat->task()->points()[i].value = proof_write.value();
 
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
             if (proof_op != Proof::BUILD)
                 success = fermat->success();
@@ -430,8 +430,8 @@ int main(int argc, char *argv[])
         else if (fermat)
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".c", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".r", fingerprint);
+            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
+            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
             success = fermat->success();
         }
