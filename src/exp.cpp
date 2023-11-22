@@ -524,13 +524,19 @@ void StrongCheckMultipointExp::execute()
     if (state() == nullptr && !smooth())
     {
         i = 0;
+        StateValue* state0;
         if (!_X0.empty())
-            R() = X0;
+            state0 = new StateValue(0, _X0);
         if (_x0 > 0)
-            R() = _x0;
-        tmp_state = new StateSerialized();
-        tmp_state->set(0, R());
-        init_state(tmp_state);
+            state0 = new StateValue(0, _x0);
+        state0->to_GWNum(R());
+        tmp = R();
+        if (tmp != state0->value())
+        {
+            _logging->warning("Value initialization error.\n");
+            throw TaskRestartException();
+        }
+        init_state(state0);
         state()->set_written();
     }
     else
@@ -744,7 +750,7 @@ void StrongCheckMultipointExp::execute()
         swap(T, X());
         if (T != 0 || D() == 0)
         {
-            _logging->error("Gerbicz%s check failed at %.1f%%.\n", !smooth() ? "-Li" : "", 100.0*i/iterations());
+            _logging->warning("Gerbicz%s check failed at %.1f%%.\n", !smooth() ? "-Li" : "", 100.0*i/iterations());
             if (_file != nullptr)
                 _file->clear();
             _state.reset(new TaskState(5));
@@ -805,7 +811,7 @@ void StrongCheckMultipointExp::execute()
                 }
                 else
                 {
-                    _logging->error("Tail check failed.\n");
+                    _logging->warning("Tail check failed.\n");
                     throw TaskRestartException();
                 }
             }

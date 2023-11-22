@@ -367,6 +367,15 @@ public:
         _tail_inv.arithmetic().free(_tail_inv);
         init(input, gwstate, file, file_recovery, logging);
     }
+    template<class T, class S>
+    void init_small(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0, T&& tail, S&& tail_inv)
+    {
+        GWASSERT(!smooth());
+        _x0 = x0;
+        _tail = std::forward<T>(tail);
+        _tail_inv = std::forward<S>(tail_inv);
+        init(input, gwstate, file, file_recovery, logging);
+    }
     template<class T>
     void init_giant(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& X0)
     {
@@ -380,8 +389,17 @@ public:
     {
         GWASSERT(!smooth());
         _X0 = std::forward<T>(X0);
-        _tail = std::forward<T>(tail);
+        _tail = std::forward<S>(tail);
         _tail_inv.arithmetic().free(_tail_inv);
+        init(input, gwstate, file, file_recovery, logging);
+    }
+    template<class T, class S, class R>
+    void init_giant(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& X0, S&& tail, R&& tail_inv)
+    {
+        GWASSERT(!smooth());
+        _X0 = std::forward<T>(X0);
+        _tail = std::forward<S>(tail);
+        _tail_inv = std::forward<R>(tail_inv);
         init(input, gwstate, file, file_recovery, logging);
     }
 
@@ -491,10 +509,10 @@ public:
     {
         init_giant(input, gwstate, file, file_recovery, logging, std::forward<T>(X0));
     }
-    template<class T, class S>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& X0, S&& tail)
+    template<class T, class S, class R>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& X0, S&& tail, R&& tail_inv)
     {
-        init_giant(input, gwstate, file, file_recovery, logging, std::forward<T>(X0), std::forward<T>(tail));
+        init_giant(input, gwstate, file, file_recovery, logging, std::forward<T>(X0), std::forward<S>(tail), std::forward<R>(tail_inv));
     }
 
 protected:
@@ -516,10 +534,10 @@ public:
     {
         init_small(input, gwstate, file, file_recovery, logging, x0);
     }
-    template<class T>
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0, T&& tail)
+    template<class T, class S>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, uint32_t x0, T&& tail, S&& tail_inv)
     {
-        init_small(input, gwstate, file, file_recovery, logging, x0, std::forward<T>(tail));
+        init_small(input, gwstate, file, file_recovery, logging, x0, std::forward<T>(tail), std::forward<S>(tail_inv));
     }
 
 private:

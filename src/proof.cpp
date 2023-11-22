@@ -314,7 +314,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
         {
             taskCheck = dynamic_cast<LiCheckExp*>(_taskA.get());
             if (taskCheck != nullptr)
-                taskCheck->init(&input, &gwstate, nullptr, nullptr, &logging, std::move(_r_0), std::move(r));
+                taskCheck->init(&input, &gwstate, nullptr, nullptr, &logging, std::move(_r_0), std::move(r), inv(r, *gwstate.N));
             else
                 _taskA->init_giant(&input, &gwstate, nullptr, &logging, std::move(_r_0), std::move(r));
             _taskA->run();

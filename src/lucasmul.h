@@ -100,8 +100,8 @@ public:
     public:
         static const char TYPE = 10;
         State() : TaskState(TYPE) { }
-        template<class T>
-        State(int iteration, T&& Vn, T&& Vn1, bool parity) : TaskState(TYPE) { TaskState::set(iteration); _Vn = std::forward<T>(Vn); _Vn1 = std::forward<T>(Vn1); _parity = parity; }
+        template<class T0, class T1>
+        State(int iteration, T0&& Vn, T1&& Vn1, bool parity) : TaskState(TYPE) { TaskState::set(iteration); _Vn = std::forward<T0>(Vn); _Vn1 = std::forward<T1>(Vn1); _parity = parity; }
         void set(int iteration, const arithmetic::LucasV& Vn, const arithmetic::LucasV& Vn1) { TaskState::set(iteration); _Vn = Vn.V();  _Vn1 = Vn1.V(); _parity = Vn.parity(); }
         void to_Lucas(arithmetic::LucasV& Vn, arithmetic::LucasV& Vn1) { Vn.V() = _Vn; Vn1.V() = _Vn1; Vn.arithmetic().init(Vn.V(), _parity, Vn); Vn1.arithmetic().init(Vn1.V(), !_parity, Vn1); }
         arithmetic::Giant& Vn() { return _Vn; }

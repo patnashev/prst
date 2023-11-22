@@ -275,8 +275,8 @@ void LucasUVMulFast::execute()
 
     arithmetic().set_gw(gw().carefully());
     LucasVArithmetic lucas(gw(), _negativeQ);
-    LucasV Vn(lucas, 2, false);
-    LucasV Vn1(lucas, _P, true);
+    LucasV Vn(lucas);
+    LucasV Vn1(lucas);
     DEBUG_INDEX(iX = 0);
 
     first = iterations()%_L;
@@ -285,11 +285,16 @@ void LucasUVMulFast::execute()
     i = 0;
     if (state() == nullptr)
     {
+        State* state0 = new State(0, 2, _P, false);
+        state0->to_Lucas(Vn, Vn1);
         DEBUG_INDEX(iR = 0);
-        arithmetic().init(R());
-        State* tmp_state = new State();
-        tmp_state->set(0, Vn, Vn1);
-        init_state(tmp_state);
+        arithmetic().init(Vn, Vn1, R());
+        if (Vn.V() != 2 || Vn1.V() != _P || R().U() != 0 || R().V() != 1)
+        {
+            _logging->warning("Value initialization error.\n");
+            throw TaskRestartException();
+        }
+        init_state(state0);
         state()->set_written();
     }
     else
@@ -438,7 +443,7 @@ void LucasUVMulFast::execute()
             gw().carefully().sub(D().V(), R().V(), D().V(), 0);
             if (D().V() != 0 || (R().U() == 0 && R().V() == 0))
             {
-                _logging->error("Gerbicz-Li check failed at %.1f%%.\n", 100.0*i/iterations());
+                _logging->warning("Gerbicz-Li check failed at %.1f%%.\n", 100.0*i/iterations());
                 if (_file != nullptr)
                     _file->clear();
                 _state.reset(new TaskState(5));
