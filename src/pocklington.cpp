@@ -16,18 +16,28 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
     if (type() != POCKLINGTON)
         return;
 
+    if (logging.progress().param_int("a") != 0)
+    {
+        _a = logging.progress().param_int("a");
+        options.maxmulbyconst = _a;
+    }
+
+    _done = 1;
     _tasks.reserve(input.factors().size());
     for (auto i = 0; i < input.factors().size(); i++)
-    {
-        _tasks.emplace_back(i);
-        Giant& factor = input.factors()[i].first;
-        Giant tmp = _task_fermat_simple->exp()/factor;
-        if (tmp != 1)
+        if (logging.progress().param("factor" + std::to_string(i)).empty())
         {
-            _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
-            _tasks.back().taskCheck.reset(new CarefulExp(factor));
+            _tasks.emplace_back(i);
+            Giant& factor = input.factors()[i].first;
+            Giant tmp = _task_fermat_simple->exp()/factor;
+            if (tmp != 1)
+            {
+                _tasks.back().taskFactor.reset(new CarefulExp(std::move(tmp)));
+                _tasks.back().taskCheck.reset(new CarefulExp(factor));
+            }
         }
-    }
+        else
+            _done *= power(input.factors()[i].first, input.factors()[i].second);
 
     if (options.AllFactors)
         _all_factors = options.AllFactors.value();
@@ -41,17 +51,13 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         return;
     }
 
-    if (logging.progress().param_int("a") != 0)
-        _a = logging.progress().param_int("a");
+    std::string sa = std::to_string(_a);
+    File* checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));
+    File* recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
 
     logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
-    Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
+    Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, proof);
 
-    Giant done;
-    done = 1;
-
-    File* checkpoint = &file_checkpoint;
-    File* recoverypoint = &file_recoverypoint;
     Giant tmp;
     while (!_tasks.empty())
     {
@@ -85,7 +91,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             {
                 tmp -= 1;
                 G.emplace_back(std::move(tmp));
-                done *= power(input.factors()[it->index].first, input.factors()[it->index].second);
+                _done *= power(input.factors()[it->index].first, input.factors()[it->index].second);
+                logging.report_param("factor" + std::to_string(it->index), "done");
                 factors += (!factors.empty() ? ", " : "") + input.factors()[it->index].first.to_string();
                 it = _tasks.erase(it);
             }
@@ -118,8 +125,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
         }
 
-        if (_tasks.empty() || (!_all_factors && done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
-            (done.bitlen()*2 > gwstate.N->bitlen() + 10 || square(done) > *gwstate.N)))
+        if (_tasks.empty() || (!_all_factors && _done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
+            (_done.bitlen()*2 > gwstate.N->bitlen() + 10 || square(_done) > *gwstate.N)))
         {
             _prime = true;
             break;
@@ -135,7 +142,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             PrimeIterator primes = PrimeIterator::get();
             for (; *primes <= _a; primes++);
             _a = *primes;
-            std::string sa = std::to_string(_a);
+
             if (!_task->smooth())
             {
                 gwstate.done();
@@ -143,14 +150,16 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 input.setup(gwstate);
             }
 
-            logging.report_param("a", _a);
+            sa = std::to_string(_a);
+            checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));
+            recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
+
+            logging.report_param("a", sa);
             logging.progress().add_stage(_task->cost());
             logging.progress().update(0, 0);
             logging.progress_save();
 
             logging.warning("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
-            checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));
-            recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
             Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, nullptr);
         }
     }

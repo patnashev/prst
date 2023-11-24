@@ -175,10 +175,12 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
     if (!_task)
         return;
 
-    File* checkpoint = nullptr;
-    File* recoverypoint = nullptr;
     if (logging.progress().param_int("P") != 0)
         _P = logging.progress().param_int("P");
+    std::string sP = std::to_string(_P);
+
+    File* checkpoint = nullptr;
+    File* recoverypoint = nullptr;
 
     _success = false;
     _prime = false;
@@ -188,8 +190,12 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         if (restart)
         {
             for (_P++; kronecker(_P*_P - (_negQ ? -4 : 4), *gwstate.N) == 1; _P++);
+            sP = std::to_string(_P);
+
+            logging.report_param("P", sP);
             logging.progress().add_stage(_task->cost());
-            logging.report_param("P", _P);
+            logging.progress().update(0, 0);
+            logging.progress_save();
 
             if (checkpoint)
                 checkpoint->clear();
@@ -217,12 +223,12 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
             exit(0);
         restart = true;
 
-        checkpoint = file_checkpoint.add_child(std::to_string(_P), File::unique_fingerprint(file_checkpoint.fingerprint(), std::to_string(_P)));
+        checkpoint = file_checkpoint.add_child(sP, File::unique_fingerprint(file_checkpoint.fingerprint(), sP));
         if (dynamic_cast<LucasVMulFast*>(_task.get()) != nullptr)
             dynamic_cast<LucasVMulFast*>(_task.get())->init(&input, &gwstate, checkpoint, &logging, _P, _negQ);
         if (dynamic_cast<LucasUVMulFast*>(_task.get()) != nullptr)
         {
-            recoverypoint = file_recoverypoint.add_child(std::to_string(_P), File::unique_fingerprint(file_recoverypoint.fingerprint(), std::to_string(_P)));
+            recoverypoint = file_recoverypoint.add_child(sP, File::unique_fingerprint(file_recoverypoint.fingerprint(), sP));
             dynamic_cast<LucasUVMulFast*>(_task.get())->init(&input, &gwstate, checkpoint, recoverypoint, &logging, _P, _negQ);
         }
         _task->run();
@@ -364,4 +370,6 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
 
     if (checkpoint)
         checkpoint->clear();
+    if (recoverypoint)
+        recoverypoint->clear();
 }

@@ -22,4 +22,5 @@ protected:
 protected:
     bool _all_factors = false;
     std::vector<FactorTask> _tasks;
+    arithmetic::Giant _done;
 };
