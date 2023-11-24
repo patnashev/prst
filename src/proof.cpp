@@ -124,7 +124,7 @@ void Proof::calc_points(int iterations, bool smooth, InputNum& input, Params& pa
         else
             params.ProofPointsPerCheck = _count/params.StrongCount.value();
     int points_per_check = params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1;
-    bool value_points = input.type() != input.KBNC || input.k() == 0 || input.b() == 0 || input.b() == 2;
+    bool value_points = input.type() == input.KBNC && (input.k() != 0 || input.cyclotomic()) && input.b() == 2;
 
     /*if (input.b() != 2 && params.ProofPointsPerCheck && !Li())
     {
