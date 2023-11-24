@@ -524,7 +524,7 @@ void StrongCheckMultipointExp::execute()
     if (state() == nullptr && !smooth())
     {
         i = 0;
-        StateValue* state0;
+        StateValue* state0 = nullptr;
         if (!_X0.empty())
             state0 = new StateValue(0, _X0);
         if (_x0 > 0)
