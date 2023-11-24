@@ -12,7 +12,7 @@
 #include "file.h"
 #include "logging.h"
 #include "task.h"
-#include "params.h"
+#include "options.h"
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
@@ -171,7 +171,7 @@ check_again:
 int boinc_main(int argc, char *argv[])
 {
     GWState gwstate;
-    Params params;
+    Options options;
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
@@ -182,8 +182,8 @@ int boinc_main(int argc, char *argv[])
     Task::DISK_WRITE_TIME = bow_get_checkpoint_seconds(Task::DISK_WRITE_TIME);
     print_banner();
 
-    params.ProofPointFilename = "prsproof";
-    params.ProofProductFilename = "prsprod";
+    options.ProofPointFilename = "prsproof";
+    options.ProofProductFilename = "prsprod";
 
     Config cnfg;
     cnfg.ignore("-boinc")
@@ -205,8 +205,8 @@ int boinc_main(int argc, char *argv[])
                         .on_check(proof_op, Proof::SAVE)
                 .optional()
                     .list("name", ' ', ' ')
-                        .value_string(params.ProofPointFilename)
-                        .value_string(params.ProofProductFilename)
+                        .value_string(options.ProofPointFilename)
+                        .value_string(options.ProofProductFilename)
                         .end()
                     .end()
                 .ex_case()
@@ -218,20 +218,20 @@ int boinc_main(int argc, char *argv[])
             .end()
         .group("-check")
             .exclusive()
-                .ex_case().check_code("near", [&] { params.CheckNear = true; params.Check = false; }).end()
-                .ex_case().check_code("always", [&] { params.CheckNear = false; params.Check = true; }).end()
-                .ex_case().check_code("never", [&] { params.CheckNear = false; params.Check = false; }).end()
+                .ex_case().check_code("near", [&] { options.CheckNear = true; options.Check = false; }).end()
+                .ex_case().check_code("always", [&] { options.CheckNear = false; options.Check = true; }).end()
+                .ex_case().check_code("never", [&] { options.CheckNear = false; options.Check = false; }).end()
                 .end()
             .group("strong")
-                .check("disable", params.CheckStrong, false)
-                .value_number("count", ' ', params.StrongCount, 1, 1048576)
-                .value_number("L", ' ', params.StrongL, 1, INT_MAX)
-                .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
+                .check("disable", options.CheckStrong, false)
+                .value_number("count", ' ', options.StrongCount, 1, 1048576)
+                .value_number("L", ' ', options.StrongL, 1, INT_MAX)
+                .value_number("L2", ' ', options.StrongL2, 1, INT_MAX)
                 .end()
-                //.on_check(params.CheckStrong, true)
+                //.on_check(options.CheckStrong, true)
             .end()
         .group("-fermat")
-            .value_number("a", ' ', params.FermatBase, 2, INT_MAX)
+            .value_number("a", ' ', options.FermatBase, 2, INT_MAX)
             .end()
             .on_check(force_fermat, true)
         .group("-time")
@@ -264,16 +264,21 @@ int boinc_main(int argc, char *argv[])
 
     BoincLogging logging;
 
+    uint32_t fingerprint = input.fingerprint();
+    std::string filename_prefix = "prst_" + std::to_string(fingerprint);
+    gwstate.fingerprint = fingerprint;
+    File file_progress(filename_prefix + ".param", fingerprint);
+    file_progress.hash = false;
+    logging.file_progress(&file_progress);
+
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
 
-    uint32_t fingerprint = input.fingerprint();
-    gwstate.fingerprint = fingerprint;
     file_cert.reset(new File(proof_cert, fingerprint));
     std::unique_ptr<Proof> proof;
     if (proof_op != Proof::NO_OP)
-        proof.reset(new Proof(proof_op, proof_count, input, params, *file_cert, logging));
+        proof.reset(new Proof(proof_op, proof_count, input, options, *file_cert, logging));
 
     std::unique_ptr<Fermat> fermat;
     
@@ -283,21 +288,23 @@ int boinc_main(int argc, char *argv[])
     else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
         if (input.is_half_factored())
-            fermat.reset(new Pocklington(input, params, logging, proof.get()));
+            fermat.reset(new Pocklington(input, options, logging, proof.get()));
         else
         {
             std::string factors;
             for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                 factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
             logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
-            fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
+            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
         }
     }
     else
-        fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
+        fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
 
 
-    gwstate.maxmulbyconst = params.maxmulbyconst;
+    if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
+        gwstate.next_fft_count = logging.progress().param_int("next_fft");
+    gwstate.maxmulbyconst = options.maxmulbyconst;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -309,27 +316,29 @@ int boinc_main(int argc, char *argv[])
         if (proof_op == Proof::CERT)
         {
             fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.ckpt", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".cert.rcpt", fingerprint);
+            File file_checkpoint(filename_prefix + ".cert.ckpt", fingerprint);
+            File file_recoverypoint(filename_prefix + ".cert.rcpt", fingerprint);
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         }
         else if (proof)
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
-            file_proofpoint.reset(new File(params.ProofPointFilename, fingerprint));
-            file_proofproduct.reset(new File(params.ProofProductFilename, fingerprint));
+            file_proofpoint.reset(new File(options.ProofPointFilename, fingerprint));
+            file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
 
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
+            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
+            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
         }
         else if (fermat)
         {
-            File file_checkpoint("prst_" + std::to_string(gwstate.fingerprint) + ".ckpt", fingerprint);
-            File file_recoverypoint("prst_" + std::to_string(gwstate.fingerprint) + ".rcpt", fingerprint);
+            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
+            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
         }
+
+        file_progress.clear();
     }
     catch (const TaskAbortException&)
     {

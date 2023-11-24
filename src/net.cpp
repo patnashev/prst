@@ -12,7 +12,7 @@
 #include "fermat.h"
 #include "pocklington.h"
 #include "proof.h"
-#include "params.h"
+#include "options.h"
 #include "version.h"
 
 #ifdef NETPRST
@@ -43,26 +43,6 @@ void NetLogging::report(const std::string& message, int level)
     _file.write_text(message);
 }
 
-void NetLogging::report_param(const std::string& name, int value)
-{
-    if (name == "fft_len")
-        _net.task()->fft_len = value;
-    if (name == "a")
-        _net.task()->a = value;
-    if (name == "L")
-        _net.task()->L = value;
-    if (name == "L2")
-        _net.task()->L2 = value;
-    if (name == "M")
-        _net.task()->M = value;
-}
-
-void NetLogging::report_param(const std::string& name, const std::string& value)
-{
-    if (name == "fft_desc")
-        _net.task()->fft_desc = value;
-}
-
 void NetLogging::report_progress()
 {
     Logging::report_progress();
@@ -71,8 +51,21 @@ void NetLogging::report_progress()
 
 void NetLogging::progress_save()
 {
+    if (_net.task()->gwstate != nullptr && progress().param_int("fft_len") != _net.task()->gwstate->fft_length)
+    {
+        report_param("fft_desc", _net.task()->gwstate->fft_description);
+        report_param("fft_len", _net.task()->gwstate->fft_length);
+    }
     _net.task()->progress = progress().progress_total();
     _net.task()->time = progress().time_total();
+}
+
+restc_cpp::RequestBuilder& NetLogging::Params(restc_cpp::RequestBuilder& builder)
+{
+    for (auto& pair : progress().params())
+        if (!pair.second.empty())
+            builder.Argument("params[" + pair.first + "]", pair.second);
+    return builder;
 }
 
 void NetFile::on_upload()
@@ -336,18 +329,12 @@ void NetContext::upload(NetFile* file)
 
             try
             {
-                RequestBuilder(ctx)
-                    .Put(put_url)
+                logging().Params(RequestBuilder(ctx)
+                    .Put(put_url))
                     .Argument("md5", md5)
                     .Argument("workerID", worker_id())
                     .Argument("version", PRST_VERSION "." VERSION_BUILD)
                     .Argument("uptime", uptime())
-                    .Argument("fft_desc", _task->fft_desc)
-                    .Argument("fft_len", _task->fft_len)
-                    .Argument("a", _task->a)
-                    .Argument("L", _task->L)
-                    .Argument("L2", _task->L2)
-                    .Argument("M", _task->M)
                     .Argument("progress", std::to_string(_task->progress))
                     .Argument("time", std::to_string(_task->time))
                     .Argument("time_op", std::to_string(_task->time_op))
@@ -507,20 +494,18 @@ int net_main(int argc, char *argv[])
             std::this_thread::sleep_for(std::chrono::minutes(1));
             continue;
         }
-        if (net.task()->options.find("FFT_Increment") != net.task()->options.end())
-            gwstate.next_fft_count = std::stoi(net.task()->options["FFT_Increment"]);
-        if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
-            gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
-        net.task()->a = net.task()->L = net.task()->L2 = net.task()->M = 0;
 
+        Options options;
         logging.progress() = Progress();
         logging.progress().time_init(net.task()->time);
         if (net.task()->options.find("write_time") != net.task()->options.end())
             Task::DISK_WRITE_TIME = std::stoi(net.task()->options["write_time"]);
         else
             Task::DISK_WRITE_TIME = disk_write_time;
-        
-        Params params;
+        if (net.task()->options.find("FFT_Increment") != net.task()->options.end())
+            gwstate.next_fft_count = std::stoi(net.task()->options["FFT_Increment"]);
+        if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
+            gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
         bool supportLLR2 = false;
         if (net.task()->options.find("support") != net.task()->options.end())
             supportLLR2 = net.task()->options["support"] == "LLR2";
@@ -534,13 +519,13 @@ int net_main(int argc, char *argv[])
         int proof_count = net.task()->count;
         if (net.task()->options.find("strong") != net.task()->options.end())
         {
-            params.CheckStrong = true;
-            params.StrongCount = std::stoi(net.task()->options["strong"]);
-            if (params.StrongCount.value() == 0)
-                params.StrongCount.reset();
+            options.CheckStrong = true;
+            options.StrongCount = std::stoi(net.task()->options["strong"]);
+            if (options.StrongCount.value() == 0)
+                options.StrongCount.reset();
         }
         if (net.task()->options.find("a") != net.task()->options.end())
-            params.FermatBase = std::stoi(net.task()->options["a"]);
+            options.FermatBase = std::stoi(net.task()->options["a"]);
 
         std::list<std::unique_ptr<NetFile>> files;
         auto newFile = [&](const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
@@ -555,7 +540,7 @@ int net_main(int argc, char *argv[])
         File* file_cert = newFile("cert", fingerprint, Proof::Certificate::TYPE);
         std::unique_ptr<Proof> proof;
         if (proof_op != Proof::NO_OP)
-            proof.reset(new Proof(proof_op, proof_count, input, params, *file_cert, logging));
+            proof.reset(new Proof(proof_op, proof_count, input, options, *file_cert, logging));
         if (proof && net.task()->options.find("CachePoints") != net.task()->options.end())
             proof->set_cache_points(true);
 
@@ -566,16 +551,17 @@ int net_main(int argc, char *argv[])
         }
         else if (net.task()->type == "Pocklington")
         {
-            fermat.reset(new Pocklington(input, params, logging, proof.get()));
+            fermat.reset(new Pocklington(input, options, logging, proof.get()));
         }
         else
-            fermat.reset(new Fermat(Fermat::AUTO, input, params, logging, proof.get()));
+            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
 
-        gwstate.maxmulbyconst = params.maxmulbyconst;
+        gwstate.maxmulbyconst = options.maxmulbyconst;
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
-        net.task()->fft_desc = gwstate.fft_description;
-        net.task()->fft_len = gwstate.fft_length;
+        logging.report_param("fft_desc", gwstate.fft_description);
+        logging.report_param("fft_len", gwstate.fft_length);
+        net.task()->gwstate = &gwstate;
 
         try
         {
@@ -610,6 +596,7 @@ int net_main(int argc, char *argv[])
 
         gwstate.done();
         gwstate.known_factors = 1;
+        net.task()->gwstate = nullptr;
 
         net.upload_wait();
         if (net.task()->aborted)

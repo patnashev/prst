@@ -5,17 +5,17 @@
 #include "task.h"
 #include "file.h"
 #include "exp.h"
-#include "params.h"
+#include "options.h"
 
 class Order
 {
 public:
-    Order(InputNum& a, InputNum& input, Params& params, Logging& logging);
+    Order(InputNum& a, InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& a, Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
+    void run(InputNum& a, Options& options, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 
 protected:
-    void create_tasks(arithmetic::Giant& a, Params& params, Logging& logging, bool restart);
+    void create_tasks(arithmetic::Giant& a, Options& options, Logging& logging, bool restart);
     bool on_point(int index, BaseExp::State* state);
 
     class FactorTask

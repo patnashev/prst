@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-class Params
+class Options
 {
 public:
     int maxmulbyconst = 1;

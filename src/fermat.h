@@ -5,7 +5,7 @@
 #include "task.h"
 #include "file.h"
 #include "exp.h"
-#include "params.h"
+#include "options.h"
 #include "proof.h"
 
 class Fermat
@@ -17,7 +17,7 @@ public:
     static const int POCKLINGTON = 3;
 
 public:
-    Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof);
+    Fermat(int type, InputNum& input, Options& options, Logging& logging, Proof* proof);
     virtual ~Fermat() { }
 
     virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof);

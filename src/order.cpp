@@ -9,20 +9,20 @@
 
 using namespace arithmetic;
 
-Order::Order(InputNum& a, InputNum& input, Params& params, Logging& logging)
+Order::Order(InputNum& a, InputNum& input, Options& options, Logging& logging)
 {
     _factors = input.factors();
     Giant ga = a.value();
-    create_tasks(ga, params, logging, false);
+    create_tasks(ga, options, logging, false);
 
     if (_task && ga <= GWMULBYCONST_MAX)
-        params.maxmulbyconst = ga.data()[0];
+        options.maxmulbyconst = ga.data()[0];
 }
 
-void Order::create_tasks(Giant& a, Params& params, Logging& logging, bool restart)
+void Order::create_tasks(Giant& a, Options& options, Logging& logging, bool restart)
 {
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
-    int checks = params.StrongCount ? params.StrongCount.value() : 16;
+    bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
+    int checks = options.StrongCount ? options.StrongCount.value() : 16;
 
     _tasks_smooth.clear();
     Giant exp;
@@ -116,7 +116,7 @@ bool Order::on_point(int index, BaseExp::State* state)
     return false;
 }
 
-void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Order::run(InputNum& a, Options& options, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     Giant ga = a.value();
     logging.info("Computing multiplicative order of %s modulo prime %s.\n", a.display_text().data(), input.display_text().data());
@@ -191,7 +191,7 @@ void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWStat
             for (auto it = _factors.begin(); it != _factors.end(); it++)
                 if (it->second > _sub)
                     it->second -= _sub;
-            create_tasks(ga, params, logging, true);
+            create_tasks(ga, options, logging, true);
             continue;
         }
 
@@ -246,7 +246,7 @@ void Order::run(InputNum& a, Params& params, InputNum& input, arithmetic::GWStat
         }
 
         if (!_factors.empty())
-            create_tasks(ga, params, logging, true);
+            create_tasks(ga, options, logging, true);
     }
 
     Giant order_div;

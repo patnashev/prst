@@ -10,7 +10,7 @@
 
 using namespace arithmetic;
 
-Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging) : _op(op), _count(count)
+Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging) : _op(op), _count(count)
 {
     if ((op == SAVE || op == BUILD) && (count & (count - 1)) != 0)
     {
@@ -18,12 +18,12 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         exit(0);
     }
 
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
+    bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
 
     if (op == SAVE)
         _task.reset(new ProofSave());
     if (op == BUILD)
-        _task.reset(new ProofBuild(params.ProofSecuritySeed));
+        _task.reset(new ProofBuild(options.ProofSecuritySeed));
     if (op == CERT)
     {
         Certificate cert;
@@ -37,7 +37,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         _M = cert.power();
         _r_count = std::move(cert.X());
         _r_0 = std::move(cert.a_base());
-        int checks = params.StrongCount ? params.StrongCount.value() : 1;
+        int checks = options.StrongCount ? options.StrongCount.value() : 1;
 
         MultipointExp* task;
         if (!Li())
@@ -46,7 +46,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
             if (!CheckStrong)
                 _task.reset(task = new SmoothExp(b, _M));
             else
-                _task.reset(task = new GerbiczCheckExp(b, _M, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+                _task.reset(task = new GerbiczCheckExp(b, _M, checks, nullptr, options.StrongL ? options.StrongL.value() : 0));
         }
         else
         {
@@ -57,8 +57,8 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
                     _taskA.reset(new SlidingWindowExp(exp >> _M));
                 else
                     _taskA.reset(new LiCheckExp(exp >> _M, 1, 0));
-                if (params.SlidingWindow)
-                    _taskA->_W = params.SlidingWindow.value();
+                if (options.SlidingWindow)
+                    _taskA->_W = options.SlidingWindow.value();
                 logging.progress().add_stage(_taskA->cost());
                 exp.arithmetic().substr(exp, 0, _M, exp);
             }
@@ -69,19 +69,19 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
             if (!CheckStrong)
                 _task.reset(task = new SlidingWindowExp(std::move(exp)));
             else
-                _task.reset(task = new LiCheckExp(std::move(exp), checks, params.StrongL ? params.StrongL.value() : 0));
+                _task.reset(task = new LiCheckExp(std::move(exp), checks, options.StrongL ? options.StrongL.value() : 0));
         }
-        if (params.SlidingWindow)
-            task->_W = params.SlidingWindow.value();
+        if (options.SlidingWindow)
+            task->_W = options.SlidingWindow.value();
         logging.progress().add_stage(task->cost());
     }
-    if ((op == BUILD && (!params.RootOfUnityCheck || params.RootOfUnityCheck.value())) || op == ROOT)
+    if ((op == BUILD && (!options.RootOfUnityCheck || options.RootOfUnityCheck.value())) || op == ROOT)
     {
         Giant exp;
         exp = 1;
         if (input.c() == 1)
         {
-            int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 64;
+            int security = options.RootOfUnitySecurity ? options.RootOfUnitySecurity.value() : 64;
             for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                 if (it->first == 2)
                     exp <<= security;
@@ -94,7 +94,7 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
         }
         else
         {
-            int security = params.RootOfUnitySecurity ? params.RootOfUnitySecurity.value() : 24;
+            int security = options.RootOfUnitySecurity ? options.RootOfUnitySecurity.value() : 24;
             logging.info("Factorizing N-1 for roots of unity check");
             double timer = getHighResTimer();
             std::vector<int> factors = input.factorize_minus1(security);
@@ -107,30 +107,30 @@ Proof::Proof(int op, int count, InputNum& input, Params& params, File& file_cert
     }
 
     if (_task)
-        _task->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
+        _task->set_error_check(options.CheckNear && options.CheckNear.value(), !options.Check || options.Check.value());
     if (_taskA)
-        _taskA->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
+        _taskA->set_error_check(options.CheckNear && options.CheckNear.value(), !options.Check || options.Check.value());
     if (_taskRoot)
-        _taskRoot->set_error_check(params.CheckNear && params.CheckNear.value(), !params.Check || params.Check.value());
+        _taskRoot->set_error_check(options.CheckNear && options.CheckNear.value(), !options.Check || options.Check.value());
 }
 
-void Proof::calc_points(int iterations, bool smooth, InputNum& input, Params& params, Logging& logging)
+void Proof::calc_points(int iterations, bool smooth, InputNum& input, Options& options, Logging& logging)
 {
     _Li = !smooth;
 
-    if (params.StrongCount)
-        if (params.StrongCount.value() > _count)
-            params.ProofChecksPerPoint = params.StrongCount.value()/_count;
+    if (options.StrongCount)
+        if (options.StrongCount.value() > _count)
+            options.ProofChecksPerPoint = options.StrongCount.value()/_count;
         else
-            params.ProofPointsPerCheck = _count/params.StrongCount.value();
-    int points_per_check = params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1;
+            options.ProofPointsPerCheck = _count/options.StrongCount.value();
+    int points_per_check = options.ProofPointsPerCheck ? options.ProofPointsPerCheck.value() : 1;
     bool value_points = input.type() == input.KBNC && (input.k() != 0 || input.cyclotomic()) && input.b() == 2;
 
-    /*if (input.b() != 2 && params.ProofPointsPerCheck && !Li())
+    /*if (input.b() != 2 && options.ProofPointsPerCheck && !Li())
     {
         int i;
         int iters = iterations*points_per_check/_count;
-        if (!params.StrongL)
+        if (!options.StrongL)
         {
             int L = points_per_check*(int)std::sqrt(iters);
             int L2 = iters - iters%L;
@@ -140,11 +140,11 @@ void Proof::calc_points(int iterations, bool smooth, InputNum& input, Params& pa
                     L = i;
                     L2 = iters - iters%i;
                 }
-            params.StrongL = L/points_per_check;
+            options.StrongL = L/points_per_check;
             _M = L2/points_per_check;
         }
         else
-            _M = (iters - iters%(params.StrongL.value()*points_per_check))/points_per_check;
+            _M = (iters - iters%(options.StrongL.value()*points_per_check))/points_per_check;
         _points.reserve(_count + 2);
         for (i = 0; i <= _count; i++)
             _points.emplace_back(i*_M, i%points_per_check == 0 || i == _count, value_points || i == _count);

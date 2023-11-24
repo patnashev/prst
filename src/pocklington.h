@@ -5,7 +5,7 @@
 class Pocklington : public Fermat
 {
 public:
-    Pocklington(InputNum& input, Params& params, Logging& logging, Proof* proof);
+    Pocklington(InputNum& input, Options& options, Logging& logging, Proof* proof);
 
     void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof) override;
 

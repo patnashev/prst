@@ -11,7 +11,7 @@ using namespace arithmetic;
 
 int genProthBase(Giant& k, uint32_t n);
 
-Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proof* proof) : Fermat(Fermat::POCKLINGTON, input, params, logging, proof)
+Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Proof* proof) : Fermat(Fermat::POCKLINGTON, input, options, logging, proof)
 {
     if (type() != POCKLINGTON)
         return;
@@ -29,8 +29,8 @@ Pocklington::Pocklington(InputNum& input, Params& params, Logging& logging, Proo
         }
     }
 
-    if (params.AllFactors)
-        _all_factors = params.AllFactors.value();
+    if (options.AllFactors)
+        _all_factors = options.AllFactors.value();
 }
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
@@ -40,6 +40,9 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
         return;
     }
+
+    if (logging.progress().param_int("a") != 0)
+        _a = logging.progress().param_int("a");
 
     logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
@@ -123,19 +126,9 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
         }
         else
         {
-            if (proof == nullptr)
+            if (proof != nullptr)
             {
-                logging.progress().add_stage(_task->cost());
-                logging.progress().update(0, 0);
-                logging.progress_save();
-                if (dynamic_cast<StrongCheckMultipointExp*>(_task.get()) != nullptr)
-                    recoverypoint->write(*_task->state());
-                else
-                    checkpoint->write(*_task->state());
-            }
-            else
-            {
-                logging.error("Pocklington test needs to restart, disable proofs to proceed.\n", input.display_text().data(), _a);
+                logging.error("Pocklington test needs to restart, disable proofs to proceed.\n");
                 throw TaskAbortException();
             }
 
@@ -149,6 +142,11 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 gwstate.maxmulbyconst = _a;
                 input.setup(gwstate);
             }
+
+            logging.report_param("a", _a);
+            logging.progress().add_stage(_task->cost());
+            logging.progress().update(0, 0);
+            logging.progress_save();
 
             logging.warning("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
             checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));

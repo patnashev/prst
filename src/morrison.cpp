@@ -17,15 +17,15 @@ using namespace arithmetic;
 // For Q=-1 gcd(U_{(N+1)/q}, N) = gcd(V_{(N+1)/2q}, N) due to BLS proof of Theorem 14.
 // For Q=-1 factor 2 is tested for free.
 
-Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
+Morrison::Morrison(InputNum& input, Options& options, Logging& logging)
 {
     int i;
     Giant tmp;
     std::vector<std::pair<Giant, int>> factors;
 
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
-    if (params.AllFactors)
-        _all_factors = params.AllFactors.value();
+    bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
+    if (options.AllFactors)
+        _all_factors = options.AllFactors.value();
 
     LucasVMulFast* taskV = nullptr;
     if (!CheckStrong)
@@ -107,9 +107,9 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
     if (CheckStrong)
     {
         exp_morrison <<= n;
-        int checks = params.StrongCount ? params.StrongCount.value() : 16;
+        int checks = options.StrongCount ? options.StrongCount.value() : 16;
         _task.reset(new LucasUVMulFast(std::move(exp_morrison), checks));
-        params.maxmulbyconst = 2;
+        options.maxmulbyconst = 2;
     }
     else
         taskV->mul_prime(2, n);
@@ -170,16 +170,15 @@ Morrison::Morrison(InputNum& input, Params& params, Logging& logging)
     logging.progress().add_stage(_task->cost());
 }
 
-void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, File& file_params, Logging& logging)
+void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     if (!_task)
         return;
 
     File* checkpoint = nullptr;
     File* recoverypoint = nullptr;
-    std::unique_ptr<Reader> reader(file_params.get_reader());
-    if (reader && reader->type() == 7)
-        reader->read(_P);
+    if (logging.progress().param_int("P") != 0)
+        _P = logging.progress().param_int("P");
 
     _success = false;
     _prime = false;
@@ -190,10 +189,8 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         {
             for (_P++; kronecker(_P*_P - (_negQ ? -4 : 4), *gwstate.N) == 1; _P++);
             logging.progress().add_stage(_task->cost());
+            logging.report_param("P", _P);
 
-            std::unique_ptr<Writer> writer(file_params.get_writer(7, 0));
-            writer->write(_P);
-            file_params.commit_writer(*writer);
             if (checkpoint)
                 checkpoint->clear();
             if (recoverypoint)
@@ -367,5 +364,4 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
 
     if (checkpoint)
         checkpoint->clear();
-    file_params.clear();
 }

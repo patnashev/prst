@@ -35,9 +35,7 @@ struct PRSTTask {
     double time = 0.0;
     std::map<std::string, std::string> options;
 
-    std::string fft_desc;
-    int fft_len;
-    int a, L, L2, M;
+    arithmetic::GWState* gwstate = nullptr;
     double progress;
     double time_op;
     bool aborted = false;
@@ -118,10 +116,9 @@ public:
     NetLogging(int level, int net_level, NetContext& net) : Logging(level), _net_level(net_level), _net(net), _file(net) { }
 
     virtual void report(const std::string& message, int level) override;
-    virtual void report_param(const std::string& name, int value) override;
-    virtual void report_param(const std::string& name, const std::string& value) override;
     virtual void report_progress() override;
     virtual void progress_save() override;
+    restc_cpp::RequestBuilder& Params(restc_cpp::RequestBuilder& builder);
 
 private:
     int _net_level;

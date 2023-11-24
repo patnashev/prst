@@ -4,15 +4,15 @@
 #include "inputnum.h"
 #include "task.h"
 #include "file.h"
-#include "params.h"
+#include "options.h"
 #include "lucasmul.h"
 
 class Morrison
 {
 public:
-    Morrison(InputNum& input, Params& params, Logging& logging);
+    Morrison(InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, File& file_params, Logging& logging);
+    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 
     bool success() { return _success; }
     bool prime() { return _prime; }

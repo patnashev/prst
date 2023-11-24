@@ -14,7 +14,7 @@
 #include "file.h"
 #include "logging.h"
 #include "task.h"
-#include "params.h"
+#include "options.h"
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
@@ -28,7 +28,7 @@ using namespace arithmetic;
 int testing_main(int argc, char *argv[])
 {
     GWState gwstate;
-    Params params;
+    Options options;
     std::string subset;
     int log_level = Logging::LEVEL_PROGRESS;
     std::string log_file;
@@ -48,20 +48,20 @@ int testing_main(int argc, char *argv[])
             .end()
         .group("-check")
             .exclusive()
-                .ex_case().check_code("near", [&] { params.CheckNear = true; params.Check = false; }).end()
-                .ex_case().check_code("always", [&] { params.CheckNear = false; params.Check = true; }).end()
-                .ex_case().check_code("never", [&] { params.CheckNear = false; params.Check = false; }).end()
+                .ex_case().check_code("near", [&] { options.CheckNear = true; options.Check = false; }).end()
+                .ex_case().check_code("always", [&] { options.CheckNear = false; options.Check = true; }).end()
+                .ex_case().check_code("never", [&] { options.CheckNear = false; options.Check = false; }).end()
                 .end()
             .group("strong")
-                .check("disable", params.CheckStrong, false)
-                .value_number("count", ' ', params.StrongCount, 1, 1048576)
-                .value_number("L", ' ', params.StrongL, 1, INT_MAX)
-                .value_number("L2", ' ', params.StrongL2, 1, INT_MAX)
+                .check("disable", options.CheckStrong, false)
+                .value_number("count", ' ', options.StrongCount, 1, 1048576)
+                .value_number("L", ' ', options.StrongL, 1, INT_MAX)
+                .value_number("L2", ' ', options.StrongL2, 1, INT_MAX)
                 .end()
-                //.on_check(params.CheckStrong, true)
+                //.on_check(options.CheckStrong, true)
             .end()
         .group("-factors")
-            .check("all", params.AllFactors, true)
+            .check("all", options.AllFactors, true)
             .end()
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
@@ -214,7 +214,7 @@ int testing_main(int argc, char *argv[])
                     subLogging.file_result(log_file);
                 else
                     subLogging.file_log(log_file);
-                RootsTest(subLogging, params, gwstate);
+                RootsTest(subLogging, options, gwstate);
             }
             else
                 for (auto& test : std::get<2>(subsetTests))
@@ -227,7 +227,7 @@ int testing_main(int argc, char *argv[])
                         subLogging.file_result(log_file);
                     else
                         subLogging.file_log(log_file);
-                    test->run(subLogging, params, gwstate);
+                    test->run(subLogging, options, gwstate);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
@@ -245,20 +245,20 @@ int testing_main(int argc, char *argv[])
     return 0;
 }
 
-void Test::run(Logging& logging, Params& global_params, GWState& global_state)
+void Test::run(Logging& logging, Options& global_options, GWState& global_state)
 {
-    Params params;
-    params.Check = global_params.Check;
-    params.CheckNear = global_params.CheckNear;
-    params.CheckStrong = global_params.CheckStrong;
-    params.ProofSecuritySeed = "12345";
-    params.RootOfUnityCheck = false;
+    Options options;
+    options.Check = global_options.Check;
+    options.CheckNear = global_options.CheckNear;
+    options.CheckStrong = global_options.CheckStrong;
+    options.ProofSecuritySeed = "12345";
+    options.RootOfUnityCheck = false;
     int proof_count = 16;
 
     uint32_t fingerprint = input.fingerprint();
     File file_cert("prst_cert", fingerprint);
-    Proof proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
-    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
+    Proof proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
+    Fermat fermat(Fermat::AUTO, input, options, logging, &proof);
 
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
@@ -268,7 +268,7 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
 
     GWState gwstate;
     gwstate.copy(global_state);
-    gwstate.maxmulbyconst = params.maxmulbyconst;
+    gwstate.maxmulbyconst = options.maxmulbyconst;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -310,8 +310,8 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
 
-        Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
-        proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
+        Proof proof_build(Proof::BUILD, proof_count, input, options, file_cert, logging);
+        proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
         proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
         logging.progress().add_stage(1);
         logging.progress().add_stage(proof_build.cost());
@@ -337,7 +337,7 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
 
-        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging);
+        Proof proof_cert(Proof::CERT, 0, input, options, file_cert, logging);
         proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
@@ -353,28 +353,29 @@ void Test::run(Logging& logging, Params& global_params, GWState& global_state)
     finally();
 }
 
-void DeterministicTest::run(Logging& logging, Params& global_params, GWState& global_state)
+void DeterministicTest::run(Logging& logging, Options& global_options, GWState& global_state)
 {
-    Params params;
-    params.Check = global_params.Check;
-    params.CheckNear = global_params.CheckNear;
-    params.CheckStrong = global_params.CheckStrong;
-    params.AllFactors = global_params.AllFactors;
+    Options options;
+    options.Check = global_options.Check;
+    options.CheckNear = global_options.CheckNear;
+    options.CheckStrong = global_options.CheckStrong;
+    options.AllFactors = global_options.AllFactors;
 
     uint32_t fingerprint = input.fingerprint();
     std::unique_ptr<Pocklington> pocklington;
     std::unique_ptr<Morrison> morrison;
     if (input.c() == 1)
-        pocklington.reset(new Pocklington(input, params, logging, nullptr));
+        pocklington.reset(new Pocklington(input, options, logging, nullptr));
     if (input.c() == -1)
-        morrison.reset(new Morrison(input, params, logging));
+        morrison.reset(new Morrison(input, options, logging));
     File file_checkpoint("prst_ckpt", fingerprint);
     File file_recoverypoint("prst_rcpt", fingerprint);
     File file_params("prst_param", fingerprint);
+    logging.file_progress(&file_params);
 
     GWState gwstate;
     gwstate.copy(global_state);
-    gwstate.maxmulbyconst = params.maxmulbyconst;
+    gwstate.maxmulbyconst = options.maxmulbyconst;
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -397,7 +398,7 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
         }
         if (morrison)
         {
-            morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, file_params, logging);
+            morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
             prime = morrison->prime();
             sres64 = morrison->res64();
         }
@@ -422,14 +423,14 @@ void DeterministicTest::run(Logging& logging, Params& global_params, GWState& gl
     finally();
 }
 
-void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
+void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 {
     SubLogging noLogging(logging, Logging::LEVEL_ERROR + 1);
-    Params params;
-    params.Check = global_params.Check;
-    params.CheckNear = global_params.CheckNear;
-    params.CheckStrong = global_params.CheckStrong;
-    params.RootOfUnityCheck = false;
+    Options options;
+    options.Check = global_options.Check;
+    options.CheckNear = global_options.CheckNear;
+    options.CheckStrong = global_options.CheckStrong;
+    options.RootOfUnityCheck = false;
     InputNum input;
     int proof_count = 4;
 
@@ -437,10 +438,10 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     uint32_t fingerprint = input.fingerprint();
     File file_cert("prst_cert", fingerprint);
-    Proof proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
-    Fermat fermat(Fermat::AUTO, input, params, logging, &proof);
-    Proof proof_build(Proof::BUILD, proof_count, input, params, file_cert, logging);
-    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
+    Proof proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
+    Fermat fermat(Fermat::AUTO, input, options, logging, &proof);
+    Proof proof_build(Proof::BUILD, proof_count, input, options, file_cert, logging);
+    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
 
     fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
     File file_proofpoint("prst_proof", fingerprint);
@@ -487,7 +488,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
         proof.run(input, gwstate, logging, nullptr);
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
 
-        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging);
+        Proof proof_cert(Proof::CERT, 0, input, options, file_cert, logging);
         proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() == proof_build.res64())
         {
@@ -511,7 +512,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
             throw TaskAbortException();
         }
 
-        Proof proof_cert(Proof::CERT, 0, input, params, file_cert, logging);
+        Proof proof_cert(Proof::CERT, 0, input, options, file_cert, logging);
         proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
@@ -519,7 +520,7 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
             throw TaskAbortException();
         }
 
-        Proof proof_root(Proof::ROOT, proof_count, input, params, file_cert, logging);
+        Proof proof_root(Proof::ROOT, proof_count, input, options, file_cert, logging);
         try
         {
             proof_root.run(input, gwstate, logging.level() > Logging::LEVEL_INFO ? noLogging : logging, &fermat.result());
@@ -600,10 +601,10 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     input.parse("960^128+1");
 
-    proof = Proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
-    Fermat fermat2(Fermat::AUTO, input, params, logging, &proof);
-    proof_build = Proof(Proof::BUILD, proof_count, input, params, file_cert, logging);
-    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
+    proof = Proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
+    Fermat fermat2(Fermat::AUTO, input, options, logging, &proof);
+    proof_build = Proof(Proof::BUILD, proof_count, input, options, file_cert, logging);
+    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
@@ -670,10 +671,10 @@ void RootsTest(Logging& logging, Params& global_params, GWState& global_state)
 
     input.parse("2*5^178-1");
 
-    proof = Proof(Proof::SAVE, proof_count, input, params, file_cert, logging);
-    Fermat fermat3(Fermat::AUTO, input, params, logging, &proof);
-    proof_build = Proof(Proof::BUILD, proof_count, input, params, file_cert, logging);
-    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, params, logging);
+    proof = Proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
+    Fermat fermat3(Fermat::AUTO, input, options, logging, &proof);
+    proof_build = Proof(Proof::BUILD, proof_count, input, options, file_cert, logging);
+    proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);

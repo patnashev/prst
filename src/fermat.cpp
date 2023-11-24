@@ -100,7 +100,7 @@ int genProthBase(Giant& k, uint32_t n) {
 }
 // END LLR code
 
-Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proof* proof)
+Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Proof* proof)
 {
     bool smooth = (input.b() == 2 && log2(input.gk()) < 1000 && log2(input.gk()) < input.n()/4);
     uint32_t n = input.n();
@@ -173,7 +173,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
             exp_fermat = 1;
         }
 
-        if (_type == PROTH || (_type == POCKLINGTON && (n + 1 >= input.n() || (params.AllFactors && params.AllFactors.value()))))
+        if (_type == PROTH || (_type == POCKLINGTON && (n + 1 >= input.n() || (options.AllFactors && options.AllFactors.value()))))
         {
             _a = genProthBase(_type == POCKLINGTON ? exp_pocklington : exp, n + 1);
             if (_a < 0)
@@ -184,7 +184,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
             }
         }
         else
-            _a = params.FermatBase ? params.FermatBase.value() : 3;
+            _a = options.FermatBase ? options.FermatBase.value() : 3;
 
         if (exp_fermat != 1)
             _task_fermat_simple.reset(new CarefulExp(std::move(exp_fermat)));
@@ -199,10 +199,10 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
             exp = input.gk();
         else
             exp = input.value() - 1;
-        _a = params.FermatBase ? params.FermatBase.value() : 3;
+        _a = options.FermatBase ? options.FermatBase.value() : 3;
     }
 
-    bool CheckStrong = params.CheckStrong ? params.CheckStrong.value() : true;
+    bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
 
     if (proof == nullptr && !CheckStrong)
     {
@@ -213,14 +213,14 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         }
         _task.reset(new FastExp(std::move(exp)));
         logging.progress().add_stage(_task->exp().bitlen());
-        params.maxmulbyconst = _a;
+        options.maxmulbyconst = _a;
     }
     else if (proof == nullptr)
     {
-        int checks = params.StrongCount ? params.StrongCount.value() : 16;
+        int checks = options.StrongCount ? options.StrongCount.value() : 16;
         if (smooth)
         {
-            _task.reset(new GerbiczCheckExp(input.gb(), n, checks, nullptr, params.StrongL ? params.StrongL.value() : 0));
+            _task.reset(new GerbiczCheckExp(input.gb(), n, checks, nullptr, options.StrongL ? options.StrongL.value() : 0));
 
             if (input.c() != 1)
                 _task_tail_simple.reset(new CarefulExp(abs(input.c() - 1)));
@@ -229,24 +229,24 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         }
         else
         {
-            _task.reset(new FastLiCheckExp(std::move(exp), checks, params.StrongL ? params.StrongL.value() : 0));
-            params.maxmulbyconst = _a;
+            _task.reset(new FastLiCheckExp(std::move(exp), checks, options.StrongL ? options.StrongL.value() : 0));
+            options.maxmulbyconst = _a;
         }
         logging.progress().add_stage(_task->cost());
     }
     else
     {
         auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2);
-        proof->calc_points(smooth ? n : exp.bitlen() - 1, smooth, input, params, logging);
+        proof->calc_points(smooth ? n : exp.bitlen() - 1, smooth, input, options, logging);
         int L = 0, L2 = 0;
         if (CheckStrong)
         {
-            L2 = proof->M()*(params.ProofPointsPerCheck ? params.ProofPointsPerCheck.value() : 1)/(params.ProofChecksPerPoint ? params.ProofChecksPerPoint.value() : 1);
-            if (params.StrongL)
+            L2 = proof->M()*(options.ProofPointsPerCheck ? options.ProofPointsPerCheck.value() : 1)/(options.ProofChecksPerPoint ? options.ProofChecksPerPoint.value() : 1);
+            if (options.StrongL)
             {
-                L = params.StrongL.value();
-                if (params.StrongL2)
-                    L2 = params.StrongL2.value();
+                L = options.StrongL.value();
+                if (options.StrongL2)
+                    L2 = options.StrongL2.value();
                 else
                     L2 -= L2%L;
             }
@@ -260,7 +260,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
                 _task.reset(new MultipointExp(std::move(exp), false, proof->points(), on_point));
             else
                 _task.reset(new StrongCheckMultipointExp(std::move(exp), false, proof->points(), L, L2, on_point));
-            params.maxmulbyconst = _a;
+            options.maxmulbyconst = _a;
         }
         else
         {
@@ -271,8 +271,8 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
                 _task.reset(new MultipointExp(input.gb(), true, proof->points(), on_point));
             else
                 _task.reset(new StrongCheckMultipointExp(input.gb(), true, proof->points(), L, L2, on_point));
-            if (params.SlidingWindow)
-                _task->_W = params.SlidingWindow.value();
+            if (options.SlidingWindow)
+                _task->_W = options.SlidingWindow.value();
 
             if (input.c() != 1)
                 _task_tail_simple.reset(new CarefulExp(abs(input.c() - 1)));
@@ -283,7 +283,7 @@ Fermat::Fermat(int type, InputNum& input, Params& params, Logging& logging, Proo
         logging.progress().add_stage(proof->cost());
     }
 
-    _task->set_error_check(!params.CheckNear || params.CheckNear.value(), params.Check && params.Check.value());
+    _task->set_error_check(!options.CheckNear || options.CheckNear.value(), options.Check && options.Check.value());
     if (_task_tail_simple)
         _task_tail_simple->set_error_check(false, true);
     if (_task_ak_simple)

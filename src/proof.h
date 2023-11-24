@@ -4,7 +4,7 @@
 #include "inputnum.h"
 #include "task.h"
 #include "file.h"
-#include "params.h"
+#include "options.h"
 #include "exp.h"
 
 class Proof
@@ -77,9 +77,9 @@ public:
 
 
 public:
-    Proof(int op, int count, InputNum& input, Params& params, File& file_cert, Logging& logging);
+    Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging);
 
-    void calc_points(int iterations, bool smooth, InputNum& input, Params& params, Logging& logging);
+    void calc_points(int iterations, bool smooth, InputNum& input, Options& options, Logging& logging);
     void init_files(File* file_point, File* file_product, File* file_cert);
     void init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputNum& input, Logging& logging, int a);
     void read_point(int index, TaskState& state, Logging& logging);
