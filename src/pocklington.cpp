@@ -13,7 +13,7 @@ int genProthBase(Giant& k, uint32_t n);
 
 Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Proof* proof) : Fermat(Fermat::POCKLINGTON, input, options, logging, proof)
 {
-    if (type() != POCKLINGTON)
+    if (type() != POCKLINGTON || _a < 0)
         return;
 
     if (logging.progress().param_int("a") != 0)
@@ -45,7 +45,7 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
-    if (type() != POCKLINGTON)
+    if (type() != POCKLINGTON || _a < 0)
     {
         Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
         return;
