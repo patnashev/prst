@@ -268,25 +268,17 @@ int boinc_main(int argc, char *argv[])
     BoincLogging logging;
 
     uint32_t fingerprint = input.fingerprint();
+    std::string filename_suffix;
+    if (options.FermatBase)
+        filename_suffix = "." + std::to_string(options.FermatBase.value());
+    else if (proof_op == Proof::CERT)
+        filename_suffix = ".cert";
     std::string filename_prefix = "prst_" + std::to_string(fingerprint);
-    gwstate.fingerprint = fingerprint;
-    File file_progress(filename_prefix + ".param", fingerprint);
+    File file_progress(filename_prefix + filename_suffix + ".param", fingerprint);
     file_progress.hash = false;
     logging.file_progress(&file_progress);
 
-    std::unique_ptr<container::FileContainer> proof_container;
-    if (!proof_pack.empty())
-    {
-        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack", true, true));
-        if (proof_container->error() != container::container_error::OK && proof_container->error() != container::container_error::EMPTY)
-            logging.warning("File %s is corrupted.", proof_pack.data());
-    }
-    std::unique_ptr<FilePacked> file_proofpacked;
-    std::unique_ptr<File> file_proofpoint;
-    std::unique_ptr<File> file_proofproduct;
-    std::unique_ptr<File> file_cert;
-
-    file_cert.reset(new File(proof_cert, fingerprint));
+    std::unique_ptr<File> file_cert(new File(proof_cert, fingerprint));
     std::unique_ptr<Proof> proof;
     if (proof_op != Proof::NO_OP)
         proof.reset(new Proof(proof_op, proof_count, input, options, *file_cert, logging));
@@ -295,6 +287,7 @@ int boinc_main(int argc, char *argv[])
     
     if (proof_op == Proof::CERT)
     {
+        fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
     }
     else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
@@ -312,6 +305,36 @@ int boinc_main(int argc, char *argv[])
     else
         fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
 
+    std::unique_ptr<container::FileContainer> proof_container;
+    if (!proof_pack.empty())
+    {
+        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack", true, true));
+        if (proof_container->error() != container::container_error::OK && proof_container->error() != container::container_error::EMPTY)
+            logging.warning("File %s is corrupted.", proof_pack.data());
+    }
+    std::unique_ptr<FilePacked> file_proofpacked;
+    std::unique_ptr<File> file_proofpoint;
+    std::unique_ptr<File> file_proofproduct;
+    if (fermat && proof)
+    {
+        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
+        file_proofpoint.reset(new File(options.ProofPointFilename, fingerprint));
+        if (proof_container)
+            file_proofproduct.reset(new FilePacked(options.ProofProductFilename, fingerprint, *proof_container));
+        else
+            file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
+        proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+        if (proof_container)
+        {
+            file_proofpacked.reset(new FilePacked(options.ProofPointFilename, fingerprint, *proof_container));
+            proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
+            proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
+        }
+    }
+    else if (fermat)
+        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
+    File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
+    File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
     if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
         gwstate.next_fft_count = logging.progress().param_int("next_fft");
@@ -325,41 +348,11 @@ int boinc_main(int argc, char *argv[])
         logging.progress().time_init(bow_get_starting_elapsed_time());
 
         if (proof_op == Proof::CERT)
-        {
-            fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-            File file_checkpoint(filename_prefix + ".cert.ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".cert.rcpt", fingerprint);
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-        }
         else if (proof)
-        {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
-            file_proofpoint.reset(new File(options.ProofPointFilename, fingerprint));
-            if (proof_container)
-                file_proofproduct.reset(new FilePacked(options.ProofProductFilename, fingerprint, *proof_container));
-            else
-                file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
-            proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
-            if (proof_container)
-            {
-                file_proofpacked.reset(new FilePacked(options.ProofPointFilename, fingerprint, *proof_container));
-                proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
-                proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
-            }
-
-            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
-
-            if (proof_container)
-                proof_container->close();
-        }
         else if (fermat)
-        {
-            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
-        }
 
         file_progress.clear();
     }
@@ -368,6 +361,8 @@ int boinc_main(int argc, char *argv[])
         failed = true;
     }
 
+    if (proof_container)
+        proof_container->close();
     gwstate.done();
 
     if (!failed)             bow_finish(0);   // Boinc task completed, or exit(0) in standalone mode

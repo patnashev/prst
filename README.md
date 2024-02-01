@@ -25,6 +25,8 @@ Options: -v
                  outputs number profile.
          -test
                  performs built-in tests.
+         -batch
+                 processes several numbers.
          -ini <filename>
                  reads command line options from ini file. See sample.ini.
          -log [{debug | info | warning | error}] [file <filename>]
@@ -60,13 +62,15 @@ Options: -v
                  enables/disables roundoff checking, by default only when close
                  to switching to the next transform size.
                  disables strong error check using Gerbicz or Gerbicz-Li algorithms.
-         -proof save <count> [name <proof> <product>] [keep]
+         -proof save <count> [name <proof> <product>] [pack <name>] [keep]
                  saves proof files for verification (on tester side).
+                 packs proof into a single file.
                  keeps all temporary files if asked.
-         -proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [cert <name>] [keep]
+         -proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [pack <name>] [cert <name>] [keep]
                  builds a certificate from proof files (on authority side).
                  uses security seed to encrypt the certificate.
                  detects root of unity attack up to 2^depth degree.
+                 reads proof from the pack file.
                  keeps all input files if asked.
          -proof cert {<name> | default}
                  verifies the certificate (on any side).

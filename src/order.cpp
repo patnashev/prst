@@ -121,7 +121,7 @@ void Order::run(InputNum& a, Options& options, InputNum& input, arithmetic::GWSt
     Giant ga = a.value();
     logging.info("Computing multiplicative order of %s modulo prime %s.\n", a.display_text().data(), input.display_text().data());
     if (gwstate.information_only)
-        exit(0);
+        throw TaskAbortException();
     logging.set_prefix("ord(" + a.display_text() + ") mod " + input.display_text() + " ");
 
     while (!_factors.empty())

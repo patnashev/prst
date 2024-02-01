@@ -308,7 +308,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         logging.info("Fermat probabilistic test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     logging.report_param("a", _a);
     if (gwstate.information_only)
-        exit(0);
+        throw TaskAbortException();
     logging.set_prefix(input.display_text() + " ");
 
     Giant tail;

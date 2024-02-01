@@ -220,7 +220,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         logging.info("%sMorrison%s test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", _LLR ? " (LLR)" : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
         logging.set_prefix(input.display_text() + " ");
         if (gwstate.information_only)
-            exit(0);
+            throw TaskAbortException();
         restart = true;
 
         checkpoint = file_checkpoint.add_child(sP, File::unique_fingerprint(file_checkpoint.fingerprint(), sP));

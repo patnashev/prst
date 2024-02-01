@@ -20,6 +20,7 @@
 #include "morrison.h"
 #include "order.h"
 #include "testing.h"
+#include "batch.h"
 #include "support.h"
 #include "version.h"
 
@@ -198,6 +199,7 @@ int main(int argc, char *argv[])
             .end()
         .check("-d", log_level, Logging::LEVEL_INFO)
         .check_code("-test", [&] { exit(testing_main(argc, argv)); })
+        .check_code("-batch", [&] { exit(batch_main(argc, argv)); })
 #ifdef BOINC
         .check_code("-boinc", [&] { exit(boinc_main(argc, argv)); })
 #endif
@@ -249,7 +251,9 @@ int main(int argc, char *argv[])
         printf("Usage: PRST {\"[K*]B^N+C\" | \"N!+C\" | \"N#+C\" | \"Phi(3, [-][K*]B^N)\" | \"Hex([-][K*]B^N)\" | \"N\"} <options>\n");
         printf("Options:\n");
         printf("\t-v\n");
+        printf("\t-info\n");
         printf("\t-test\n");
+        printf("\t-batch\n");
         printf("\t-ini <filename>\n");
         printf("\t-log [{debug | info | warning | error}] [file <filename>]\n");
         printf("\t-time [write <sec>] [progress <sec>] [coarse]\n");
@@ -262,8 +266,8 @@ int main(int argc, char *argv[])
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>] [L <L>]]\n");
-        printf("\t-proof save <count> [name <proof> <product>] [keep]\n");
-        printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [cert <name>] [keep]\n");
+        printf("\t-proof save <count> [name <proof> <product>] [pack <name>] [keep]\n");
+        printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [pack <name>] [cert <name>] [keep]\n");
         printf("\t-proof cert {<name> | default}\n");
         return 0;
     }
@@ -297,22 +301,18 @@ int main(int argc, char *argv[])
 
     uint32_t fingerprint = input.fingerprint();
     gwstate.fingerprint = fingerprint;
+    std::string filename_suffix;
+    if (!order_a.empty() && order_a.value() > 1)
+        filename_suffix = "." + std::to_string(order_a.fingerprint());
+    else if (options.FermatBase)
+        filename_suffix = "." + std::to_string(options.FermatBase.value());
+    else if (proof_op == Proof::CERT)
+        filename_suffix = ".cert";
     std::string filename_prefix = "prst_" + std::to_string(fingerprint);
-    File file_progress(filename_prefix + ".param", fingerprint);
+    File file_progress(filename_prefix + filename_suffix + ".param", fingerprint);
     file_progress.hash = false;
     logging.file_progress(&file_progress);
 
-    std::unique_ptr<container::FileContainer> proof_container;
-    if (!proof_pack.empty())
-    {
-        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack", true, proof_op != Proof::BUILD));
-        if (proof_container->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof_container->error() != container::container_error::EMPTY))
-            logging.warning("File %s is corrupted.\n", proof_pack.data());
-    }
-    std::unique_ptr<FilePacked> file_proofpacked;
-    std::unique_ptr<File> file_proofpoint;
-    std::unique_ptr<File> file_proofproduct;
-    std::unique_ptr<File> file_cert;
     auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
     {
         if (supportLLR2)
@@ -321,6 +321,7 @@ int main(int argc, char *argv[])
             file.reset(new File(filename, fingerprint));
     };
 
+    std::unique_ptr<File> file_cert;
     newFile(file_cert, !proof_cert.empty() && proof_cert != "default" ? proof_cert : filename_prefix + ".cert", fingerprint, Proof::Certificate::TYPE);
     std::unique_ptr<Proof> proof;
     if (proof_op != Proof::NO_OP)
@@ -340,9 +341,11 @@ int main(int argc, char *argv[])
             return 1;
         }
         order.reset(new Order(order_a, input, options, logging));
+        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
     }
     else if (proof_op == Proof::CERT)
     {
+        fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
     }
     else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
@@ -377,6 +380,40 @@ int main(int argc, char *argv[])
     else
         fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
 
+    std::unique_ptr<container::FileContainer> proof_container;
+    if (!proof_pack.empty())
+    {
+        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack", true, proof_op != Proof::BUILD));
+        if (proof_container->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof_container->error() != container::container_error::EMPTY))
+            logging.warning("File %s is corrupted.\n", proof_pack.data());
+    }
+    std::unique_ptr<FilePacked> file_proofpacked;
+    std::unique_ptr<File> file_proofpoint;
+    std::unique_ptr<File> file_proofproduct;
+    if (fermat && proof)
+    {
+        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
+        newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", fingerprint);
+        if (proof_container)
+            file_proofproduct.reset(new FilePacked(!options.ProofProductFilename.empty() ? options.ProofProductFilename : "prod", fingerprint, *proof_container));
+        else
+            newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
+        proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+        if (proof_container)
+        {
+            file_proofpacked.reset(new FilePacked(!options.ProofPointFilename.empty() ? options.ProofPointFilename : "proof", fingerprint, *proof_container));
+            proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
+            proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
+        }
+        if (proof_write)
+            for (int i = 1; i < proof_count; i++)
+                fermat->task()->points()[i].value = proof_write.value();
+    }
+    else if (fermat)
+        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
+    File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
+    File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
+
     if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
         gwstate.next_fft_count = logging.progress().param_int("next_fft");
     gwstate.maxmulbyconst = options.maxmulbyconst;
@@ -388,47 +425,16 @@ int main(int argc, char *argv[])
     try
     {
         if (order)
-        {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
-            File file_checkpoint(filename_prefix + "." + std::to_string(order_a.fingerprint()) + ".ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + "." + std::to_string(order_a.fingerprint()) + ".rcpt", fingerprint);
             order->run(order_a, options, input, gwstate, file_checkpoint, file_recoverypoint, logging);
-        }
         else if (proof_op == Proof::CERT)
-        {
-            fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-            File file_checkpoint(filename_prefix + ".cert.ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".cert.rcpt", fingerprint);
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-        }
         else if (morrison)
         {
-            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
             success = morrison->success();
         }
         else if (proof)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
-            newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", fingerprint);
-            if (proof_container)
-                file_proofproduct.reset(new FilePacked(!options.ProofProductFilename.empty() ? options.ProofProductFilename : "prod", fingerprint, *proof_container));
-            else
-                newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
-            proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
-            if (proof_container)
-            {
-                file_proofpacked.reset(new FilePacked(!options.ProofPointFilename.empty() ? options.ProofPointFilename : "proof", fingerprint, *proof_container));
-                proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
-                proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
-            }
-            if (proof_write)
-                for (int i = 1; i < proof_count; i++)
-                    fermat->task()->points()[i].value = proof_write.value();
-
-            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
             if (proof_op != Proof::BUILD)
                 success = fermat->success();
@@ -454,9 +460,6 @@ int main(int argc, char *argv[])
         }
         else if (fermat)
         {
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
-            File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
-            File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
             success = fermat->success();
         }
@@ -465,7 +468,8 @@ int main(int argc, char *argv[])
     }
     catch (const TaskAbortException&)
     {
-        failed = true;
+        if (!gwstate.information_only)
+            failed = true;
     }
 
     gwstate.done();

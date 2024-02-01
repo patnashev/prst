@@ -157,6 +157,7 @@
     <ClCompile Include="..\..\framework\logging.cpp" />
     <ClCompile Include="..\..\framework\md5.c" />
     <ClCompile Include="..\..\framework\task.cpp" />
+    <ClCompile Include="..\batch.cpp" />
     <ClCompile Include="..\boinc.cpp" />
     <ClCompile Include="..\exp.cpp" />
     <ClCompile Include="..\fermat.cpp" />
@@ -184,6 +185,7 @@
     <ClInclude Include="..\..\framework\logging.h" />
     <ClInclude Include="..\..\framework\md5.h" />
     <ClInclude Include="..\..\framework\task.h" />
+    <ClInclude Include="..\batch.h" />
     <ClInclude Include="..\boinc.h" />
     <ClInclude Include="..\exp.h" />
     <ClInclude Include="..\fermat.h" />
