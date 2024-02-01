@@ -10,6 +10,7 @@
 #include "config.h"
 #include "inputnum.h"
 #include "file.h"
+#include "container.h"
 #include "logging.h"
 #include "task.h"
 #include "options.h"
@@ -175,6 +176,7 @@ int boinc_main(int argc, char *argv[])
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
+    std::string proof_pack;
     bool force_fermat = false;
     InputNum input;
 
@@ -208,6 +210,7 @@ int boinc_main(int argc, char *argv[])
                         .value_string(options.ProofPointFilename)
                         .value_string(options.ProofProductFilename)
                         .end()
+                    .value_string("pack", ' ', proof_pack)
                     .end()
                 .ex_case()
                     //.value_string("cert", ' ', proof_cert)
@@ -271,6 +274,14 @@ int boinc_main(int argc, char *argv[])
     file_progress.hash = false;
     logging.file_progress(&file_progress);
 
+    std::unique_ptr<container::FileContainer> proof_container;
+    if (!proof_pack.empty())
+    {
+        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack", true, true));
+        if (proof_container->error() != container::container_error::OK && proof_container->error() != container::container_error::EMPTY)
+            logging.warning("File %s is corrupted.", proof_pack.data());
+    }
+    std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
@@ -324,12 +335,24 @@ int boinc_main(int argc, char *argv[])
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
             file_proofpoint.reset(new File(options.ProofPointFilename, fingerprint));
-            file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
+            if (proof_container)
+                file_proofproduct.reset(new FilePacked(options.ProofProductFilename, fingerprint, *proof_container));
+            else
+                file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+            if (proof_container)
+            {
+                file_proofpacked.reset(new FilePacked(options.ProofPointFilename, fingerprint, *proof_container));
+                proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
+                proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
+            }
 
             File file_checkpoint(filename_prefix + ".ckpt", fingerprint);
             File file_recoverypoint(filename_prefix + ".rcpt", fingerprint);
             fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
+
+            if (proof_container)
+                proof_container->close();
         }
         else if (fermat)
         {

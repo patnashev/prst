@@ -24,7 +24,7 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
 
     _done = 1;
     _tasks.reserve(input.factors().size());
-    for (auto i = 0; i < input.factors().size(); i++)
+    for (int i = 0; i < input.factors().size(); i++)
         if (logging.progress().param("factor" + std::to_string(i)).empty())
         {
             _tasks.emplace_back(i);

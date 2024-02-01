@@ -152,6 +152,7 @@
     <ClCompile Include="..\..\framework\arithmetic\lucas.cpp" />
     <ClCompile Include="..\..\framework\config.cpp" />
     <ClCompile Include="..\..\framework\file.cpp" />
+    <ClCompile Include="..\..\framework\container.cpp" />
     <ClCompile Include="..\..\framework\inputnum.cpp" />
     <ClCompile Include="..\..\framework\logging.cpp" />
     <ClCompile Include="..\..\framework\md5.c" />
@@ -178,6 +179,7 @@
     <ClInclude Include="..\..\framework\arithmetic\lucas.h" />
     <ClInclude Include="..\..\framework\config.h" />
     <ClInclude Include="..\..\framework\file.h" />
+    <ClInclude Include="..\..\framework\container.h" />
     <ClInclude Include="..\..\framework\inputnum.h" />
     <ClInclude Include="..\..\framework\logging.h" />
     <ClInclude Include="..\..\framework\md5.h" />

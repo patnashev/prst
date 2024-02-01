@@ -10,6 +10,7 @@
 #include "config.h"
 #include "inputnum.h"
 #include "file.h"
+#include "container.h"
 #include "logging.h"
 #include "task.h"
 #include "options.h"
@@ -67,6 +68,7 @@ int main(int argc, char *argv[])
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
     std::string proof_cert;
+    std::string proof_pack;
     bool proof_keep = false;
     std::optional<bool> proof_write;
     bool supportLLR2 = false;
@@ -100,6 +102,7 @@ int main(int argc, char *argv[])
                         .value_string(options.ProofPointFilename)
                         .value_string(options.ProofProductFilename)
                         .end()
+                    .value_string("pack", ' ', proof_pack)
                     .check("keep", proof_keep, true)
                     .value_enum("write", ' ', proof_write, Enum<bool>().add("fast", false).add("small", true))
                     .end()
@@ -112,6 +115,7 @@ int main(int argc, char *argv[])
                         .value_string(options.ProofProductFilename)
                         .end()
                     .value_string("cert", ' ', proof_cert)
+                    .value_string("pack", ' ', proof_pack)
                     .value_string("security", ' ', options.ProofSecuritySeed)
                     .value_number("roots", ' ', options.RootOfUnitySecurity, 0, 64)
                         .on_code([&] { if (options.RootOfUnitySecurity.value() == 0) options.RootOfUnityCheck = false; })
@@ -298,6 +302,14 @@ int main(int argc, char *argv[])
     file_progress.hash = false;
     logging.file_progress(&file_progress);
 
+    std::unique_ptr<container::FileContainer> proof_container;
+    if (!proof_pack.empty())
+    {
+        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack", true, proof_op != Proof::BUILD));
+        if (proof_container->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof_container->error() != container::container_error::EMPTY))
+            logging.warning("File %s is corrupted.\n", proof_pack.data());
+    }
+    std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     std::unique_ptr<File> file_cert;
@@ -365,7 +377,6 @@ int main(int argc, char *argv[])
     else
         fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
 
-
     if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
         gwstate.next_fft_count = logging.progress().param_int("next_fft");
     gwstate.maxmulbyconst = options.maxmulbyconst;
@@ -401,8 +412,17 @@ int main(int argc, char *argv[])
         {
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
             newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", fingerprint);
-            newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
+            if (proof_container)
+                file_proofproduct.reset(new FilePacked(!options.ProofProductFilename.empty() ? options.ProofProductFilename : "prod", fingerprint, *proof_container));
+            else
+                newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+            if (proof_container)
+            {
+                file_proofpacked.reset(new FilePacked(!options.ProofPointFilename.empty() ? options.ProofPointFilename : "proof", fingerprint, *proof_container));
+                proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
+                proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
+            }
             if (proof_write)
                 for (int i = 1; i < proof_count; i++)
                     fermat->task()->points()[i].value = proof_write.value();
@@ -413,17 +433,21 @@ int main(int argc, char *argv[])
             if (proof_op != Proof::BUILD)
                 success = fermat->success();
 
+            if (proof_container)
+                proof_container->close();
             if (!proof_keep)
             {
                 if (proof_op == Proof::SAVE)
                     for (int i = 1; i < proof->count(); i++)
                         proof->file_points()[i]->clear();
-                if (proof_op == Proof::BUILD)
+                if (proof_op == Proof::BUILD && proof_container)
+                    remove(proof_pack.data());
+                else if (proof_op == Proof::BUILD)
                 {
                     if (!proof->Li())
                         proof->file_points()[0]->clear();
                     proof->file_points()[proof->count()]->clear();
-                    for (auto file : proof->file_products())
+                    for (auto& file : proof->file_products())
                         file->clear();
                 }
             }

@@ -152,7 +152,7 @@ int testing_main(int argc, char *argv[])
 
     if (subset == "all" || subset == "error")
     {
-        auto& cont = add("error");
+        add("error");
     }
     
     if (subset == "all" || subset == "deterministic")

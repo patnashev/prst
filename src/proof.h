@@ -93,7 +93,7 @@ public:
     int op() { return _op; }
     int count() { return _count; }
     bool Li() { return _Li; }
-    int depth() { int t; for (t = 0; (1 << t) < _count; t++); return t; }
+    int depth() { int t = 0; while ((1 << t) < _count) t++; return t; }
     std::vector<MultipointExp::Point>& points() { return _points; }
     int M() { return _M; }
     void set_cache_points(bool value) { _cache_points = value; }

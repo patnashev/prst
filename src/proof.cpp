@@ -119,10 +119,12 @@ void Proof::calc_points(int iterations, bool smooth, InputNum& input, Options& o
     _Li = !smooth;
 
     if (options.StrongCount)
+    {
         if (options.StrongCount.value() > _count)
             options.ProofChecksPerPoint = options.StrongCount.value()/_count;
         else
             options.ProofPointsPerCheck = _count/options.StrongCount.value();
+    }
     int points_per_check = options.ProofPointsPerCheck ? options.ProofPointsPerCheck.value() : 1;
     bool value_points = input.type() == input.KBNC && (input.k() != 0 || input.cyclotomic()) && input.b() == 2;
 
