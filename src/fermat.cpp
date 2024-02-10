@@ -7,6 +7,7 @@
 #include "fermat.h"
 #include "integer.h"
 #include "exception.h"
+#include "container.h"
 
 using namespace arithmetic;
 
@@ -375,6 +376,8 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         if (proof != nullptr)
             _task->state()->set_written();
     }
+    if (proof != nullptr && proof->file_points().size() > 0 && dynamic_cast<FilePacked*>(proof->file_points().front()) != nullptr)
+        dynamic_cast<FilePacked*>(proof->file_points().front())->container().close();
 
     _task->run();
 

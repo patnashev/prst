@@ -383,7 +383,7 @@ int main(int argc, char *argv[])
     std::unique_ptr<container::FileContainer> proof_container;
     if (!proof_pack.empty())
     {
-        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack", true, proof_op != Proof::BUILD));
+        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack"));
         if (proof_container->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof_container->error() != container::container_error::EMPTY))
             logging.warning("File %s is corrupted.\n", proof_pack.data());
     }
@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
                     for (int i = 1; i < proof->count(); i++)
                         proof->file_points()[i]->clear();
                 if (proof_op == Proof::BUILD && proof_container)
-                    remove(proof_pack.data());
+                    remove(proof_container->filename().data());
                 else if (proof_op == Proof::BUILD)
                 {
                     if (!proof->Li())

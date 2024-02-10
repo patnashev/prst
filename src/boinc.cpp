@@ -308,7 +308,7 @@ int boinc_main(int argc, char *argv[])
     std::unique_ptr<container::FileContainer> proof_container;
     if (!proof_pack.empty())
     {
-        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack", true, true));
+        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack"));
         if (proof_container->error() != container::container_error::OK && proof_container->error() != container::container_error::EMPTY)
             logging.warning("File %s is corrupted.", proof_pack.data());
     }
