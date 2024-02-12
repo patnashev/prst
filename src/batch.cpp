@@ -4,6 +4,7 @@
 #include <tuple>
 #include <cmath>
 #include <string.h>
+#include <iostream>
 
 #include "gwnum.h"
 #include "cpuid.h"
@@ -112,7 +113,7 @@ int batch_main(int argc, char *argv[])
 
     if (batch_name.empty())
     {
-        printf("Usage: PRST -batch <file> <options>\n");
+        printf("Usage: PRST -batch {<file> | stdin} <options>\n");
         printf("Options:\n");
         printf("\t-info\n");
         printf("\t-ini <filename>\n");
@@ -136,19 +137,22 @@ int batch_main(int argc, char *argv[])
         logging_batch.file_log(log_file);
 
     std::vector<std::string> batch;
+    std::string batch_cur;
 
-    File batch_file(batch_name, 0);
-    batch_file.read_buffer();
-    std::unique_ptr<TextReader> reader(batch_file.get_textreader());
-    std::string st;
-    while (reader->read_textline(st))
-        batch.push_back(std::move(st));
-
-
-    if (batch.empty())
+    if (batch_name != "stdin")
     {
-        logging_batch.warning("Batch %s is empty.\n", batch_name.data());
-        return 0;
+        File batch_file(batch_name, 0);
+        batch_file.read_buffer();
+        std::unique_ptr<TextReader> reader(batch_file.get_textreader());
+        std::string st;
+        while (reader->read_textline(st))
+            batch.push_back(std::move(st));
+
+        if (batch.empty())
+        {
+            logging_batch.warning("Batch %s is empty.\n", batch_name.data());
+            return 0;
+        }
     }
 
     std::string filename_suffix;
@@ -164,8 +168,18 @@ int batch_main(int argc, char *argv[])
         logging_batch.info("Restarting at %d.\n", cur + 1);
 
     bool success = false;
-    for (; cur < batch.size(); cur++)
+    for (; cur < batch.size() || batch_name == "stdin"; cur++)
     {
+        if (batch_name == "stdin")
+        {
+            double time = logging_batch.progress().time_total();
+            std::getline(std::cin, batch_cur);
+            logging_batch.progress().time_init(time);
+            if (batch_cur.empty() || Task::abort_flag())
+                break;
+            batch.push_back(std::move(batch_cur));
+        }
+
         logging_batch.report_param("cur", cur);
         logging_batch.progress().update(cur/(double)batch.size(), 0);
         logging_batch.progress_save();
@@ -192,12 +206,14 @@ int batch_main(int argc, char *argv[])
             if (!gwstate.information_only)
                 continue;
         }
-        else
-            logging_batch.info("%s\n", input.display_text().data());
+        else if (batch_name != "stdin")
+            logging_batch.info("%d of %d: %s\n", cur, (int)batch.size(), input.display_text().data());
 
         Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
         if (!log_file.empty())
             logging.file_log(log_file);
+        if (batch_name == "stdin")
+            logging.level_result_not_success = Logging::LEVEL_WARNING;
 
         if (input.bitlen() < 32)
         {
@@ -316,7 +332,7 @@ int batch_main(int argc, char *argv[])
     }
 
     logging_batch.progress().update(cur/(double)batch.size(), 0);
-    if (Task::abort_flag())
+    if (Task::abort_flag() && batch_name != "stdin")
         logging_batch.progress_save();
     else
     {
