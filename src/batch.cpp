@@ -137,7 +137,6 @@ int batch_main(int argc, char *argv[])
         logging_batch.file_log(log_file);
 
     std::vector<std::string> batch;
-    std::string batch_cur;
 
     if (batch_name != "stdin")
     {
@@ -154,6 +153,8 @@ int batch_main(int argc, char *argv[])
             return 0;
         }
     }
+    else
+        batch.emplace_back();
 
     std::string filename_suffix;
     if (!order_a.empty() && order_a.value() > 1)
@@ -168,18 +169,8 @@ int batch_main(int argc, char *argv[])
         logging_batch.info("Restarting at %d.\n", cur + 1);
 
     bool success = false;
-    for (; cur < batch.size() || batch_name == "stdin"; cur++)
+    for (; cur < batch.size(); cur++)
     {
-        if (batch_name == "stdin")
-        {
-            double time = logging_batch.progress().time_total();
-            std::getline(std::cin, batch_cur);
-            logging_batch.progress().time_init(time);
-            if (batch_cur.empty() || Task::abort_flag())
-                break;
-            batch.push_back(std::move(batch_cur));
-        }
-
         logging_batch.report_param("cur", cur);
         logging_batch.progress().update(cur/(double)batch.size(), 0);
         logging_batch.progress_save();
@@ -187,6 +178,15 @@ int batch_main(int argc, char *argv[])
         {
             Task::abort();
             break;
+        }
+        if (batch_name == "stdin")
+        {
+            double time = logging_batch.progress().time_total();
+            std::getline(std::cin, batch.back());
+            logging_batch.progress().time_init(time);
+            if (batch.back().empty() || Task::abort_flag())
+                break;
+            batch.emplace_back();
         }
 
         InputNum input;
