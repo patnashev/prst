@@ -18,8 +18,19 @@ Donate XMR: 453MFNnC7N7NK9iK99FoNh3xZ4wY9yqt1Qk6F62iUZjg6bv6xD3oH3U2EABnUQMmco5B
 view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d460f09b167e0a.
 
 ```
-Usage: PRST {"K*B^N+C" | "B^N+C" | "N!+C" | "N#+C" | "Phi(3,[-]K*B^N)" | "Hex([-][K*]B^N)" | "N"} <options>
-Options: -v
+Usage: PRST "<number>" <mode> <options>
+Number:  K*B^N/D+C
+                 K and D can occur multiple times or none.
+                 K, B and D can be (<number>).
+         N!+C | N!A+C | N#+C | pN#+C
+                 !A is the multifactorial function.
+                 pN denotes N-th prime number.
+         X
+                 arbitrary length number in decimal notation.
+         Phi(3,[-]<number>) | Phi(6,<number>)
+                 expands to X^2 ± X + 1.
+Mode:    default is primality testing.
+         -v
                  outputs version information.
          -info
                  outputs number profile.
@@ -27,7 +38,9 @@ Options: -v
                  performs built-in tests.
          -batch
                  processes several numbers.
-         -ini <filename>
+         -order {<a> | "<number>"}
+                 computes multiplicative order of a.
+Options: -ini <filename>
                  reads command line options from ini file. See sample.ini.
          -log [{debug | info | warning | error}] [file <filename>]
                  level of detail of output information.
@@ -52,8 +65,6 @@ Options: -v
          -fermat [a <a>]
                  forces Fermat probabilistic test, optionally supplying starting value,
                  a = 3 by default.
-         -order {<a> | "K*B^N+C"}
-                 computes multiplicative order of a.
          -factors [list <factor>,...] [file <filename>] [all]
                  sets list of prime factors to be used by Pocklington or Morrison tests.
                  reads the list from helper file, one factor per line.

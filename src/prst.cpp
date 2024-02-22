@@ -248,12 +248,14 @@ int main(int argc, char *argv[])
 
     if (input.empty())
     {
-        printf("Usage: PRST {\"[K*]B^N+C\" | \"N!+C\" | \"N#+C\" | \"Phi(3, [-][K*]B^N)\" | \"Hex([-][K*]B^N)\" | \"N\"} <options>\n");
-        printf("Options:\n");
+        printf("Usage: PRST {\"[K*]B^N[/D]+C\" | \"N![A]+C\" | \"[p]N#+C\" | \"X\" | \"Phi(3,[-]<number>)\"} <mode> <options>\n");
+        printf("Mode: default is primality testing\n");
         printf("\t-v\n");
         printf("\t-info\n");
         printf("\t-test\n");
         printf("\t-batch\n");
+        printf("\t-order {<a> | \"<number>\"}\n");
+        printf("Options:\n");
         printf("\t-ini <filename>\n");
         printf("\t-log [{debug | info | warning | error}] [file <filename>]\n");
         printf("\t-time [write <sec>] [progress <sec>] [coarse]\n");
@@ -263,7 +265,6 @@ int main(int argc, char *argv[])
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
         printf("\t-fermat [a <a>]\n");
-        printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>] [L <L>]]\n");
         printf("\t-proof save <count> [name <proof> <product>] [pack <name>] [keep]\n");
