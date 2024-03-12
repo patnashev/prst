@@ -19,6 +19,7 @@ view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d46
 
 ```
 Usage: PRST "<number>" <mode> <options>
+
 Number:  K*B^N/D+C
                  K and D can occur multiple times or none.
                  K, B and D can be (<number>).
@@ -29,6 +30,7 @@ Number:  K*B^N/D+C
                  arbitrary length number in decimal notation.
          Phi(3,[-]<number>) | Phi(6,<number>)
                  expands to X^2 ± X + 1.
+
 Mode:    default is primality testing.
          -v
                  outputs version information.
@@ -40,6 +42,7 @@ Mode:    default is primality testing.
                  processes several numbers.
          -order {<a> | "<number>"}
                  computes multiplicative order of a.
+
 Options: -ini <filename>
                  reads command line options from ini file. See sample.ini.
          -log [{debug | info | warning | error}] [file <filename>]
@@ -77,7 +80,8 @@ Options: -ini <filename>
                  saves proof files for verification (on tester side).
                  packs proof into a single file.
                  keeps all temporary files if asked.
-         -proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [pack <name>] [cert <name>] [keep]
+         -proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>]
+          [pack <name>] [cert <name>] [keep]
                  builds a certificate from proof files (on authority side).
                  uses security seed to encrypt the certificate.
                  detects root of unity attack up to 2^depth degree.
