@@ -210,7 +210,8 @@ int boinc_main(int argc, char *argv[])
                         .value_string(options.ProofPointFilename)
                         .value_string(options.ProofProductFilename)
                         .end()
-                    .value_string("pack", ' ', proof_pack)
+                    //.value_string("pack", ' ', proof_pack)
+                    .value_code("pack", ' ', [&](const char* pack) { bow_resolve_filename(pack, proof_pack); return true; })
                     .end()
                 .ex_case()
                     //.value_string("cert", ' ', proof_cert)
@@ -303,7 +304,7 @@ int boinc_main(int argc, char *argv[])
         }
     }
     else
-        fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
+        fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
 
     std::unique_ptr<container::FileContainer> proof_container;
     if (!proof_pack.empty())
