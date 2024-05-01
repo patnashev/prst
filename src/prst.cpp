@@ -386,7 +386,7 @@ int main(int argc, char *argv[])
     {
         proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack"));
         if (proof_container->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof_container->error() != container::container_error::EMPTY))
-            logging.warning("File %s is corrupted.\n", proof_pack.data());
+            logging.warning("Pack %s is corrupted.\n", proof_pack.data());
     }
     std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;

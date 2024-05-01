@@ -4,7 +4,7 @@
 //#define NETPRST
 
 #define PRST_VERSION "12.1"
-#define VERSION_BUILD "1442"
+#define VERSION_BUILD "1443"
 
 inline void print_banner()
 {
