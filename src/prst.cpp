@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
                         if (tmp == 0)
                             return false;
                         if (tmp != 1)
-                            factors.push_back(std::move(tmp));
+                            input.add_factor(factors.emplace_back(std::move(tmp)));
                         return true;
                     })
                 .end()
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
                         {
                             tmp = factor;
                             if (tmp != 0 && tmp != 1)
-                                factors.push_back(std::move(tmp));
+                                input.add_factor(factors.emplace_back(std::move(tmp)));
                         }
                     }
                     return true;
@@ -210,25 +210,6 @@ int main(int argc, char *argv[])
                 print_banner();
                 exit(0);
             })
-        .check_code("-i", [&] {
-                if (!show_info)
-                    input.print_info();
-                show_info = true;
-            })
-        .check_code("-info", [&] {
-                if (!show_info)
-                    input.print_info();
-                show_info = true;
-            })
-        .value_code("-q", 0, [&](const char* param) {
-                if (param[0] != '\"' && !isdigit(param[0]))
-                    return false;
-                if (!input.parse(param))
-                    return false;
-                else if (show_info)
-                    input.print_info();
-                return true;
-            })
         .value_code("-ini", ' ', [&](const char* param) {
                 File ini_file(param, 0);
                 ini_file.read_buffer();
@@ -238,11 +219,33 @@ int main(int argc, char *argv[])
                     cnfg.parse_ini(ini_file);
                 return true;
             })
+        .check("-i", show_info, true)
+        .check("-info", show_info, true)
+        .value_code("-q", 0, [&](const char* param) {
+                if (param[0] != '\"' && !isdigit(param[0]))
+                    return false;
+                InputNum tmp;
+                if (!tmp.parse(param))
+                    return false;
+                if (show_info)
+                    input.print_info();
+                input = std::move(tmp);
+                for (auto& f : factors)
+                    input.add_factor(f);
+                return true;
+            })
         .default_code([&](const char* param) {
-            if (!input.parse(param))
-                printf("Unknown option %s.\n", param);
-            else if (show_info)
-                input.print_info();
+                InputNum tmp;
+                if (!tmp.parse(param))
+                    printf("Unknown option %s.\n", param);
+                else
+                {
+                    if (show_info)
+                        input.print_info();
+                    input = std::move(tmp);
+                    for (auto& f : factors)
+                        input.add_factor(f);
+                }
             })
         .parse_args(argc, argv);
 
@@ -272,10 +275,10 @@ int main(int argc, char *argv[])
         printf("\t-proof cert {<name> | default}\n");
         return 0;
     }
+    if (show_info)
+        input.print_info();
     if (show_info && !gwstate.information_only)
         return 0;
-    for (auto& f : factors)
-        input.add_factor(f);
 
     Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
     if (!log_file.empty())
