@@ -1,4 +1,9 @@
+<p align="center">
+  <img src="https://github.com/patnashev/prst/assets/12833063/4ec5bd6d-ebd6-443f-a3c4-7d7840fc8300" alt="Anton Frolov &quot;Euler's Totient&quot;">
+</p>
+
 # PRST
+
 PRST is a primality testing utility written in C++ by Pavel Atnashev. It is based on [GWnum](https://www.mersenne.org/download/) multiplication library by George Woltman.
 
 The utility is best used for systematic searches of large prime numbers, either by public distributed projects or by private individuals. It can handle numbers of many popular forms like Proth numbers, Thabit numbers, generalized Fermat numbers, factorials, primorials and arbitrary numbers. Mersenne numbers are better handled by [GIMPS](https://www.mersenne.org/).
@@ -29,7 +34,7 @@ Number:  K*B^N/D+C
          X
                  arbitrary length number in decimal notation.
          Phi(3,[-]<number>) | Phi(6,<number>)
-                 expands to X^2 ± X + 1.
+                 expands to X^2 Â± X + 1.
 
 Mode:    default is primality testing.
          -v
