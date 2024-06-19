@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/patnashev/prst/assets/12833063/4ec5bd6d-ebd6-443f-a3c4-7d7840fc8300" alt="Anton Frolov &quot;Euler's Totient&quot;">
+  <a href="#" title="Anton Frolov &quot;Euler's Totient&quot;"><img src="https://github.com/patnashev/prst/assets/12833063/4ec5bd6d-ebd6-443f-a3c4-7d7840fc8300"></a>
 </p>
 
 # PRST
