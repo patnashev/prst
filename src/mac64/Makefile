@@ -1,4 +1,4 @@
-# Makefile for Linux
+# Makefile for macOS
 
 EXE       = prst
 LIB_GWNUM = ../../framework/gwnum/mac64/gwnum.a
@@ -10,19 +10,15 @@ COMPOBJS        = $(COMPOBJS_COMMON) prst.o
 
 VPATH     = ..:../../framework:../../framework/arithmetic
 
-# See README.md for how to get macOS SDK
-LFLAGS    = # -isysroot MacOSX10.7.sdk/ -mmacosx-version-min=10.7
+LFLAGS    = -ld_classic
 
 DUMMY2    =
 LIBS2     = -lm -lpthread -lstdc++ /usr/local/lib/libgmp.a  # link against .a file directly to avoid using .dylib
 
-#CC        = /usr/local/bin/gcc-12 -mmacosx-version-min=10.9
-#CC        = /usr/local/bin/gcc-12
-#CXX       = /usr/local/bin/g++-12
-CC = gcc -mmacosx-version-min=10.13 -isysroot /Users/daohe/CLionProjects/prst/src/mac64/MacOSX10.13.sdk
-CXX = g++ -mmacosx-version-min=10.13 -isysroot /Users/daohe/CLionProjects/prst/src/mac64/MacOSX10.13.sdk
-CFLAGS    = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -O2 -std=c99     -Wall -Wextra
-CXXFLAGS  = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -O2 -std=gnu++17 -Wall -Wextra
+CC = clang
+CXX = clang
+CFLAGS    = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -O2 -fno-limit-debug-info -g -std=c99     -Wall -Wextra -target x86_64-apple-macos10.15
+CXXFLAGS  = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -O2 -fno-limit-debug-info -g -std=gnu++17 -Wall -Wextra -target x86_64-apple-macos10.15
 
 # the code is too noisy for all warnings
 CXXFLAGS += -Wno-sign-compare
@@ -34,5 +30,5 @@ all: $(EXE)
 $(EXE): $(COMPOBJS)
 	$(CC) $(LFLAGS) -o $@ $(COMPOBJS) $(LIB_GWNUM) $(LIBS2)
 
-clean:
+clean::
 	rm -f $(EXE) $(COMPOBJS)
