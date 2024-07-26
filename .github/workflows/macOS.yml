@@ -94,6 +94,15 @@ jobs:
           key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-macIntel64
           fail-on-cache-miss: true
 
+      - name: boinc libs debug
+        run: |
+          ls -la ../../../boinc/mac_build/build/Deployment
+          ls -la ../../../boinc/mac_build/build
+          ls -la ../../../boinc/mac_build
+          ls -la ../../../boinc/
+          ls -la ../../../
+          ls -la ../../
+
       - name: Use cached gwnum
         id: cache-gwnum
         uses: actions/cache@v3
