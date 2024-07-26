@@ -12,6 +12,7 @@ concurrency:
 
 env:
   boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
+  gwnum_ver: "v3019b20"
 
 
 jobs:
@@ -53,11 +54,28 @@ jobs:
     runs-on: macos-12
 
     steps:
+      - name: Cache gwnum.a libs
+        id: cache-gwnum-macIntel64
+        uses: actions/cache@v3
+        with:
+          path: |
+            gwnum/gwnum.a
+            gwnum/polymult.a
+          key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
+
       - name: Download p95
-        run: wget "https://www.mersenne.org/download/software/v30/30.19/p95v3019b20.source.zip"
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
+        run: wget "https://www.mersenne.org/download/software/v30/30.19/p95${{ env.gwnum_ver }}.source.zip"
 
       - name: unzip p95
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
         run: unzip p95*.zip
+
+      - name: build gwnum.a and polymult.a
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
+        run: |
+          cd gwnum
+          make -f makemac -j gwnum.a polymult.a
 
   macIntel64:
     needs: [boinc-macIntel64, gwnum]
