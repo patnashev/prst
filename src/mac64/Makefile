@@ -20,8 +20,8 @@ LIBS2     = -lm -lpthread -lstdc++ /usr/local/lib/libgmp.a  # link against .a fi
 
 CC = clang
 CXX = clang++
-CFLAGS    = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -Og -g -fno-limit-debug-info -std=c99     -Wall -Wextra
-CXXFLAGS  = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -Og -g -fno-limit-debug-info -std=gnu++17 -Wall -Wextra
+CFLAGS    = -I/usr/local/include/ -I.. -I../../framework/gwnum                                                -DGMP -DX86_64 -O2 -g -fno-limit-debug-info -std=c99     -Wall -Wextra
+CXXFLAGS  = -I/usr/local/include/ -I.. -I../../framework -I../../framework/arithmetic -I../../framework/gwnum -DGMP -DX86_64 -O2 -g -fno-limit-debug-info -std=gnu++17 -Wall -Wextra
 
 CFLAGS   += -target x86_64-apple-macos10.13
 CXXFLAGS += -target x86_64-apple-macos10.13
