@@ -97,6 +97,18 @@ jobs:
         if: steps.cache-boinc.outputs.cache-hit != 'true'
         run: exit 1
 
+      - name: Use cached gwnum
+        id: cache-gwnum
+        uses: actions/cache@v3
+        with:
+          path: |
+            gwnum/gwnum.a
+          key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
+
+      - name: Fail if gwnum missing
+        if: steps.cache-gwnum.outputs.cache-hit != 'true'
+        run: exit 1
+
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '13.4.1'
@@ -117,6 +129,9 @@ jobs:
         with:
           submodules: 'true'
           path: 'prst'
+
+      - name: copy gwnum
+        run: cp gwnum/gwnum.a prst/framework/gwnum/mac64/
 
       - name: make
         run: cd prst/src/mac64 && make -j
