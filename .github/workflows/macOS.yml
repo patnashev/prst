@@ -16,7 +16,7 @@ env:
 
 jobs:
   boinc-macIntel64:
-    runs-on: macos-latest
+    runs-on: macos-12
 
     steps:
       - name: Cache BOINC libs
@@ -49,9 +49,19 @@ jobs:
           cd ./boinc/mac_build/
           source BuildMacBOINC.sh -lib
 
+  gwnum:
+    runs-on: macos-12
+
+    steps:
+      - name: Download p95
+        run: wget "https://www.mersenne.org/download/software/v30/30.19/p95v3019b20.source.zip"
+
+      - name: unzip p95
+        run: unzip p95*.zip
+
   macIntel64:
-    needs: boinc-macIntel64
-    runs-on: macos-latest
+    needs: [boinc-macIntel64, gwnum]
+    runs-on: macos-12
 
     steps:
       - name: Use cached BOINC libs
