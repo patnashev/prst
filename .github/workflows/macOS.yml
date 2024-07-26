@@ -96,12 +96,13 @@ jobs:
 
       - name: boinc libs debug
         run: |
-          ls -la ../../../boinc/mac_build/build/Deployment
-          ls -la ../../../boinc/mac_build/build
-          ls -la ../../../boinc/mac_build
-          ls -la ../../../boinc/
-          ls -la ../../../
+          cd prst/src/mac64
           ls -la ../../
+          ls -la ../../../
+          ls -la ../../../boinc/
+          ls -la ../../../boinc/mac_build
+          ls -la ../../../boinc/mac_build/build
+          ls -la ../../../boinc/mac_build/build/Deployment
 
       - name: Use cached gwnum
         id: cache-gwnum
