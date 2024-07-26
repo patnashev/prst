@@ -100,6 +100,7 @@ jobs:
         with:
           path: |
             gwnum/gwnum.a
+            gwnum/polymult.a
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
           fail-on-cache-miss: true
 
