@@ -87,6 +87,7 @@ jobs:
       - name: Checkout prst
         uses: actions/checkout@v3
         with:
+          submodules: 'true'
           path: 'prst'
 
       - name: make
