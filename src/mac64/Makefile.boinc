@@ -2,7 +2,7 @@ EXE_BOINC = prst_boinc
 
 BOINC_DIR = ../../../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
-BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/boinc.build/Deployment/api_libboinc.build/Objects-normal/x86_64/Binary -L$(BOINC_DIR)/mac_build/build/boinc.build/Deployment/libboinc.build/Objects-normal/x86_64/Binary -lboinc_api -lboinc
+BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment/api_libboinc.build/Objects-normal/x86_64/Binary -L$(BOINC_DIR)/mac_build/build/Deployment/libboinc.build/Objects-normal/x86_64/Binary -lboinc_api -lboinc
 
 all_boinc: $(EXE_BOINC)
 .PHONY: all_boinc
