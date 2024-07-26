@@ -125,16 +125,6 @@ jobs:
           submodules: 'true'
           path: 'prst'
 
-      - name: boinc libs debug
-        run: |
-          cd prst/src/mac64
-          ls -la ../../
-          ls -la ../../../
-          ls -la ../../../boinc/
-          ls -la ../../../boinc/mac_build
-          ls -la ../../../boinc/mac_build/build
-          ls -la ../../../boinc/mac_build/build/Deployment
-
       - name: copy gwnum
         run: cp gwnum/gwnum.a prst/framework/gwnum/mac64/
 
