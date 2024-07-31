@@ -2,7 +2,7 @@ EXE_BOINC = prst_boinc
 
 BOINC_DIR = ../../../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
-BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/boinc.build/Deployment/api_libboinc.build/Objects-normal/x86_64/Binary -L$(BOINC_DIR)/mac_build/build/boinc.build/Deployment/libboinc.build/Objects-normal/x86_64/Binary -lboinc_api -lboinc
+BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment/ -lboinc_api -lboinc
 
 all_boinc: $(EXE_BOINC)
 .PHONY: all_boinc
@@ -10,7 +10,7 @@ all_boinc: $(EXE_BOINC)
 include Makefile
 
 $(EXE_BOINC): $(COMPOBJS_COMMON) prst_boinc.o bow.o boinc.o
-	$(CC) -o $@ $^ $(LIB_GWNUM) $(DUMMY2) $(BOINC_LIB) $(LIBS2)
+	$(CC) $(LFLAGS) -o $@ $^ $(LIB_GWNUM) $(DUMMY2) $(BOINC_LIB) $(LIBS2)
 
 prst_boinc.o: prst.cpp
 	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
@@ -20,3 +20,6 @@ boinc.o: boinc.cpp
 
 bow.o: bow/bow.cpp
 	$(CXX) -o $@ -c $(CXXFLAGS) $(BOINC_INC) $<
+
+clean::
+	rm -f $(EXE_BOINC) bow.o boinc.o prst_boinc.o
