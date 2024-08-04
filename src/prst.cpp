@@ -332,6 +332,7 @@ int main(int argc, char *argv[])
         proof.reset(new Proof(proof_op, proof_count, input, options, *file_cert, logging));
 
     std::unique_ptr<Fermat> fermat;
+    std::unique_ptr<PocklingtonGeneric> pocklington;
     std::unique_ptr<Morrison> morrison;
     std::unique_ptr<Order> order;
 
@@ -350,6 +351,17 @@ int main(int argc, char *argv[])
     else if (proof_op == Proof::CERT)
     {
         fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
+    }
+    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL) && input.c() == 1 && !force_fermat && !proof)
+    {
+        input.factorize_f_p();
+        if (input.is_half_factored())
+           pocklington.reset(new PocklingtonGeneric(input, options, logging));
+        else
+        {
+            logging.warning("Not enough factors for Pocklington test.\n");
+            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
+        }
     }
     else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
     {
@@ -432,6 +444,11 @@ int main(int argc, char *argv[])
             order->run(order_a, options, input, gwstate, file_checkpoint, file_recoverypoint, logging);
         else if (proof_op == Proof::CERT)
             proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        else if (pocklington)
+        {
+            pocklington->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+            success = pocklington->success();
+        }
         else if (morrison)
         {
             morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);

@@ -168,6 +168,7 @@ int batch_main(int argc, char *argv[])
     if (cur > 0)
         logging_batch.info("Restarting at %d.\n", cur + 1);
 
+    int primes = 0;
     bool success = false;
     for (; cur < batch.size(); cur++)
     {
@@ -207,7 +208,7 @@ int batch_main(int argc, char *argv[])
                 continue;
         }
         else if (batch_name != "stdin")
-            logging_batch.info("%d of %d: %s\n", cur, (int)batch.size(), input.display_text().data());
+            logging_batch.info("%d of %d: %s\n", cur + 1, (int)batch.size(), input.display_text().data());
 
         Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
         if (!log_file.empty())
@@ -243,6 +244,7 @@ int batch_main(int argc, char *argv[])
         logging.file_progress(&file_progress);
 
         std::unique_ptr<Fermat> fermat;
+        std::unique_ptr<PocklingtonGeneric> pocklington;
         std::unique_ptr<Morrison> morrison;
         std::unique_ptr<Order> order;
 
@@ -255,6 +257,17 @@ int batch_main(int argc, char *argv[])
             }
             order.reset(new Order(order_a, input, options, logging));
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
+        }
+        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL) && input.c() == 1 && !force_fermat)
+        {
+            input.factorize_f_p();
+            if (input.is_half_factored())
+                pocklington.reset(new PocklingtonGeneric(input, options, logging));
+            else
+            {
+                logging.warning("Not enough factors for Pocklington test.\n");
+                fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
+            }
         }
         else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
         {
@@ -299,11 +312,17 @@ int batch_main(int argc, char *argv[])
         input.setup(gwstate_cur);
         logging.info("Using %s.\n", gwstate_cur.fft_description.data());
 
+        success = false;
         bool failed = false;
         try
         {
             if (order)
                 order->run(order_a, options, input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
+            else if (pocklington)
+            {
+                pocklington->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
+                success = pocklington->success();
+            }
             else if (morrison)
             {
                 morrison->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
@@ -325,6 +344,8 @@ int batch_main(int argc, char *argv[])
 
         gwstate_cur.done();
 
+        if (success)
+            primes++;
         if (failed && stop_error)
             Task::abort();
         if (Task::abort_flag())
@@ -337,7 +358,7 @@ int batch_main(int argc, char *argv[])
     else
     {
         batch_progress.clear();
-        logging_batch.info("Batch of %d, time: %.1f s.\n", cur, logging_batch.progress().time_total());
+        logging_batch.info("Batch of %d, primes: %d, time: %.1f s.\n", cur, primes, logging_batch.progress().time_total());
     }
 
     return 0;
