@@ -6,17 +6,21 @@
 #include "file.h"
 #include "options.h"
 #include "lucasmul.h"
+#include "pocklington.h"
 
 class Morrison
 {
+protected:
+    Morrison() { }
 public:
     Morrison(InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
+    virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 
     bool success() { return _success; }
     bool prime() { return _prime; }
     std::string& res64() { return _res64; }
+    bool is_LLR() { return _LLR; }
 
 protected:
     class FactorTask
@@ -42,3 +46,19 @@ protected:
     std::string _res64;
 };
 
+class MorrisonGeneric : public Morrison
+{
+public:
+    MorrisonGeneric(InputNum& input, Options& options, Logging& logging);
+
+    virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+
+protected:
+    Options& _options;
+    std::unique_ptr<SubLogging> _logging;
+
+    arithmetic::Giant _done;
+    std::set<int> _done_factors;
+    std::unique_ptr<FactorTree> _tree;
+    std::vector<int> _dac_index;
+};

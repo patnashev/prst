@@ -68,7 +68,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             return;
         std::vector<Giant> G;
         G.reserve(_tasks.size());
-        std::string factors;
+        std::vector<int> factors;
+        std::string factors_str;
 
         for (auto it = _tasks.begin(); it != _tasks.end(); )
         {
@@ -95,8 +96,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 tmp -= 1;
                 G.emplace_back(std::move(tmp));
                 _done *= power(input.factors()[it->index].first, input.factors()[it->index].second);
-                logging.report_param("factor" + std::to_string(it->index), "done");
-                factors += (!factors.empty() ? ", " : "") + input.factors()[it->index].first.to_string();
+                factors.push_back(it->index);
+                factors_str += (!factors_str.empty() ? ", " : "") + input.factors()[it->index].first.to_string();
                 it = _tasks.erase(it);
             }
             else
@@ -116,7 +117,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 tmp = std::move(G[0]);
 
             logging.set_prefix(input.display_text() + " ");
-            logging.info("Checking gcd with factors {%s}.\n", factors.data());
+            logging.info("Checking gcd with factors {%s}.\n", factors_str.data());
             logging.set_prefix("");
             tmp.gcd(*gwstate.N);
             if (tmp != 1)
@@ -126,6 +127,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ".\n");
                 break;
             }
+            for (auto it = factors.begin(); it != factors.end(); it++)
+                logging.report_param("factor" + std::to_string(*it), "done");
         }
 
         if (_tasks.empty() || (!_all_factors && _done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
@@ -180,8 +183,6 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
 
 PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Logging& logging) : _options(options)
 {
-    GWASSERT(input.type() == InputNum::GENERIC || input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL);
-
     if (logging.progress().param_int("a") != 0)
         _a = logging.progress().param_int("a");
     else
@@ -216,8 +217,6 @@ PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Loggin
     for (int i = 0; i < input.factors().size(); i++)
     {
         auto& f = input.factors()[i];
-        if (f.first.size() == 1)
-            GWASSERT(is_prime(*f.first.data()));
         if (_done_factors.count(i) != 0)
         {
             tmp = f.first;
@@ -248,6 +247,9 @@ PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Loggin
         exp *= tmp_exp;
 
     _logging.reset(new SubLogging(logging, logging.level() + 1));
+    _logging->progress().set_parent(nullptr);
+    logging.progress().add_stage(input.bitlen()*std::log2(input.factors().size()));
+
     create_tasks(input, logging, exp);
 }
 
@@ -333,10 +335,12 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
         throw TaskAbortException();
 
     bool CheckStrong = _options.CheckStrong ? _options.CheckStrong.value() : true;
+    if (CheckStrong)
+        logging.info("%s Gerbicz-Li check enabled.\n", input.display_text().data());
 
     Giant tmp_done;
     tmp_done = 1;
-    double pct_bitlen = input.bitlen()/1000.0;
+    double pct_bitlen = gwstate.N->bitlen()/1000.0;
     double last_progress = 0;
     auto progress_factors = [&]() {
         if (tmp_done != 1)
@@ -345,6 +349,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
         char buf[50];
         snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
         logging.report(buf, Logging::LEVEL_PROGRESS);
+        logging.progress().update((_options.AllFactors && _options.AllFactors.value() ? 1 : 2)*_done.bitlen()/pct_bitlen/10.0, 0);
         last_progress = 0;
     };
         
@@ -354,13 +359,15 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
         if (_done > 1)
             logging.info("Restarting with %.1f%% of factors tested.\n", std::floor(_done.bitlen()/pct_bitlen)/10.0);
 
-        int task_num = 0;
-        std::string factors_str;
         Giant tmp, tmp_exp;
         tmp_exp = 1;
         Giant exp;
         exp = 1;
+        std::vector<FactorTree*> stack;
+        std::vector<Giant> stack_value;
+        int task_num = 0;
         std::vector<int> factors;
+        std::string factors_str;
         std::vector<Giant> G;
         auto test_G = [&]() {
             if (G.size() > 1)
@@ -374,9 +381,12 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
                 tmp = std::move(G[0]);
 
             if (factors_str.size() < 50)
-                _logging->info("Checking gcd with factors {%s}.\n", factors_str.data());
+                logging.debug("Checking gcd with factors {%s}.\n", factors_str.data());
             else
-                _logging->info("Checking gcd with %d factors.\n", factors.size());
+                logging.debug("Checking gcd with %d factors.\n", G.size());
+            G.clear();
+            factors_str.clear();
+
             tmp.gcd(*gwstate.N);
             if (tmp != 1)
             {
@@ -393,6 +403,8 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
                 GWASSERT(_done_factors.count(*it) == 0);
                 _done_factors.insert(*it);
             }
+            factors.clear();
+
             if (tmp_done != 1)
                 _done *= tmp_done;
             tmp_done = 1;
@@ -411,8 +423,6 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
             return false;
         };
 
-        std::vector<Giant> stack_value;
-        std::vector<FactorTree*> stack;
         stack.push_back(_tree.get());
         if (_a > GWMULBYCONST_MAX)
         {
@@ -423,13 +433,15 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
         {
             if (!stack.back()->exp().empty() && stack.back()->exp() != 1)
             {
+                if (stack.back()->index() >= 0)
+                    GWASSERT(input.factors()[stack.back()->index()].first == stack.back()->exp());
                 task_num++;
                 int bitlen = stack.back()->exp().bitlen();
                 int checks = _options.StrongCount ? _options.StrongCount.value() : 16;
                 checks = bitlen > checks*1000 ? checks : bitlen/1000 + 1;
 
                 std::unique_ptr<BaseExp> cur_task;
-                if (bitlen < 30)
+                if (bitlen < 32)
                     cur_task.reset(new CarefulExp(std::move(stack.back()->exp())));
                 else if (stack_value.empty())
                 {
@@ -445,6 +457,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
                     else
                         cur_task.reset(new SlidingWindowExp(std::move(stack.back()->exp())));
                 }
+                stack.back()->exp().arithmetic().free(stack.back()->exp());
                 cur_task->set_error_check(!_options.CheckNear || _options.CheckNear.value(), _options.Check && _options.Check.value());
                 _logging->progress() = Progress();
                 _logging->progress().add_stage(cur_task->cost());
@@ -503,14 +516,15 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
                         break;
                     }
                     _success = true;
+                    int index = stack.back()->index();
                     stack.pop_back();
                     stack_value.pop_back();
                     if (stack_value.back() != 1)
                     {
-                        _logging->info("Factor #%d added to gcd.\n", stack.back()->index());
+                        _logging->info("Factor #%d added to gcd.\n", index);
                         G.push_back(std::move(stack_value.back()));
                         G.back() -= 1;
-                        factors.push_back(stack.back()->index());
+                        factors.push_back(index);
 
                         auto& f = input.factors()[factors.back()];
                         tmp_done *= power(f.first, f.second);
@@ -532,14 +546,11 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
                         {
                             if (test_G())
                                 break;
-                            G.clear();
-                            factors.clear();
-                            factors_str.clear();
                             logging.progress_save();
                         }
                     }
                     else
-                        _logging->info("Invalid a for factor #%d.\n", stack.back()->index());
+                        _logging->info("Factor #%d can't be tested with a=%d.\n", index, _a);
                     if (last_progress > Task::PROGRESS_TIME)
                         progress_factors();
                 }
@@ -559,7 +570,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
 
         if (!stack.empty())
             break;
-        if (!factors.empty() && test_G())
+        if (!G.empty() && test_G())
             break;
 
         PrimeIterator primes = PrimeIterator::get();
@@ -577,8 +588,6 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
 
         create_tasks(input, logging, exp);
 
-        logging.progress().next_stage();
-        logging.progress().update(0, 0);
         logging.progress_save();
         file_checkpoint.clear(true);
         file_recoverypoint.clear(true);
@@ -587,11 +596,15 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
         logging.info("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
     }
 
+    logging.progress().next_stage();
     logging.set_prefix("");
     if (_prime)
     {
-        logging.info("%s %.1f%% of factors tested.\n", input.display_text().data(), _done.bitlen()/pct_bitlen/10.0);
+        logging.info("%s %.1f%% of factors tested.\n", input.display_text().data(), std::floor(_done.bitlen()/pct_bitlen)/10.0);
         logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
         logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
     }
+
+    file_checkpoint.clear(true);
+    file_recoverypoint.clear(true);
 }

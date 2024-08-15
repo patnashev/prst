@@ -70,11 +70,10 @@ public:
         if (tree.size() == 1)
         {
             _left = std::move(tree[0]);
-            _index = _left->index();
             return;
         }
         for (auto it = tree.begin(); it != tree.end(); it++)
-            (*it)->_left.reset(new FactorTree((*it)->exp()));
+            (*it)->_left.reset(new FactorTree((*it)->exp(), (*it)->index()));
 
         while (true)
         {
@@ -88,6 +87,7 @@ public:
                 {
                     auto& b = *it;  it++;
                     swap(a->exp(), b->exp());
+                    std::swap(a->_index, b->_index);
                     if (tree.size() == 2)
                     {
                         _left = std::move(tree[0]);
