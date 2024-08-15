@@ -32,7 +32,7 @@ CXXFLAGS += -target x86_64-apple-macos10.13
 #CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer
 
 # the code is too noisy for all warnings
-CXXFLAGS += -Wno-sign-compare
+CXXFLAGS += -Wno-sign-compare -Wunused-parameter -Wunused-private-field
 
 #########################################################################
 

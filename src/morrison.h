@@ -14,6 +14,7 @@ protected:
     Morrison() { }
 public:
     Morrison(InputNum& input, Options& options, Logging& logging);
+    virtual ~Morrison() { }
 
     virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
 

@@ -134,10 +134,12 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging)
                 index = _taskCheck->mul_prime(prime, 1, index);
                 if (_factor_tasks.size() > 1)
                     for (auto& task : _factor_tasks)
+                    {
                         if (task.index == i)
                             task.taskCheck->mul_prime(prime, 1, index);
                         else
                             task.taskFactor->mul_prime(prime, 1, index);
+                    }
             }
         }
         else
@@ -149,10 +151,12 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging)
                 _taskCheck->mul_giant(b, 1);
                 if (_factor_tasks.size() > 1)
                     for (auto& task : _factor_tasks)
+                    {
                         if (task.index == i)
                             task.taskCheck->mul_giant(b, 1);
                         else
                             task.taskFactor->mul_giant(b, 1);
+                    }
             }
         }
     }

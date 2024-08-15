@@ -158,7 +158,7 @@ int testing_main(int argc, char *argv[])
     if (subset == "all" || subset == "freeform")
     {
         auto& cont = add("freeform");
-        for (FreeFormTest* ffTest = TestFreeForm; ffTest->s != ""; ffTest++)
+        for (FreeFormTest* ffTest = TestFreeForm; ffTest->s[0] != 0; ffTest++)
         {
             cont.emplace_back(new Test(*ffTest));
             if (ffTest->res64 == 1)

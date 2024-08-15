@@ -173,7 +173,6 @@ public:
     arithmetic::Giant& exp() { return _exp; }
 
 protected:
-    using InputTask::init;
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging);
     void write_state() override;
     void setup() override;
