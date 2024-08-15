@@ -126,7 +126,7 @@ void Proof::calc_points(int iterations, bool smooth, InputNum& input, Options& o
             options.ProofPointsPerCheck = _count/options.StrongCount.value();
     }
     int points_per_check = options.ProofPointsPerCheck ? options.ProofPointsPerCheck.value() : 1;
-    bool value_points = input.type() == input.KBNC && (input.k() != 0 || input.cyclotomic()) && input.b() == 2;
+    bool value_points = input.type() == input.KBNC && input.k() != 0 && input.b() == 2; // base 2 FFT, not general, not need_mod
 
     /*if (input.b() != 2 && options.ProofPointsPerCheck && !Li())
     {
@@ -507,8 +507,6 @@ void ProofSave::execute()
 
     for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, Y, h))
     {
-        if (_gwstate->need_mod())
-            _gwstate->mod(state()->Y(), state()->Y());
         if (_proof->file_products()[i]->read(product))
         {
             _proof->file_products()[i]->free_buffer();
@@ -548,8 +546,6 @@ void ProofSave::execute()
                 check();
             }
             product.set(i, D);
-            if (_gwstate->need_mod())
-                _gwstate->mod(product.value(), product.value());
 
             _proof->file_products()[i]->write(product);
             _proof->file_products()[i]->free_buffer();
@@ -566,8 +562,6 @@ void ProofSave::execute()
     }
     tree.clear();
 
-    if (_gwstate->need_mod())
-        _gwstate->mod(state()->Y(), state()->Y());
     done();
 }
 
@@ -629,8 +623,6 @@ void ProofBuild::execute()
     M = _proof->points()[_proof->count()].pos >> state()->iteration();
     for (i = state()->iteration(); i < t; i++, commit_execute<Proof::State>(i, X, Y, a_power, h), M >>= 1)
     {
-        if (_gwstate->need_mod())
-            _gwstate->mod(state()->Y(), state()->Y());
         _proof->read_product(i, product, *_logging);
         D = product.value();
         h.emplace_back(GiantsArithmetic::default_arithmetic(), 4);
@@ -669,8 +661,6 @@ void ProofBuild::execute()
         exp_gw(gw().carefully(), h[i], D, T = D, 0);
         gw().carefully().mul(D, Y, Y, 0);
     }
-    if (_gwstate->need_mod())
-        _gwstate->mod(state()->Y(), state()->Y());
 
     D = _proof->r_0();
     if (!_rnd_seed.empty())
@@ -687,8 +677,6 @@ void ProofBuild::execute()
             exp_gw(gw().carefully(), exp, D, T = D, 0);
 
         commit_execute<Proof::State>(t + 1, X, Y, a_power, h);
-        if (_gwstate->need_mod())
-            _gwstate->mod(state()->Y(), state()->Y());
     }
 
     if (state()->Y() == 0)

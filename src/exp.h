@@ -41,7 +41,7 @@ public:
     public:
         static const char TYPE = 1;
         StateValue() : State(TYPE) { }
-        void set(int iteration, arithmetic::GWNum& X) override { TaskState::set(iteration); _giant_value = X; }
+        void set(int iteration, arithmetic::GWNum& X) override { TaskState::set(iteration); _giant_value = X; if (X.arithmetic().state().need_mod()) X.arithmetic().state().mod(_giant_value, _giant_value); }
         void to_GWNum(arithmetic::GWNum& X) override { X = _giant_value; }
         bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_giant_value); }
         void write(Writer& writer) override { TaskState::write(writer); writer.write(_giant_value); }
@@ -81,9 +81,6 @@ public:
     arithmetic::Giant& tail() { return _tail; }
     arithmetic::Giant& X0() { return !_smooth ? _X0 : *(arithmetic::Giant*)nullptr; }
     uint32_t x0() { return !_smooth ? _x0 : 0; }
-
-protected:
-    void done() override;
 
 protected:
     bool _smooth;

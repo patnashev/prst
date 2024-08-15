@@ -22,7 +22,7 @@ public:
     public:
         static const char TYPE = 3;
         Product() : TaskState(TYPE) { }
-        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; }
+        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; if (X.arithmetic().state().need_mod()) X.arithmetic().state().mod(_X, _X); }
         int depth() { return _iteration; }
         arithmetic::Giant& value() { return _X; }
         bool read(Reader& reader) override { return TaskState::read(reader) && reader.read(_X); }
@@ -36,8 +36,8 @@ public:
     public:
         static const char TYPE = 4;
         Certificate() : TaskState(TYPE) { }
-        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; _a_power = 0; _a_base = 0; }
-        void set(int power, arithmetic::GWNum& X, arithmetic::Giant& a_power, arithmetic::GWNum& A) { TaskState::set(power); _X = X; _a_power = a_power; _a_base = A; }
+        void set(int power, arithmetic::GWNum& X) { TaskState::set(power); _X = X; _a_power = 0; _a_base = 0; if (X.arithmetic().state().need_mod()) X.arithmetic().state().mod(_X, _X); }
+        void set(int power, arithmetic::GWNum& X, arithmetic::Giant& a_power, arithmetic::GWNum& A) { TaskState::set(power); _X = X; _a_power = a_power; _a_base = A; if (X.arithmetic().state().need_mod()) { X.arithmetic().state().mod(_X, _X); A.arithmetic().state().mod(_a_base, _a_base); } }
         int power() { return _iteration; }
         arithmetic::Giant& X() { return _X; }
         arithmetic::Giant& a_power() { return _a_power; }
@@ -59,10 +59,8 @@ public:
         State(int iteration, T&& Y) : TaskState(TYPE) { TaskState::set(iteration); _Y = std::forward<T>(Y); }
         template<class T, class R, class S>
         State(int iteration, S&& X, T&& Y, R&& exp) : TaskState(TYPE) { TaskState::set(iteration); _X = std::forward<S>(X); _Y = std::forward<T>(Y); _exp = std::forward<R>(exp); }
-        template<class T>
-        void set(int iteration, T& Y, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _Y = Y; _h = h; }
-        template<class T, class S>
-        void set(int iteration, S& X, T& Y, arithmetic::Giant& exp, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _X = X; _Y = Y; _exp = exp; _h = h; }
+        void set(int iteration, arithmetic::GWNum& Y, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _Y = Y; _h = h; if (Y.arithmetic().state().need_mod()) Y.arithmetic().state().mod(_Y, _Y); }
+        void set(int iteration, arithmetic::GWNum& X, arithmetic::GWNum& Y, arithmetic::Giant& exp, const std::vector<arithmetic::Giant>& h) { TaskState::set(iteration); _X = X; _Y = Y; _exp = exp; _h = h; if (Y.arithmetic().state().need_mod()) Y.arithmetic().state().mod(_Y, _Y); }
         arithmetic::SerializedGWNum& X() { return _X; }
         arithmetic::Giant& Y() { return _Y; }
         arithmetic::Giant& exp() { return _exp; }

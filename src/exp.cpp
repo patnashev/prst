@@ -66,13 +66,6 @@ BaseExp::State* BaseExp::State::cast(bool value, std::unique_ptr<TaskState>& sta
     return cast_state;
 }
 
-void BaseExp::done()
-{
-    InputTask::done();
-    if (_gwstate->need_mod())
-        _gwstate->mod(*result(), *result());
-}
-
 void CarefulExp::init(InputNum* input, GWState* gwstate, Logging* logging)
 {
     GWASSERT(!smooth());
@@ -162,8 +155,6 @@ void MultipointExp::init_state(State* state)
     _logging->progress().update(progress(), 0);
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
-    if (result() != nullptr && _gwstate->need_mod())
-        _gwstate->mod(*result(), *result());
 }
 
 void MultipointExp::setup()
@@ -471,8 +462,6 @@ void StrongCheckMultipointExp::init_state(State* state)
     _logging->progress().update(progress(), 0);
     if (_state->iteration() > 0)
         _logging->info("restarting at %.1f%%.\n", 100.0*_state->iteration()/iterations());
-    if (result() != nullptr && _gwstate->need_mod())
-        _gwstate->mod(*result(), *result());
 }
 
 void StrongCheckMultipointExp::write_state()
@@ -748,7 +737,13 @@ void StrongCheckMultipointExp::execute()
         gw().carefully().mul(R(), X(), X(), 0);
         gw().carefully().sub(X(), D(), X(), 0);
         swap(T, X());
-        if (T != 0 || D() == 0)
+        tmp = T;
+        if (_gwstate->need_mod() && dynamic_cast<StateValue*>(tmp_state))
+            _gwstate->mod(tmp, tmp);
+        tmp2 = D();
+        if (_gwstate->need_mod() && dynamic_cast<StateValue*>(tmp_state))
+            _gwstate->mod(tmp2, tmp2);
+        if (tmp != 0 || tmp2 == 0)
         {
             _logging->warning("Gerbicz%s check failed at %.1f%%.\n", !smooth() ? "-Li" : "", 100.0*i/iterations());
             if (_file != nullptr)
@@ -800,11 +795,16 @@ void StrongCheckMultipointExp::execute()
             D() = _tail_inv;
             gw().carefully().mul(D(), R(), R(), 0);
             tmp = R();
+            if (_gwstate->need_mod())
+                _gwstate->mod(tmp, tmp);
             if (tmp != static_cast<StateValue*>(_state_recovery.get())->value())
             {
                 R() = _tail;
                 gw().carefully().mul(D(), R(), R(), 0);
-                if (R() != 1)
+                tmp2 = R();
+                if (_gwstate->need_mod())
+                    _gwstate->mod(tmp2, tmp2);
+                if (tmp2 != 1)
                 {
                     _logging->error("Tail calculation error.\n");
                     throw TaskAbortException();

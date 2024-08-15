@@ -168,7 +168,7 @@ int batch_main(int argc, char *argv[])
     if (cur > 0)
         logging_batch.info("Restarting at %d.\n", cur + 1);
 
-    int primes = 0;
+    int primes = logging_batch.progress().param_int("primes");;
     bool success = false;
     for (; cur < batch.size(); cur++)
     {
@@ -208,7 +208,7 @@ int batch_main(int argc, char *argv[])
                 continue;
         }
         else if (batch_name != "stdin")
-            logging_batch.info("%d of %d: %s\n", cur + 1, (int)batch.size(), input.display_text().data());
+            logging_batch.info("%d of %d: %s", cur + 1, (int)batch.size(), input.display_text().data());
 
         Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
         if (!log_file.empty())
@@ -220,7 +220,10 @@ int batch_main(int argc, char *argv[])
         {
             Giant num = input.value();
             GWASSERT(num.size() == 1);
-            logging.info("Trial division test of %s.\n", input.display_text().data());
+            if (batch_name != "stdin")
+                logging_batch.info(", Trial division test.\n");
+            else
+                logging.info("Trial division test of %s.\n", input.display_text().data());
             if (is_prime(num.data()[0]))
             {
                 logging.result(true, "%s is prime!\n", input.display_text().data());
@@ -250,6 +253,8 @@ int batch_main(int argc, char *argv[])
 
         if (!order_a.empty() && order_a.value() > 1)
         {
+            if (batch_name != "stdin")
+                logging_batch.info(", Order.\n");
             if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
             {
                 logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
@@ -258,13 +263,19 @@ int batch_main(int argc, char *argv[])
             order.reset(new Order(order_a, input, options, logging));
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
         }
-        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL) && input.c() == 1 && !force_fermat)
+        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)) && input.c() == 1 && !force_fermat)
         {
             input.factorize_f_p();
             if (input.is_half_factored())
+            {
+                if (batch_name != "stdin")
+                    logging_batch.info(", generic Pocklington test.\n");
                 pocklington.reset(new PocklingtonGeneric(input, options, logging));
+            }
             else
             {
+                if (batch_name != "stdin")
+                    logging_batch.info(", Fermat test.\n");
                 logging.warning("Not enough factors for Pocklington test.\n");
                 fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
             }
@@ -272,9 +283,15 @@ int batch_main(int argc, char *argv[])
         else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
         {
             if (input.is_half_factored())
+            {
+                if (batch_name != "stdin")
+                    logging_batch.info(", Pocklington test.\n");
                 fermat.reset(new Pocklington(input, options, logging, nullptr));
+            }
             else
             {
+                if (batch_name != "stdin")
+                    logging_batch.info(", Fermat test.\n");
                 std::string factors;
                 for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                     factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
@@ -282,12 +299,37 @@ int batch_main(int argc, char *argv[])
                 fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
             }
         }
+        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)) && input.c() == -1 && !force_fermat)
+        {
+            input.factorize_f_p();
+            if (input.is_half_factored())
+            {
+                if (batch_name != "stdin")
+                    logging_batch.info(", generic Morrison test.\n");
+                morrison.reset(new MorrisonGeneric(input, options, logging));
+            }
+            else
+            {
+                if (batch_name != "stdin")
+                    logging_batch.info(", Fermat test.\n");
+                logging.warning("Not enough factors for Morrison test.\n");
+                fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
+            }
+        }
         else if (input.type() == InputNum::KBNC && input.c() == -1 && !force_fermat)
         {
             if (input.is_half_factored())
+            {
                 morrison.reset(new Morrison(input, options, logging));
+                if (batch_name != "stdin" && morrison->is_LLR())
+                    logging_batch.info(", Morrison (LLR) test.\n");
+                else if (batch_name != "stdin")
+                    logging_batch.info(", Morrison test.\n");
+            }
             else
             {
+                if (batch_name != "stdin")
+                    logging_batch.info(", Fermat test.\n");
                 std::string factors;
                 for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                     factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
@@ -296,7 +338,13 @@ int batch_main(int argc, char *argv[])
             }
         }
         else
+        {
             fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, nullptr));
+            if (batch_name != "stdin" && fermat->type() == Fermat::PROTH)
+                logging_batch.info(", Proth test.\n");
+            else if (batch_name != "stdin")
+                logging_batch.info(", Fermat test.\n");
+        }
 
         if (fermat)
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
@@ -345,7 +393,10 @@ int batch_main(int argc, char *argv[])
         gwstate_cur.done();
 
         if (success)
+        {
             primes++;
+            logging_batch.report_param("primes", primes);
+        }
         if (failed && stop_error)
             Task::abort();
         if (Task::abort_flag())
