@@ -96,7 +96,7 @@ int testing_main(int argc, char *argv[])
     {
         printf("Usage: PRST -test <subset> <options>\n");
         printf("Subsets:\n");
-        printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + deterministic + prime\n");
+        printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + freeform + deterministic + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
         return 0;
     }
@@ -155,6 +155,17 @@ int testing_main(int argc, char *argv[])
         add("error");
     }
     
+    if (subset == "all" || subset == "freeform")
+    {
+        auto& cont = add("freeform");
+        for (FreeFormTest* ffTest = TestFreeForm; ffTest->s != ""; ffTest++)
+        {
+            cont.emplace_back(new Test(*ffTest));
+            if (ffTest->res64 == 1)
+                cont.emplace_back(new DeterministicTest(*ffTest));
+        }
+    }
+
     if (subset == "all" || subset == "deterministic")
     {
         std::string str2("2");
@@ -219,8 +230,7 @@ int testing_main(int argc, char *argv[])
             else
                 for (auto& test : std::get<2>(subsetTests))
                 {
-                    test_text = test->input.display_text().data();
-                    logging.info("%s\n", test_text);
+                    logging.info("%s\n", test->display_text().data());
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
                     if (log_level > Logging::LEVEL_DEBUG)
@@ -362,12 +372,22 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     options.AllFactors = global_options.AllFactors;
 
     uint32_t fingerprint = input.fingerprint();
+    input.factorize_f_p();
+    if (!input.is_half_factored())
+        throw std::runtime_error("Not enough factors.");
+
     std::unique_ptr<Pocklington> pocklington;
+    std::unique_ptr<PocklingtonGeneric> pocklingtonGeneric;
     std::unique_ptr<Morrison> morrison;
-    if (input.c() == 1)
+    if (input.c() == 1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)))
+        pocklingtonGeneric.reset(new PocklingtonGeneric(input, options, logging));
+    else if (input.c() == 1)
         pocklington.reset(new Pocklington(input, options, logging, nullptr));
-    if (input.c() == -1)
+    if (input.c() == -1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)))
+        morrison.reset(new MorrisonGeneric(input, options, logging));
+    else if (input.c() == -1)
         morrison.reset(new Morrison(input, options, logging));
+
     File file_checkpoint("prst_ckpt", fingerprint);
     File file_recoverypoint("prst_rcpt", fingerprint);
     File file_params("prst_param", fingerprint);
@@ -395,6 +415,12 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
             pocklington->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
             prime = pocklington->prime();
             sres64 = pocklington->res64();
+        }
+        if (pocklingtonGeneric)
+        {
+            pocklingtonGeneric->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+            prime = pocklingtonGeneric->prime();
+            sres64 = pocklingtonGeneric->res64();
         }
         if (morrison)
         {
