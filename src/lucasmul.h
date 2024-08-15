@@ -13,9 +13,17 @@ public:
     virtual double cost() = 0;
 
     virtual arithmetic::Giant* result() = 0;
+    virtual bool result_parity() = 0;
+
+    arithmetic::Giant& P() { return _P; }
+    bool negativeQ() { return _negativeQ; }
 
 protected:
     void done() override;
+
+protected:
+    arithmetic::Giant _P;
+    bool _negativeQ;
 };
 
 class LucasVMulFast : public LucasVMul
@@ -64,10 +72,11 @@ public:
     template<class T>
     void init(InputNum* input, arithmetic::GWState* gwstate, File* checkpoint, Logging* logging, T&& P, bool negativeQ)
     {
+        _P = std::forward<T>(P);
         _negativeQ = negativeQ;
         init(input, gwstate, checkpoint, logging);
         if (state() == nullptr)
-            init_state(new State(0, 0, std::forward<T>(P), true));
+            init_state(new State(0, 0, _P, true));
     }
     void init_state(State* state);
 
@@ -75,6 +84,7 @@ public:
     double cost() override;
     double progress() override;
     arithmetic::Giant* result() override { if (state() == nullptr || state()->index() != _giants.size() + _primes.size()) return nullptr; return &state()->V(); }
+    bool result_parity() override { return state() == nullptr || state()->parity(); }
 
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* checkpoint, Logging* logging);
@@ -86,13 +96,12 @@ protected:
 
 protected:
     bool _carefully;
-    bool _negativeQ;
     std::vector<std::pair<arithmetic::Giant, int>> _giants;
     std::vector<std::tuple<int, int, int>> _primes;
     std::unique_ptr<Progress> _progress;
 };
 
-class LucasUVMulFast : public LucasVMul
+class LucasUVMul : public LucasVMul
 {
 public:
     class State : public TaskState
@@ -138,15 +147,16 @@ public:
 
 public:
     template<class T>
-    LucasUVMulFast(T&& exp, int count) : LucasVMul()
+    LucasUVMul(T&& exp, int count) : LucasVMul()
     {
         _exp = std::forward<T>(exp);
         Gerbicz_params((_exp.bitlen() + count - 1)/count, _L, _L2);
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, int P, bool negativeQ)
+    template<class T>
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, T&& P, bool negativeQ)
     {
-        _P = P;
+        _P = std::forward<T>(P);
         _negativeQ = negativeQ;
         init(input, gwstate, file, file_recovery, logging);
     }
@@ -155,6 +165,7 @@ public:
     State* state() { return _state_recovery.get(); }
     StrongCheckState* state_check() { return dynamic_cast<StrongCheckState*>(Task::state()); }
     arithmetic::Giant* result() override { if (state() == nullptr || state()->iteration() != iterations()) return nullptr; return &state()->Vn(); }
+    bool result_parity() override { return state() == nullptr || state()->parity(); }
 
     void Gerbicz_params(int iters, int& L, int &L2);
     double cost() override { return _exp.bitlen()*2; }
@@ -162,6 +173,7 @@ public:
     arithmetic::Giant& exp() { return _exp; }
 
 protected:
+    using InputTask::init;
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging);
     void write_state() override;
     void setup() override;
@@ -178,8 +190,6 @@ protected:
     int _L;
     int _L2;
 
-    int _P;
-    bool _negativeQ;
     int _W;
     arithmetic::Giant _result;
 
@@ -192,4 +202,19 @@ protected:
     std::unique_ptr<arithmetic::LucasUV> _X;
     std::unique_ptr<arithmetic::LucasUV> _R;
     std::unique_ptr<arithmetic::LucasUV> _D;
+};
+
+class LucasUVMulFast : public LucasUVMul
+{
+public:
+    template<class T>
+    LucasUVMulFast(T&& exp, int count) : LucasUVMul(std::forward<T>(exp), count) { }
+
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, File* file_recovery, Logging* logging, int P, bool negativeQ)
+    {
+        LucasUVMul::init(input, gwstate, file, file_recovery, logging, P, negativeQ);
+    }
+
+private:
+    using LucasUVMul::init;
 };

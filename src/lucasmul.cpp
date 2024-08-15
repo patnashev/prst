@@ -21,10 +21,11 @@ int LucasVMulFast::mul_prime(int prime, int n, int index)
 {
     if (prime < 14)
         index = 0;
-    else if (index == 0)
+    else
     {
-        if (prime < precomputed_DAC_S_d_len*(log(precomputed_DAC_S_d_len) + log(log(precomputed_DAC_S_d_len))))
-            for (auto it = PrimeIterator::get(); *it != prime && index < precomputed_DAC_S_d_len; index++, it++);
+        if (index == 0 && prime < precomputed_DAC_S_d_len*(log(precomputed_DAC_S_d_len) + log(log(precomputed_DAC_S_d_len))))
+            for (auto it = PrimeIterator::get(); *it != prime && index < precomputed_DAC_S_d_len; index++, it++)
+                ;
         if (index == 0 || index >= precomputed_DAC_S_d_len)
         {
             int len = 60;
@@ -175,7 +176,7 @@ void LucasVMulFast::execute()
     done();
 }
 
-void LucasUVMulFast::Gerbicz_params(int iters, int& L, int &L2)
+void LucasUVMul::Gerbicz_params(int iters, int& L, int &L2)
 {
     int i;
     L = (int)std::sqrt(iters);
@@ -189,7 +190,7 @@ void LucasUVMulFast::Gerbicz_params(int iters, int& L, int &L2)
         }
 }
 
-void LucasUVMulFast::init(InputNum* input, GWState* gwstate, File* file, File* file_recovery, Logging* logging)
+void LucasUVMul::init(InputNum* input, GWState* gwstate, File* file, File* file_recovery, Logging* logging)
 {
     InputTask::init(input, gwstate, file, read_state<StrongCheckState>(file), logging, _exp.bitlen());
     _state_update_period = MULS_PER_STATE_UPDATE/2;
@@ -205,7 +206,7 @@ void LucasUVMulFast::init(InputNum* input, GWState* gwstate, File* file, File* f
         init_state(state_recovery);
 }
 
-void LucasUVMulFast::init_state(State* state)
+void LucasUVMul::init_state(State* state)
 {
     if (state == nullptr)
     {
@@ -227,14 +228,14 @@ void LucasUVMulFast::init_state(State* state)
         _gwstate->mod(*result(), *result());
 }
 
-void LucasUVMulFast::write_state()
+void LucasUVMul::write_state()
 {
     if (_file_recovery != nullptr && _state_recovery && !_state_recovery->is_written())
         _file_recovery->write(*_state_recovery);
     Task::write_state();
 }
 
-void LucasUVMulFast::setup()
+void LucasUVMul::setup()
 {
     if (!_arithmetic)
         _arithmetic.reset(new LucasUVArithmetic(gw(), _P, _negativeQ));
@@ -249,7 +250,7 @@ void LucasUVMulFast::setup()
     _logging->debug("W = %d\n", _W);
 }
 
-void LucasUVMulFast::release()
+void LucasUVMul::release()
 {
     _recovery_op = 0;
     _X.reset();
@@ -258,7 +259,7 @@ void LucasUVMulFast::release()
     _arithmetic.reset();
 }
 
-void LucasUVMulFast::execute()
+void LucasUVMul::execute()
 {
     if (result() != nullptr)
         return;
@@ -279,6 +280,13 @@ void LucasUVMulFast::execute()
     LucasV Vn1(lucas);
     DEBUG_INDEX(iX = 0);
 
+    int intP = 0;
+    std::unique_ptr<LucasV> V1;
+    if (_P.bitlen() < 32)
+        intP = (int)*_P.data();
+    else
+        V1.reset(new LucasV(lucas, _P));
+
     first = iterations()%_L;
     if (first == 0)
         first = _L;
@@ -289,7 +297,7 @@ void LucasUVMulFast::execute()
         state0->to_Lucas(Vn, Vn1);
         DEBUG_INDEX(iR = 0);
         arithmetic().init(Vn, Vn1, R());
-        if (Vn.V() != 2 || Vn1.V() != _P || R().U() != 0 || R().V() != 1)
+        if (Vn.V() != 2 || (gw().popg() = Vn1.V()) != _P || R().U() != 0 || R().V() != 1)
         {
             _logging->warning("Value initialization error.\n");
             throw TaskRestartException();
@@ -342,12 +350,18 @@ void LucasUVMulFast::execute()
             {
                 DEBUG_INDEX(iX <<= 1);
                 DEBUG_INDEX(iX += 1);
-                lucas.add(Vn1, Vn, _P, Vn, GWMUL_STARTNEXTFFT_IF(!is_last(i)));
+                if (V1)
+                    lucas.add(Vn1, Vn, *V1, Vn, GWMUL_STARTNEXTFFT_IF(!is_last(i)));
+                else
+                    lucas.add(Vn1, Vn, intP, Vn, GWMUL_STARTNEXTFFT_IF(!is_last(i)));
                 lucas.dbl(Vn1, Vn1, GWMUL_STARTNEXTFFT_IF(!is_last(i) && j > 0));
             }
             else
             {
-                lucas.add(Vn1, Vn, _P, Vn1, GWMUL_STARTNEXTFFT_IF(!is_last(i) && j > 0));
+                if (V1)
+                    lucas.add(Vn1, Vn, *V1, Vn1, GWMUL_STARTNEXTFFT_IF(!is_last(i) && j > 0));
+                else
+                    lucas.add(Vn1, Vn, intP, Vn1, GWMUL_STARTNEXTFFT_IF(!is_last(i) && j > 0));
                 DEBUG_INDEX(iX <<= 1);
                 lucas.dbl(Vn, Vn, GWMUL_STARTNEXTFFT_IF(!is_last(i)));
             }
