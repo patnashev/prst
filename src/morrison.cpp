@@ -459,8 +459,7 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
         _P = logging.progress().param_int("P");
     else
         _P = (_negQ ? 1 : 5);
-    for (; kronecker(_P*_P - (_negQ ? -4 : 4), *gwstate.N) == 1; _P++)
-        ;
+    for (; kronecker(_P*_P - (_negQ ? -4 : 4), *gwstate.N) == 1; _P++);
     logging.info("Morrison test of %s, P = %d, Q = %d.\n", input.display_text().data(), _P, _negQ ? -1 : 1);
     if (gwstate.information_only)
         throw TaskAbortException();
@@ -475,13 +474,17 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
     double pct_bitlen = gwstate.N->bitlen()/1000.0;
     double last_progress = 0;
     auto progress_factors = [&]() {
-        if (tmp_done != 1)
-            _done *= tmp_done;
-        tmp_done = 1;
-        char buf[50];
-        snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
-        logging.report(buf, Logging::LEVEL_PROGRESS);
-        logging.progress().update((_all_factors ? 1 : 2)*_done.bitlen()/pct_bitlen/10.0, 0);
+        if (logging.level() <= Logging::LEVEL_PROGRESS)
+        {
+            if (tmp_done != 1)
+                _done *= tmp_done;
+            tmp_done = 1;
+            char buf[50];
+            snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
+            logging.report(buf, Logging::LEVEL_PROGRESS);
+        }
+        logging.progress().update((_all_factors ? 1 : 2)*_done.bitlen()/pct_bitlen/1000.0, 0);
+        logging.heartbeat();
         last_progress = 0;
     };
 
@@ -522,7 +525,7 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
                     bool a = Task::abort_flag();
                     Task::abort_reset();
                     Product taskP(G.begin(), G.end());
-                    taskP.init(&input, &gwstate, &logging);
+                    taskP.init(&input, &gwstate, _logging.get());
                     taskP.run();
                     tmp = std::move(taskP.result());
                     if (a)
@@ -584,8 +587,7 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
                     continue;
                 std::string filename = file_checkpoint.filename() + "." + stack_file_prefix + std::to_string(i);
                 auto it = file_checkpoint.children().begin();
-                for (; it != file_checkpoint.children().end() && (*it)->filename() != filename; it++)
-                    ;
+                for (; it != file_checkpoint.children().end() && (*it)->filename() != filename; it++);
                 if (it == file_checkpoint.children().end())
                 {
                     if (i < stack_value.size())

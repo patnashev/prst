@@ -146,8 +146,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             }
 
             PrimeIterator primes = PrimeIterator::get();
-            for (; *primes <= _a; primes++)
-                ;
+            for (; *primes <= _a; primes++);
             _a = *primes;
 
             if (!_task->smooth())
@@ -260,13 +259,11 @@ void PocklingtonGeneric::create_tasks(InputNum& input, Logging& logging, arithme
     std::vector<std::unique_ptr<FactorTree>> factors;
     int i = 0;
     auto it = _done_factors.begin();
-    for (; i < input.factors().size() && it != _done_factors.end() && *it == i; it++, i++)
-        ;
+    for (; i < input.factors().size() && it != _done_factors.end() && *it == i; it++, i++);
     while (i < input.factors().size())
     {
         factors.emplace_back(new FactorTree(input.factors()[i].first, i));
-        for (i++; i < input.factors().size() && it != _done_factors.end() && *it == i; it++, i++)
-            ;
+        for (i++; i < input.factors().size() && it != _done_factors.end() && *it == i; it++, i++);
     }
 
     _tree.reset(new FactorTree(factors));
@@ -343,13 +340,17 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
     double pct_bitlen = gwstate.N->bitlen()/1000.0;
     double last_progress = 0;
     auto progress_factors = [&]() {
-        if (tmp_done != 1)
-            _done *= tmp_done;
-        tmp_done = 1;
-        char buf[50];
-        snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
-        logging.report(buf, Logging::LEVEL_PROGRESS);
-        logging.progress().update((_options.AllFactors && _options.AllFactors.value() ? 1 : 2)*_done.bitlen()/pct_bitlen/10.0, 0);
+        if (logging.level() <= Logging::LEVEL_PROGRESS)
+        {
+            if (tmp_done != 1)
+                _done *= tmp_done;
+            tmp_done = 1;
+            char buf[50];
+            snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
+            logging.report(buf, Logging::LEVEL_PROGRESS);
+        }
+        logging.progress().update((_options.AllFactors && _options.AllFactors.value() ? 1 : 2)*_done.bitlen()/pct_bitlen/1000.0, 0);
+        logging.heartbeat();
         last_progress = 0;
     };
         
@@ -373,7 +374,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
             if (G.size() > 1)
             {
                 Product taskP(G.begin(), G.end());
-                taskP.init(&input, &gwstate, &logging);
+                taskP.init(&input, &gwstate, _logging.get());
                 taskP.run();
                 tmp = std::move(taskP.result());
             }
@@ -574,8 +575,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
             break;
 
         PrimeIterator primes = PrimeIterator::get();
-        for (; *primes <= _a; primes++)
-            ;
+        for (; *primes <= _a; primes++);
         if (_done_factors.count(0) == 0)
             while (kronecker(*primes, *gwstate.N) != -1)
                 primes++;

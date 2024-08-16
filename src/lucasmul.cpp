@@ -24,8 +24,7 @@ int LucasVMulFast::mul_prime(int prime, int n, int index)
     else
     {
         if (index == 0 && prime < precomputed_DAC_S_d_len*(log(precomputed_DAC_S_d_len) + log(log(precomputed_DAC_S_d_len))))
-            for (auto it = PrimeIterator::get(); *it != prime && index < precomputed_DAC_S_d_len; index++, it++)
-                ;
+            for (auto it = PrimeIterator::get(); *it != prime && index < precomputed_DAC_S_d_len; index++, it++);
         if (index == 0 || index >= precomputed_DAC_S_d_len)
         {
             int len = 60;
