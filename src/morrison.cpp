@@ -253,9 +253,9 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         {
             Giant G, done;
             done = 1;
-            std::string factors;
+            std::string factors_str;
             if (_negQ)
-                factors = "2";
+                factors_str = "2";
 
             if (_factor_tasks.size() == 1)
             {
@@ -264,7 +264,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     G -= 2;
                 if (G == 0)
                     continue;
-                factors += (!factors.empty() ? ", " : "") + input.factors()[_factor_tasks[0].index].first.to_string();
+                factors_str += (!factors_str.empty() ? ", " : "") + input.factors()[_factor_tasks[0].index].first.to_string();
             }
             else
             {
@@ -296,7 +296,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     if (!_negQ)
                         Gs.back() -= 2;
                     done *= power(input.factors()[ftask.index].first, input.factors()[ftask.index].second);
-                    factors += (!factors.empty() ? ", " : "") + input.factors()[ftask.index].first.to_string();
+                    factors_str += (!factors_str.empty() ? ", " : "") + input.factors()[ftask.index].first.to_string();
                 }
                 if (done == 0)
                     continue;
@@ -321,7 +321,9 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     G = std::move(Gs[0]);
             }
 
-            logging.info("Checking gcd with factors {%s}.\n", factors.data());
+            if (factors_str.size() > 30)
+                factors_str = factors_str.substr(0, 30) + "...";
+            logging.info("Checking gcd with factors {%s}.\n", factors_str.data());
             G.gcd(*gwstate.N);
             logging.progress().update(0, 0);
             if (G != 1) // Q=1: 19*2130-1, Q=-1: 225*5516-1

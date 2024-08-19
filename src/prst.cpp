@@ -151,8 +151,8 @@ int main(int argc, char *argv[])
             .list("list", ' ', ',', false)
                 .value_code([&](const char* param) {
                         Giant tmp;
-                        tmp = param;
-                        if (tmp == 0)
+                        InputNum input_factor;
+                        if (!input_factor.parse(param) || (tmp = input_factor.value()) == 0)
                             return false;
                         if (tmp != 1)
                             input.add_factor(factors.emplace_back(std::move(tmp)));
@@ -169,12 +169,10 @@ int main(int argc, char *argv[])
                         std::unique_ptr<TextReader> reader(factor_file.get_textreader());
                         Giant tmp;
                         std::string factor;
+                        InputNum input_factor;
                         while (reader->read_textline(factor))
-                        {
-                            tmp = factor;
-                            if (tmp != 0 && tmp != 1)
+                            if (input_factor.parse(factor) && (tmp = input_factor.value()) != 0 && tmp != 1)
                                 input.add_factor(factors.emplace_back(std::move(tmp)));
-                        }
                     }
                     return true;
                 })

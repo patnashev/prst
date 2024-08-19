@@ -117,6 +117,8 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 tmp = std::move(G[0]);
 
             logging.set_prefix(input.display_text() + " ");
+            if (factors_str.size() > 30)
+                factors_str = factors_str.substr(0, 30) + "...";
             logging.info("Checking gcd with factors {%s}.\n", factors_str.data());
             logging.set_prefix("");
             tmp.gcd(*gwstate.N);
