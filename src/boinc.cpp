@@ -59,6 +59,7 @@ void BoincLogging::report_progress()
 
 void BoincLogging::progress_save()
 {
+    Logging::progress_save();
     bow_app_checkpointed(progress().progress_total());
 }
 
