@@ -103,7 +103,11 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging)
         options.maxmulbyconst = 2;
     }
     else
+    {
+        if (_negQ)
+            taskV->mul_prime(2, n);
         options.maxmulbyconst = 1;
+    }
 
     if (_factor_tasks.size() > 0)
         _taskCheck.reset(new LucasVMulFast(true));

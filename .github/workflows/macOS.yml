@@ -12,7 +12,7 @@ concurrency:
 
 env:
   boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
-  gwnum_ver: "v3019b20"
+  gwnum_ver: "v3019b21"
 
 
 jobs:
