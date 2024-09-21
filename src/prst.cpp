@@ -350,7 +350,7 @@ int main(int argc, char *argv[])
     {
         fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
     }
-    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)) && input.c() == 1 && !force_fermat && !proof)
+    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == 1 && !force_fermat && !proof)
     {
         input.factorize_f_p();
         if (input.is_half_factored())
@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
             fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
         }
     }
-    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)) && input.c() == -1 && !force_fermat && !proof)
+    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == -1 && !force_fermat && !proof)
     {
         input.factorize_f_p();
         if (input.is_half_factored())

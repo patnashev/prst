@@ -263,7 +263,7 @@ int batch_main(int argc, char *argv[])
             order.reset(new Order(order_a, input, options, logging));
             fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
         }
-        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)) && input.c() == 1 && !force_fermat)
+        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == 1 && !force_fermat)
         {
             input.factorize_f_p();
             if (input.is_half_factored())
@@ -299,7 +299,7 @@ int batch_main(int argc, char *argv[])
                 fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
             }
         }
-        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.bitlen() > 1000 && input.n() < 10)) && input.c() == -1 && !force_fermat)
+        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == -1 && !force_fermat)
         {
             input.factorize_f_p();
             if (input.is_half_factored())
