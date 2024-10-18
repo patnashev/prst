@@ -285,12 +285,16 @@ void Proof::read_product(int index, TaskState& state, Logging& logging)
     _file_products[index]->free_buffer();
 }
 
-bool Proof::on_point(int index, BaseExp::State* state)
+bool Proof::on_point(int index, BaseExp::State* state, Logging& logging)
 {
     if (index > _count)
         return false;
     GWASSERT(index < _count || dynamic_cast<BaseExp::StateValue*>(state) != nullptr);
-    _file_points[index]->write(*state);
+    if (!_file_points[index]->write(*state))
+    {
+        logging.error("Write to %s failed.\n", _file_points[index]->filename().data());
+        throw TaskAbortException();
+    }
     if (!_cache_points)
         _file_points[index]->free_buffer();
     return true;
@@ -547,7 +551,11 @@ void ProofSave::execute()
             }
             product.set(i, D);
 
-            _proof->file_products()[i]->write(product);
+            if (!_proof->file_products()[i]->write(product))
+            {
+                _logging->error("Write to %s failed.\n", _proof->file_products()[i]->filename().data());
+                throw TaskAbortException();
+            }
             _proof->file_products()[i]->free_buffer();
             on_state();
         }
@@ -690,7 +698,11 @@ void ProofBuild::execute()
         cert.set(M, X);
     else
         cert.set(M, X, a_power, D);
-    _proof->file_cert()->write(cert);
+    if (!_proof->file_cert()->write(cert))
+    {
+        _logging->error("Write to %s failed.\n", _proof->file_cert()->filename().data());
+        throw TaskAbortException();
+    }
     _proof->file_cert()->free_buffer();
 
     done();

@@ -149,7 +149,7 @@ public:
 
 public:
     template<class T>
-    MultipointExp(T&& exp, bool smooth, const std::vector<Point>& points, std::function<bool(int, State*)> on_point) : BaseExp(), _points(points), _on_point(on_point)
+    MultipointExp(T&& exp, bool smooth, const std::vector<Point>& points, std::function<bool(int, State*, Logging&)> on_point) : BaseExp(), _points(points), _on_point(on_point)
     {
         _exp = std::forward<T>(exp);
         _smooth = smooth;
@@ -218,7 +218,7 @@ protected:
 
 protected:
     std::vector<Point> _points;
-    std::function<bool(int, State*)> _on_point;
+    std::function<bool(int, State*, Logging&)> _on_point;
 
     std::unique_ptr<arithmetic::GWNum> _X;
     std::vector<arithmetic::GWNum> _U;
@@ -322,7 +322,7 @@ public:
 
 public:
     template<class T>
-    StrongCheckMultipointExp(T&& exp, bool smooth, const std::vector<Point>& points, int L, int L2, std::function<bool(int, State*)> on_point) : MultipointExp(std::forward<T>(exp), smooth, points, on_point), _L(L), _L2(L2)
+    StrongCheckMultipointExp(T&& exp, bool smooth, const std::vector<Point>& points, int L, int L2, std::function<bool(int, State*, Logging&)> on_point) : MultipointExp(std::forward<T>(exp), smooth, points, on_point), _L(L), _L2(L2)
     {
     }
 
@@ -433,7 +433,7 @@ protected:
 class GerbiczCheckExp : public StrongCheckMultipointExp
 {
 public:
-    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, State*)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<Point>(), 0, 0, on_point)
+    GerbiczCheckExp(arithmetic::Giant& b, int n, int count, std::function<bool(int, State*, Logging&)> on_point = nullptr, int L = 0) : StrongCheckMultipointExp(b, true, std::vector<Point>(), 0, 0, on_point)
     {
         if (n < count)
         {

@@ -237,7 +237,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
     }
     else
     {
-        auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2);
+        auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         proof->calc_points(smooth ? n : exp.bitlen() - 1, smooth, input, options, logging);
         int L = 0, L2 = 0;
         if (CheckStrong)
@@ -370,7 +370,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         {
             logging.progress().update(0, 0);
             logging.progress_save();
-            proof->on_point(0, state);
+            proof->on_point(0, state, logging);
         }
         _task->init_state(state);
         if (proof != nullptr)
