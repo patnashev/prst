@@ -504,5 +504,5 @@ int main(int argc, char *argv[])
 
     gwstate.done();
 
-    return success || failed ? 1 : 0;
+    return success ? 2 : failed ? 1 : 0;
 }
