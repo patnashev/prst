@@ -32,6 +32,7 @@ int batch_main(int argc, char *argv[])
     bool force_fermat = false;
     InputNum order_a;
     bool show_info = false;
+    bool trial_division = false;
     int log_level = Logging::LEVEL_WARNING;
     int log_batch_level = Logging::LEVEL_INFO;
     std::string log_file;
@@ -91,6 +92,7 @@ int batch_main(int argc, char *argv[])
             .end()
         .check("-d", log_level, Logging::LEVEL_INFO)
         .check("-info", show_info, true)
+        .check("-trial", trial_division, true)
         .group("-stop")
             .group("on")
                 .check("error", stop_error, true)
@@ -124,6 +126,7 @@ int batch_main(int argc, char *argv[])
         printf("\t-fft+1\n");
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
+        printf("\t-trial\n");
         printf("\t-fermat [a <a>]\n");
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-factors all\n");
@@ -216,15 +219,15 @@ int batch_main(int argc, char *argv[])
         if (batch_name == "stdin")
             logging.level_result_not_success = Logging::LEVEL_WARNING;
 
-        if (input.bitlen() < 32)
+        if (input.bitlen() <= 40)
         {
-            Giant num = input.value();
-            GWASSERT(num.size() == 1);
             if (batch_name != "stdin")
                 logging_batch.info(", Trial division test.\n");
             else
                 logging.info("Trial division test of %s.\n", input.display_text().data());
-            if (is_prime(num.data()[0]))
+            auto factors = input.factorize_small();
+            GWASSERT(!factors.empty());
+            if (factors[0] == input.value() || (factors[0] == 0 && factors.size() == 1))
             {
                 logging.result(true, "%s is prime!\n", input.display_text().data());
                 logging.result_save(input.input_text() + " is prime!\n");
@@ -232,6 +235,20 @@ int batch_main(int argc, char *argv[])
             }
             else
             {
+                logging.result(false, "%s is not prime.\n", input.display_text().data());
+                logging.result_save(input.input_text() + " is not prime.\n");
+                continue;
+            }
+        }
+        else if (trial_division)
+        {
+            auto factors = input.factorize_small();
+            if (!factors.empty())
+            {
+                if (batch_name != "stdin")
+                    logging_batch.info(", trial division found factor %d.\n", factors[0]);
+                else
+                    logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
                 logging.result(false, "%s is not prime.\n", input.display_text().data());
                 logging.result_save(input.input_text() + " is not prime.\n");
                 continue;

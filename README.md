@@ -70,6 +70,9 @@ Options: -ini <filename>
                  outputs only setup information, no primality test is performed.
          -cpu {SSE2 | AVX | FMA3 | AVX512F}
                  CPU instruction set to use.
+         -trial
+                 performs trial division by primes less than a million before the main test.
+                 Slow, not a proper way to do sieving!
          -fermat [a <a>]
                  forces Fermat probabilistic test, optionally supplying starting value,
                  a = 3 by default.

@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
     InputNum input;
     InputNum order_a;
     bool show_info = false;
+    bool trial_division = false;
     int log_level = Logging::LEVEL_WARNING;
     std::string log_file;
 
@@ -219,6 +220,7 @@ int main(int argc, char *argv[])
             })
         .check("-i", show_info, true)
         .check("-info", show_info, true)
+        .check("-trial", trial_division, true)
         .value_code("-q", 0, [&](const char* param) {
                 if (param[0] != '\"' && !isdigit(param[0]))
                     return false;
@@ -265,6 +267,7 @@ int main(int argc, char *argv[])
         printf("\t-fft+1\n");
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
+        printf("\t-trial\n");
         printf("\t-fermat [a <a>]\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>] [L <L>]]\n");
@@ -282,19 +285,30 @@ int main(int argc, char *argv[])
     if (!log_file.empty())
         logging.file_log(log_file);
 
-    if (input.bitlen() < 32)
+    if (input.bitlen() <= 40)
     {
-        Giant num = input.value();
-        GWASSERT(num.size() == 1);
         logging.info("Trial division test of %s.\n", input.display_text().data());
-        if (is_prime(num.data()[0]))
+        auto factors = input.factorize_small();
+        GWASSERT(!factors.empty());
+        if (factors[0] == input.value() || (factors[0] == 0 && factors.size() == 1))
         {
             logging.result(true, "%s is prime!\n", input.display_text().data());
             logging.result_save(input.input_text() + " is prime!\n");
-            return 1;
+            return 2;
         }
         else
         {
+            logging.result(false, "%s is not prime.\n", input.display_text().data());
+            logging.result_save(input.input_text() + " is not prime.\n");
+            return 0;
+        }
+    }
+    else if (trial_division)
+    {
+        auto factors = input.factorize_small();
+        if (!factors.empty())
+        {
+            logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
             logging.result(false, "%s is not prime.\n", input.display_text().data());
             logging.result_save(input.input_text() + " is not prime.\n");
             return 0;
