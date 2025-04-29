@@ -372,7 +372,7 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     options.AllFactors = global_options.AllFactors;
 
     uint32_t fingerprint = input.fingerprint();
-    input.factorize_f_p();
+    input.expand_factors();
     if (!input.is_half_factored())
         throw std::runtime_error("Not enough factors.");
 

@@ -236,8 +236,9 @@ int main(int argc, char *argv[])
             })
         .default_code([&](const char* param) {
                 InputNum tmp;
-                if (!tmp.parse(param))
-                    printf("Unknown option %s.\n", param);
+                InputNum::ParseResult res = tmp.parse(param);
+                if (!res)
+                    printf("Error parsing %s, pos %d: %s.\n", param, res.pos + 1, res.message.data());
                 else
                 {
                     if (show_info)
@@ -249,7 +250,7 @@ int main(int argc, char *argv[])
             })
         .parse_args(argc, argv);
 
-    if (input.empty())
+    if (argc == 1)
     {
         printf("Usage: PRST {\"[K*]B^N[/D]+C\" | \"N![A]+C\" | \"[p]N#+C\" | \"X\" | \"Phi(3,[-]<number>)\"} <mode> <options>\n");
         printf("Mode: default is primality testing\n");
@@ -275,6 +276,11 @@ int main(int argc, char *argv[])
         printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [pack <name>] [cert <name>] [keep]\n");
         printf("\t-proof cert {<name> | default}\n");
         return 0;
+    }
+    if (input.empty())
+    {
+        printf("No input.\n");
+        return 1;
     }
     if (show_info)
         input.print_info();
@@ -366,7 +372,7 @@ int main(int argc, char *argv[])
     }
     else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == 1 && !force_fermat && !proof)
     {
-        input.factorize_f_p();
+        input.expand_factors();
         if (input.is_half_factored())
            pocklington.reset(new PocklingtonGeneric(input, options, logging));
         else
@@ -390,7 +396,7 @@ int main(int argc, char *argv[])
     }
     else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == -1 && !force_fermat && !proof)
     {
-        input.factorize_f_p();
+        input.expand_factors();
         if (input.is_half_factored())
             morrison.reset(new MorrisonGeneric(input, options, logging));
         else

@@ -194,9 +194,10 @@ int batch_main(int argc, char *argv[])
         }
 
         InputNum input;
-        if (!input.parse(batch[cur]))
+        InputNum::ParseResult res = input.parse(batch[cur]);
+        if (!res)
         {
-            logging_batch.error("Invalid input: %s\n", batch[cur].data());
+            printf("Error parsing %s, pos %d: %s.\n", batch[cur].data(), res.pos + 1, res.message.data());
             if (stop_error)
             {
                 Task::abort();
@@ -282,7 +283,7 @@ int batch_main(int argc, char *argv[])
         }
         else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == 1 && !force_fermat)
         {
-            input.factorize_f_p();
+            input.expand_factors();
             if (input.is_half_factored())
             {
                 if (batch_name != "stdin")
@@ -318,7 +319,7 @@ int batch_main(int argc, char *argv[])
         }
         else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)) && input.c() == -1 && !force_fermat)
         {
-            input.factorize_f_p();
+            input.expand_factors();
             if (input.is_half_factored())
             {
                 if (batch_name != "stdin")

@@ -88,6 +88,7 @@ struct KBNCTest TestPrime[] = {
 { "", "", 0, 0, 0x0ULL, 0x0ULL } };
 
 struct FreeFormTest TestFreeForm[] = {
+{ "2^56+(2^55-1)", 56, 0x0ULL, 0x005B515CB3167ACFULL },
 { "2*15^100/(5^43)-1", 293, 0x1ULL, 0x40500ADE955709F9ULL },
 { "(10^1031-1)/9", 3422, 0x0ULL, 0xE12244EA862791A1ULL },
 { "Phi(6,83#)", 215, 0x1ULL, 0xC982A892CA2C45E8ULL },
