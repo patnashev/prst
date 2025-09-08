@@ -1,10 +1,6 @@
 name: macOS build
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [push, pull_request]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -13,11 +9,11 @@ concurrency:
 env:
   boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
   gwnum_ver: "v3019b21"
-
+  MACOSX_DEPLOYMENT_TARGET: "10.14"
 
 jobs:
   boinc-macIntel64:
-    runs-on: macos-12
+    runs-on: macos-13
 
     steps:
       - name: Cache BOINC libs
@@ -34,7 +30,7 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
         with:
-          xcode-version: '13.4.1'
+          xcode-version: latest-stable
 
       - name: Checkout boinc
         if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
@@ -51,7 +47,7 @@ jobs:
           source BuildMacBOINC.sh -lib
 
   gwnum:
-    runs-on: macos-12
+    runs-on: macos-13
 
     steps:
       - name: Cache gwnum.a libs
@@ -62,6 +58,12 @@ jobs:
             gwnum/gwnum.a
             gwnum/polymult.a
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
+
+      - name: Install gmp
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
+        run: |
+          brew update
+          brew reinstall gmp
 
       - name: Download p95
         if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
@@ -79,7 +81,10 @@ jobs:
 
   macIntel64:
     needs: [boinc-macIntel64, gwnum]
-    runs-on: macos-12
+    runs-on: macos-13
+    env:
+      SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk
+      LIBCXX_INCLUDE: /opt/libcxx-11/include/c++/v1
 
     steps:
       - name: Use cached BOINC libs
@@ -104,11 +109,22 @@ jobs:
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
           fail-on-cache-miss: true
 
-      - name: install Homebrew
-        run: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      - name: setup MacOSX10.14 SDK
+        run: |
+          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.14.sdk.tar.xz
+          xz -c -d MacOSX10.14.sdk.tar.xz | tar -xf -
+          sudo mv MacOSX10.14.sdk "$SDKROOT"
+          sudo /usr/libexec/PlistBuddy -c "Set :MinimumSDKVersion 10.14" /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Info.plist
 
       - name: install deps (brew)
         run: brew install gmp
+
+      - name: install llvm headers
+        run: |
+          curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.1/libcxx-11.0.1.src.tar.xz
+          tar -xf libcxx-11.0.1.src.tar.xz
+          sudo mkdir -p "$LIBCXX_INCLUDE"
+          sudo cp -R libcxx-11.0.1.src/include/* "$LIBCXX_INCLUDE"
 
       - name: remove dylib files (force static link)
         run: |
@@ -131,9 +147,10 @@ jobs:
         run: cd prst/src/mac64 && make -f Makefile.boinc -j
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macIntel64_bins
           path: |
             prst/src/mac64/prst
             prst/src/mac64/prst_boinc
+            gwnum

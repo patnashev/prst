@@ -9,17 +9,20 @@ all_boinc: $(EXE_BOINC)
 
 include Makefile
 
+CXXFLAGS_BOINC := $(COMMON_CFLAGS) $(CXXFLAGS) $(BOINC_INC)
+LDFLAGS_BOINC  := $(COMMON_LDFLAGS) $(LFLAGS) $(BOINC_LIB)
+
 $(EXE_BOINC): $(COMPOBJS_COMMON) prst_boinc.o bow.o boinc.o
-	$(CC) $(LFLAGS) -o $@ $^ $(LIB_GWNUM) $(DUMMY2) $(BOINC_LIB) $(LIBS2)
+	$(CXX) $(LDFLAGS_BOINC) -o $@ $^ $(LIB_GWNUM) $(LIBS2)
 
 prst_boinc.o: prst.cpp
-	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
+	$(CXX) -o $@ -c $(CPPFLAGS) $(CXXFLAGS_BOINC) -DBOINC $<
 
 boinc.o: boinc.cpp
-	$(CXX) -o $@ -c $(CXXFLAGS) -DBOINC $<
+	$(CXX) -o $@ -c $(CPPFLAGS) $(CXXFLAGS_BOINC) -DBOINC $<
 
 bow.o: bow/bow.cpp
-	$(CXX) -o $@ -c $(CXXFLAGS) $(BOINC_INC) $<
+	$(CXX) -o $@ -c $(CPPFLAGS) $(CXXFLAGS_BOINC) $<
 
 clean::
 	rm -f $(EXE_BOINC) bow.o boinc.o prst_boinc.o
