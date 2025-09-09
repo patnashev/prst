@@ -30,7 +30,7 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
         with:
-          xcode-version: latest-stable
+          xcode-version: '15.2.0'
 
       - name: Checkout boinc
         if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
