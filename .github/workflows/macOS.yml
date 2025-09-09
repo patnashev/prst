@@ -59,12 +59,6 @@ jobs:
             gwnum/polymult.a
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
 
-      - name: Install gmp
-        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
-        run: |
-          brew update
-          brew reinstall gmp
-
       - name: Download p95
         if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
         run: wget "https://www.mersenne.org/download/software/v30/30.19/p95${{ env.gwnum_ver }}.source.zip"
