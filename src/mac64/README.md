@@ -1,8 +1,6 @@
-#### Get Mac OS X 10.13 SDK if running a newer version of Xcode
+#### Get Mac OS X 10.14 SDK if running a newer version of Xcode
 
-- Download Xcode 9.4.1 (https://developer.apple.com/services-account/download?path=/Developer_Tools/Xcode_9.4.1/Xcode_9.4.1.xip or https://developer.apple.com/download/more/)
-- Extract Xcode.app from the `.xip` archive (no need to install)
-- Right click, "Show Package Content"
-- Go to `/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs`
-- Copy `MacOSX.sdk` to the directory this README file is located
-  - (optional) rename `MacOSX.sdk` to `MacOSX10.13.sdk`
+- Download MacOSX10.14 SDK: https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.14.sdk.tar.xz
+- Extract to `/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk`
+- Download LLVM 11 (for header files): https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.1/libcxx-11.0.1.src.tar.xz
+- Extract to `/opt/libcxx-11/include/c++/v1`
