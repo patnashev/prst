@@ -7,6 +7,7 @@
 #include "proof.h"
 #include "md5.h"
 #include "integer.h"
+#include "exception.h"
 
 using namespace arithmetic;
 
@@ -313,31 +314,38 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
 
     if (Li())
     {
-        LiCheckExp* taskCheck;
-        Giant r = std::move(_r_count);
-
-        if (_taskA)
-        {
-            taskCheck = dynamic_cast<LiCheckExp*>(_taskA.get());
-            if (taskCheck != nullptr)
-                taskCheck->init(&input, &gwstate, nullptr, nullptr, &logging, std::move(_r_0), std::move(r), inv(r, *gwstate.N));
-            else
-                _taskA->init_giant(&input, &gwstate, nullptr, &logging, std::move(_r_0), std::move(r));
-            _taskA->run();
-            logging.progress().next_stage();
-            _r_0 = std::move(_taskA->X0());
-            r = std::move(*_taskA->result());
-        }
-
-        taskCheck = dynamic_cast<LiCheckExp*>(_task.get());
+        LiCheckExp* taskCheck = dynamic_cast<LiCheckExp*>(_task.get());
         if (taskCheck != nullptr)
             taskCheck->init(&input, &gwstate, &file_checkpoint, &file_recoverypoint, &logging, std::move(_r_0));
         else
             task->init_giant(&input, &gwstate, &file_checkpoint, &logging, std::move(_r_0));
         if (task->state() == nullptr)
         {
-            task->init_state(new BaseExp::StateValue(0, std::move(r)));
-            task->state()->set_written();
+            if (_taskA)
+            {
+                LiCheckExp* taskACheck = dynamic_cast<LiCheckExp*>(_taskA.get());
+                if (taskACheck != nullptr)
+                {
+                    Giant inv_r;
+                    try
+                    {
+                        inv_r = inv(_r_count, *gwstate.N);
+                    }
+                    catch (const NoInverseException&) { }
+                    taskACheck->init(&input, &gwstate, nullptr, nullptr, &logging, std::move(task->X0()), std::move(_r_count), std::move(inv_r));
+                }
+                else
+                    _taskA->init_giant(&input, &gwstate, nullptr, &logging, std::move(task->X0()), std::move(_r_count));
+                _taskA->run();
+                logging.progress().next_stage();
+                task->X0() = std::move(_taskA->X0());
+                task->init_state(new BaseExp::StateValue(0, std::move(*_taskA->result())));
+            }
+            else
+            {
+                task->init_state(new BaseExp::StateValue(0, std::move(_r_count)));
+                task->state()->set_written();
+            }
         }
     }
     else

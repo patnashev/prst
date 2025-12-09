@@ -203,6 +203,19 @@ int testing_main(int argc, char *argv[])
             cont.emplace_back(new Test(100186, 5, *nTest, -1));
     }
 
+    if (tests.empty())
+    {
+        FreeFormTest ffTest = { subset.data(), 0, 0, 0 };
+        Test test(ffTest);
+        if (test.input.parse(test.input_text))
+        {
+            test.input_bitlen = test.input.bitlen();
+            test.res64 = 0;
+            auto& cont = add("custom");
+            cont.emplace_back(new Test(test));
+        }
+    }
+
     for (auto& subsetTests : tests)
     {
         for (auto& test : std::get<2>(subsetTests))
@@ -210,7 +223,7 @@ int testing_main(int argc, char *argv[])
         logging.progress().add_stage(std::get<1>(subsetTests).progress().cost_total());
     }
 
-    const char* test_text = "";
+    std::string test_text;
     try
     {
         for (auto& subsetTests : tests)
@@ -230,7 +243,8 @@ int testing_main(int argc, char *argv[])
             else
                 for (auto& test : std::get<2>(subsetTests))
                 {
-                    logging.info("%s\n", test->display_text().data());
+                    test_text = test->display_text();
+                    logging.info("%s\n", test_text.data());
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
                     if (log_level > Logging::LEVEL_DEBUG)
@@ -249,7 +263,7 @@ int testing_main(int argc, char *argv[])
         if (Task::abort_flag())
             logging.warning("Test aborted.\n");
         else
-            logging.error("Test %s failed.\n", test_text);
+            logging.error("Failed test: %s.\n", test_text.data());
     }
 
     return 0;
@@ -326,7 +340,7 @@ void Test::run(Logging& logging, Options& global_options, GWState& global_state)
         logging.progress().add_stage(1);
         logging.progress().add_stage(proof_build.cost());
         fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
-        if (std::stoull(dynamic_cast<ProofBuild*>(proof_build.task())->raw_res64(), nullptr, 16) != cert64)
+        if (std::stoull(options.ProofSecuritySeed.empty() ? proof_build.res64() : dynamic_cast<ProofBuild*>(proof_build.task())->raw_res64(), nullptr, 16) != cert64)
         {
             logging.error("Build raw certificate mismatch.\n");
             throw TaskAbortException();
