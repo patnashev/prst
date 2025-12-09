@@ -12,7 +12,9 @@ concurrency:
 
 env:
   boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
-  gwnum_ver: "v3019b21"
+  gwnum_ver: "v3103b01"
+  gwnum_ver_major: "31"
+  gwnum_ver_minor: "03"
 
 
 jobs:
@@ -59,13 +61,14 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
+            gwnum/*.h
             gwnum/gwnum.a
             gwnum/polymult.a
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
 
       - name: Download p95
         if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
-        run: wget "https://www.mersenne.org/download/software/v30/30.19/p95${{ env.gwnum_ver }}.source.zip"
+        run: wget "https://www.mersenne.org/download/software/v${{ env.gwnum_ver_major }}/${{ env.gwnum_ver_major }}.${{ env.gwnum_ver_minor }}/p95${{ env.gwnum_ver }}.source.zip"
 
       - name: unzip p95
         if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
@@ -76,6 +79,14 @@ jobs:
         run: |
           cd gwnum
           make -f makemac -j gwnum.a polymult.a
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macIntel64_gwnum
+          path: |
+            gwnum/gwnum.a
+            gwnum/polymult.a
 
   macIntel64:
     needs: [boinc-macIntel64, gwnum]
@@ -99,6 +110,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
+            gwnum/*.h
             gwnum/gwnum.a
             gwnum/polymult.a
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
@@ -122,7 +134,9 @@ jobs:
           path: 'prst'
 
       - name: copy gwnum
-        run: cp gwnum/gwnum.a prst/framework/gwnum/mac64/
+        run: |
+          cp gwnum/*.h prst/framework/gwnum/
+          cp gwnum/gwnum.a prst/framework/gwnum/mac64/
 
       - name: make
         run: cd prst/src/mac64 && make -j
