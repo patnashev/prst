@@ -252,7 +252,8 @@ int main(int argc, char *argv[])
 
     if (argc == 1)
     {
-        printf("Usage: PRST {\"[K*]B^N[/D]+C\" | \"N![A]+C\" | \"[p]N#+C\" | \"X\" | \"Phi(3,[-]<number>)\"} <mode> <options>\n");
+        printf("Usage: PRST \"<number>\" <mode> <options>\n");
+        printf("Number: [K*]B^N[/D]+C\n\tN![A]+C\n\t[p]N#+C\n\tX\n\tPhi(3,[-]<number>)\n\t(<number>)/F\n");
         printf("Mode: default is primality testing\n");
         printf("\t-v\n");
         printf("\t-info\n");

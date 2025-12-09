@@ -35,6 +35,8 @@ Number:  K*B^N/D+C
                  arbitrary length number in decimal notation.
          Phi(3,[-]<number>) | Phi(6,<number>)
                  expands to X^2 ± X + 1.
+         (<number>)/F
+                 F can be (<number>) and occur multiple times.
 
 Mode:    default is primality testing.
          -v
