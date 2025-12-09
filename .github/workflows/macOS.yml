@@ -15,7 +15,7 @@ env:
 
 jobs:
   boinc-macIntel64:
-    runs-on: macos-13
+    runs-on: macos-14
 
     steps:
       - name: Cache BOINC libs
@@ -49,7 +49,7 @@ jobs:
           source BuildMacBOINC.sh -lib
 
   gwnum:
-    runs-on: macos-13
+    runs-on: macos-14
 
     steps:
       - name: Cache gwnum.a libs
@@ -78,7 +78,7 @@ jobs:
 
   macIntel64:
     needs: [boinc-macIntel64, gwnum]
-    runs-on: macos-13
+    runs-on: macos-14
     env:
       SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk
       LIBCXX_INCLUDE: /opt/libcxx-11/include/c++/v1
