@@ -8,11 +8,14 @@ concurrency:
 
 env:
   boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
+  gwnum_ver: "v3103b01"
+  gwnum_ver_major: "31"
+  gwnum_ver_minor: "03"
   MACOSX_DEPLOYMENT_TARGET: "10.14"
 
 jobs:
   boinc-macIntel64:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Cache BOINC libs
@@ -45,9 +48,37 @@ jobs:
           cd ./boinc/mac_build/
           source BuildMacBOINC.sh -lib
 
+  gwnum:
+    runs-on: macos-15
+
+    steps:
+      - name: Cache gwnum.a libs
+        id: cache-gwnum-macIntel64
+        uses: actions/cache@v3
+        with:
+          path: |
+            gwnum/*.h
+            gwnum/gwnum.a
+            gwnum/polymult.a
+          key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
+
+      - name: Download p95
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
+        run: wget "https://www.mersenne.org/download/software/v${{ env.gwnum_ver_major }}/${{ env.gwnum_ver_major }}.${{ env.gwnum_ver_minor }}/p95${{ env.gwnum_ver }}.source.zip"
+
+      - name: unzip p95
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
+        run: unzip p95*.zip
+
+      - name: build gwnum.a and polymult.a
+        if: steps.cache-gwnum-macIntel64.outputs.cache-hit != 'true'
+        run: |
+          cd gwnum
+          make -f makemac -j gwnum.a polymult.a
+
   macIntel64:
-    needs: [boinc-macIntel64]
-    runs-on: macos-14
+    needs: [boinc-macIntel64, gwnum]
+    runs-on: macos-15
     env:
       SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk
       LIBCXX_INCLUDE: /opt/libcxx-11/include/c++/v1
@@ -63,6 +94,17 @@ jobs:
             boinc/api
             boinc/lib
           key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-macIntel64
+          fail-on-cache-miss: true
+
+      - name: Use cached gwnum
+        id: cache-gwnum
+        uses: actions/cache@v3
+        with:
+          path: |
+            gwnum/*.h
+            gwnum/gwnum.a
+            gwnum/polymult.a
+          key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
           fail-on-cache-miss: true
 
       - name: setup MacOSX10.14 SDK
@@ -93,6 +135,11 @@ jobs:
           submodules: 'true'
           path: 'prst'
 
+      - name: copy gwnum
+        run: |
+          cp gwnum/*.h prst/framework/gwnum/
+          cp gwnum/gwnum.a prst/framework/gwnum/mac64/
+
       - name: make
         run: cd prst/src/mac64 && make -j
 
@@ -106,3 +153,4 @@ jobs:
           path: |
             prst/src/mac64/prst
             prst/src/mac64/prst_boinc
+            gwnum
