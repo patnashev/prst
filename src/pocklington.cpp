@@ -355,7 +355,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
         logging.heartbeat();
         last_progress = 0;
     };
-        
+
     while (_res64.empty() && !_prime)
     {
         logging.set_prefix(input.display_text() + " ");
@@ -578,7 +578,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
 
         PrimeIterator primes = PrimeIterator::get();
         for (; *primes <= _a; primes++);
-        if (_done_factors.count(0) == 0)
+        if (((_options.AllFactors && _options.AllFactors.value()) || input.factors()[0].second > gwstate.N->bitlen()/100) && _done_factors.count(0) == 0)
             while (kronecker(*primes, *gwstate.N) != -1)
                 primes++;
         _a = *primes;

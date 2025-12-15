@@ -393,11 +393,11 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     std::unique_ptr<Pocklington> pocklington;
     std::unique_ptr<PocklingtonGeneric> pocklingtonGeneric;
     std::unique_ptr<Morrison> morrison;
-    if (input.c() == 1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)))
+    if (input.c() == 1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))))
         pocklingtonGeneric.reset(new PocklingtonGeneric(input, options, logging));
     else if (input.c() == 1)
         pocklington.reset(new Pocklington(input, options, logging, nullptr));
-    if (input.c() == -1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)))
+    if (input.c() == -1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))))
         morrison.reset(new MorrisonGeneric(input, options, logging));
     else if (input.c() == -1)
         morrison.reset(new Morrison(input, options, logging));
