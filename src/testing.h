@@ -100,11 +100,11 @@ public:
     {
         if (input.type() == InputNum::ZERO && !input.parse(input_text))
             throw std::runtime_error("Parse failed.");
-        if (input.c() == 1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)))
+        if (input.c() == 1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))))
             return input.display_text() + ", generic Pocklington test.";
         else if (input.c() == 1)
             return input.display_text() + ", Pocklington test.";
-        if (input.c() == -1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && input.n() < 10)))
+        if (input.c() == -1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))))
             return input.display_text() + ", generic Morrison test.";
         else if (input.c() == -1 && (input.b() != 2 || log2(input.gk()) >= input.n()))
             return input.display_text() + ", Morrison test.";
