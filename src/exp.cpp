@@ -366,7 +366,7 @@ double MultipointExp::cost()
         double cost = ((1 << (W - 1)) + log2b*_points[first].pos*(1 + 1/(W + 1.0)));
         if (_points.size() > 1 + first)
         {
-            cost *= (_points.size() - 1 - first);
+            cost *= (double)(_points.size() - 1 - first);
             int last = _points[_points.size() - 1].pos - _points[_points.size() - 2].pos;
             for (W = 2; (W < _W || _W == -1) && ((1 << (W + 1)) <= _max_size || _max_size == -1) && (1 << (W - 1)) + log2b*last*(1 + 1/(W + 1.0)) >(1 << (W - 0)) + log2b*last*(1 + 1/(W + 2.0)); W++);
             cost += ((1 << (W - 1)) + log2b*last*(1 + 1/(W + 1.0)));
