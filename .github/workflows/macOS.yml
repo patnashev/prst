@@ -11,7 +11,7 @@ env:
   gwnum_ver: "v3103b01"
   gwnum_ver_major: "31"
   gwnum_ver_minor: "03"
-  MACOSX_DEPLOYMENT_TARGET: "10.14"
+  MACOSX_DEPLOYMENT_TARGET: "10.15"
 
 jobs:
   boinc-macIntel64:
@@ -80,7 +80,7 @@ jobs:
     needs: [boinc-macIntel64, gwnum]
     runs-on: macos-15-intel
     env:
-      SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk
+      SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk
       LIBCXX_INCLUDE: /opt/libcxx-11/include/c++/v1
 
     steps:
@@ -107,12 +107,12 @@ jobs:
           key: gwmum-${{ runner.os }}-${{ env.gwnum_ver }}-macIntel64
           fail-on-cache-miss: true
 
-      - name: setup MacOSX10.14 SDK
+      - name: setup MacOSX10.15 SDK
         run: |
-          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.14.sdk.tar.xz
-          xz -c -d MacOSX10.14.sdk.tar.xz | tar -xf -
-          sudo mv MacOSX10.14.sdk "$SDKROOT"
-          sudo /usr/libexec/PlistBuddy -c "Set :MinimumSDKVersion 10.14" /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Info.plist
+          wget -nv https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.15.sdk.tar.xz
+          xz -c -d MacOSX10.15.sdk.tar.xz | tar -xf -
+          sudo mv MacOSX10.15.sdk "$SDKROOT"
+          sudo /usr/libexec/PlistBuddy -c "Set :MinimumSDKVersion 10.15" /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Info.plist
 
       - name: install deps (brew)
         run: brew install gmp

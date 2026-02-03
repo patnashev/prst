@@ -9,7 +9,7 @@ COMPOBJS        = $(COMPOBJS_COMMON) prst.o
 
 # libc++ headers to use. Download and extract from https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.1/libcxx-11.0.1.src.tar.xz
 LIBCXX_INCLUDE ?= /opt/libcxx-11/include/c++/v1
-SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk
+SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk
 MINVER  = 10.14
 
 # some tools use this env var as well, so set it as well
