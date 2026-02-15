@@ -334,7 +334,8 @@ int main(int argc, char *argv[])
     std::string filename_prefix = "prst_" + std::to_string(fingerprint);
     File file_progress(filename_prefix + filename_suffix + ".param", fingerprint);
     file_progress.hash = false;
-    logging.file_progress(&file_progress);
+    file_progress.read_buffer();
+    logging.file_progress(file_progress.buffer().empty() ? nullptr : &file_progress);
 
     auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
     {
@@ -460,10 +461,31 @@ int main(int argc, char *argv[])
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
-    if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
+    if (!logging.progress().param("next_fft").empty() && gwstate.next_fft_count < logging.progress().param_int("next_fft"))
         gwstate.next_fft_count = logging.progress().param_int("next_fft");
     gwstate.maxmulbyconst = options.maxmulbyconst;
-    input.setup(gwstate);
+    try
+    {
+        input.setup(gwstate);
+    }
+    catch (const ArithmeticException& e)
+    {
+        printf("FFT setup error: %s\n", e.what());
+        gwstate.done();
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        printf("Setup error: %s\n", e.what());
+        gwstate.done();
+        return 1;
+    }
+    catch (...)
+    {
+        printf("Unknown error during FFT setup.\n");
+        gwstate.done();
+        return 1;
+    }
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
     bool success = false;
@@ -521,6 +543,16 @@ int main(int argc, char *argv[])
     {
         if (!gwstate.information_only)
             failed = true;
+    }
+    catch (const ArithmeticException& e)
+    {
+        printf("Arithmetic error: %s\n", e.what());
+        failed = true;
+    }
+    catch (const std::exception& e)
+    {
+        printf("Unexpected error: %s\n", e.what());
+        failed = true;
     }
 
     gwstate.done();
