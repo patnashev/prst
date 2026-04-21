@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cmath>
 
+#include "gwnum.h"
 #include "logging.h"
 #include "file.h"
 #include "abc_parser.h"
