@@ -463,7 +463,28 @@ int main(int argc, char *argv[])
     if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
         gwstate.next_fft_count = logging.progress().param_int("next_fft");
     gwstate.maxmulbyconst = options.maxmulbyconst;
-    input.setup(gwstate);
+    try
+    {
+        input.setup(gwstate);
+    }
+    catch (const ArithmeticException& e)
+    {
+        printf("FFT setup error: %s\n", e.what());
+        gwstate.done();
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        printf("Setup error: %s\n", e.what());
+        gwstate.done();
+        return 1;
+    }
+    catch (...)
+    {
+        printf("Unknown error during FFT setup.\n");
+        gwstate.done();
+        return 1;
+    }
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
     bool success = false;
@@ -521,6 +542,16 @@ int main(int argc, char *argv[])
     {
         if (!gwstate.information_only)
             failed = true;
+    }
+    catch (const ArithmeticException& e)
+    {
+        printf("Arithmetic error: %s\n", e.what());
+        failed = true;
+    }
+    catch (const std::exception& e)
+    {
+        printf("Unexpected error: %s\n", e.what());
+        failed = true;
     }
 
     gwstate.done();

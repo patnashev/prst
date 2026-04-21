@@ -2,6 +2,7 @@
 #include <list>
 #include <deque>
 #include <tuple>
+#include <map>
 #include <cmath>
 #include <string.h>
 #include <iostream>
@@ -22,6 +23,7 @@
 #include "morrison.h"
 #include "order.h"
 #include "batch.h"
+#include "abc_parser.h"
 
 using namespace arithmetic;
 
@@ -41,6 +43,8 @@ int batch_main(int argc, char *argv[])
     std::string batch_name;
     bool stop_error = false;
     bool stop_prime = false;
+    int stop_composites = 0;
+    bool stop_k_prime = false;
 
     Config cnfg;
     cnfg.ignore("-batch")
@@ -97,6 +101,8 @@ int batch_main(int argc, char *argv[])
             .group("on")
                 .check("error", stop_error, true)
                 .check("prime", stop_prime, true)
+                .value_number("composites", ' ', stop_composites, 1, INT_MAX)
+                .check("kprime", stop_k_prime, true)
                 .end()
             .end()
         .value_code("-ini", ' ', [&](const char* param) {
@@ -131,7 +137,8 @@ int batch_main(int argc, char *argv[])
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-factors all\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>]]\n");
-        printf("\t-stop [on error] [on prime]\n");
+        printf("\t-stop [on error] [on prime] [on composites <count>] [on kprime]\n");
+        printf("Batch file formats: raw (one expression per line), ABC, ABCD, ABC2\n");
         return 0;
     }
 
@@ -139,25 +146,21 @@ int batch_main(int argc, char *argv[])
     if (!log_file.empty())
         logging_batch.file_log(log_file);
 
-    std::vector<std::string> batch;
+    // --- Parse batch file via CandidateSource or stdin fallback ---
+
+    std::unique_ptr<CandidateSource> source;
 
     if (batch_name != "stdin")
     {
-        File batch_file(batch_name, 0);
-        batch_file.read_buffer();
-        std::unique_ptr<TextReader> reader(batch_file.get_textreader());
-        std::string st;
-        while (reader->read_textline(st))
-            batch.push_back(std::move(st));
-
-        if (batch.empty())
+        source = parse_batch_file(batch_name, logging_batch);
+        if (!source || source->size() == 0)
         {
-            logging_batch.warning("Batch %s is empty.\n", batch_name.data());
+            logging_batch.warning("Batch %s is empty or could not be parsed.\n", batch_name.data());
             return 0;
         }
     }
-    else
-        batch.emplace_back();
+
+    size_t total = source ? source->size() : 0;
 
     std::string filename_suffix;
     if (!order_a.empty() && order_a.value() > 1)
@@ -171,33 +174,65 @@ int batch_main(int argc, char *argv[])
     if (cur > 0)
         logging_batch.info("Restarting at %d.\n", cur + 1);
 
-    int primes = logging_batch.progress().param_int("primes");;
+    int primes = logging_batch.progress().param_int("primes");
+    int composites = logging_batch.progress().param_int("composites");
+
+    // Per-k tracking: k_value -> whether a prime has been found for this k
+    std::map<std::string, bool> k_prime_found;
+
     bool success = false;
-    for (; cur < batch.size(); cur++)
+    for (; batch_name == "stdin" || cur < (int)total; cur++)
     {
         logging_batch.report_param("cur", cur);
-        logging_batch.progress().update(cur/(double)batch.size(), 0);
+        if (total > 0)
+            logging_batch.progress().update(cur/(double)total, 0);
         logging_batch.progress_save();
         if (success && stop_prime)
         {
             Task::abort();
             break;
         }
+        if (stop_composites > 0 && composites >= stop_composites)
+        {
+            logging_batch.info("Stopping: %d consecutive composites reached.\n", composites);
+            Task::abort();
+            break;
+        }
+
+        // --- Get the next candidate expression ---
+        std::string expression;
+        std::string k_value;
+
         if (batch_name == "stdin")
         {
             double time = logging_batch.progress().time_total();
-            std::getline(std::cin, batch.back());
+            std::getline(std::cin, expression);
             logging_batch.progress().time_init(time);
-            if (batch.back().empty() || Task::abort_flag())
+            if (expression.empty() || Task::abort_flag())
                 break;
-            batch.emplace_back();
+        }
+        else
+        {
+            Candidate cand;
+            if (!source->get(cur, cand))
+                break;
+            expression = std::move(cand.expression);
+            k_value = std::move(cand.k_value);
+        }
+
+        // Per-k skip: if stop_k_prime is set and we already found a prime for this k
+        if (stop_k_prime && !k_value.empty() && k_prime_found.count(k_value) && k_prime_found[k_value])
+        {
+            logging_batch.info("%d of %d: %s, skipping (prime already found for k=%s).\n",
+                cur + 1, (int)total, expression.data(), k_value.data());
+            continue;
         }
 
         InputNum input;
-        InputNum::ParseResult res = input.parse(batch[cur]);
+        InputNum::ParseResult res = input.parse(expression);
         if (!res)
         {
-            printf("Error parsing %s, pos %d: %s.\n", batch[cur].data(), res.pos + 1, res.message.data());
+            printf("Error parsing %s, pos %d: %s.\n", expression.data(), res.pos + 1, res.message.data());
             if (stop_error)
             {
                 Task::abort();
@@ -212,7 +247,7 @@ int batch_main(int argc, char *argv[])
                 continue;
         }
         else if (batch_name != "stdin")
-            logging_batch.info("%d of %d: %s", cur + 1, (int)batch.size(), input.display_text().data());
+            logging_batch.info("%d of %d: %s", cur + 1, (int)total, input.display_text().data());
 
         Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
         if (!log_file.empty())
@@ -414,6 +449,15 @@ int batch_main(int argc, char *argv[])
         {
             primes++;
             logging_batch.report_param("primes", primes);
+            composites = 0;
+            logging_batch.report_param("composites", composites);
+            if (!k_value.empty())
+                k_prime_found[k_value] = true;
+        }
+        else if (!failed)
+        {
+            composites++;
+            logging_batch.report_param("composites", composites);
         }
         if (failed && stop_error)
             Task::abort();
@@ -421,7 +465,8 @@ int batch_main(int argc, char *argv[])
             break;
     }
 
-    logging_batch.progress().update(cur/(double)batch.size(), 0);
+    if (total > 0)
+        logging_batch.progress().update(cur/(double)total, 0);
     if (Task::abort_flag() && batch_name != "stdin")
         logging_batch.progress_save();
     else

@@ -79,7 +79,7 @@ public:
             return input.display_text() + ", Proth test with certification.";
         return input.display_text() + ", Fermat test with certification.";
     }
-    
+
     virtual void run(Logging& logging, Options& global_options, arithmetic::GWState& global_state);
 
 public:
@@ -135,3 +135,4 @@ private:
 };
 
 void RootsTest(Logging& logging, Options& global_options, arithmetic::GWState& global_state);
+int ABCParserTest(Logging& logging);

@@ -3,7 +3,7 @@
 EXE       = prst
 LIB_GWNUM = ../../framework/gwnum/mac64/gwnum.a
 
-COMPOBJS_COMMON = md5.o arithmetic.o group.o giant.o lucas.o config.o inputnum.o integer.o logging.o file.o container.o task.o exp.o fermat.o order.o pocklington.o lucasmul.o morrison.o proof.o testing.o support.o batch.o
+COMPOBJS_COMMON = md5.o arithmetic.o group.o giant.o lucas.o config.o inputnum.o integer.o logging.o file.o container.o task.o exp.o fermat.o order.o pocklington.o lucasmul.o morrison.o proof.o testing.o support.o batch.o abc_parser.o
 COMPOBJS        = $(COMPOBJS_COMMON) prst.o
 
 

@@ -20,6 +20,7 @@
 #include "pocklington.h"
 #include "morrison.h"
 #include "testing.h"
+#include "abc_parser.h"
 
 #include "test.data"
 
@@ -98,6 +99,7 @@ int testing_main(int argc, char *argv[])
         printf("Subsets:\n");
         printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + freeform + deterministic + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
+        printf("\tabc_parser\n");
         return 0;
     }
 
@@ -154,7 +156,7 @@ int testing_main(int argc, char *argv[])
     {
         add("error");
     }
-    
+
     if (subset == "all" || subset == "freeform")
     {
         auto& cont = add("freeform");
@@ -181,7 +183,7 @@ int testing_main(int argc, char *argv[])
         for (KBNCTest* kbncTest = TestPrime; kbncTest->n != 0; kbncTest++)
             cont.emplace_back(new Test(*kbncTest));
     }
-    
+
     if (subset == "slow" || subset == "gfn13more")
     {
         auto& cont = add("gfn13more");
@@ -201,6 +203,17 @@ int testing_main(int argc, char *argv[])
         auto& cont = add("100186b5minus");
         for (NTest* nTest = Test100186Base5Minus; nTest->n != 0; nTest++)
             cont.emplace_back(new Test(100186, 5, *nTest, -1));
+    }
+
+    if (subset == "abc_parser")
+    {
+        logging.warning("Running abc_parser tests.\n");
+        int result = ABCParserTest(logging);
+        if (result == 0)
+            logging.error("All abc_parser tests completed successfully.\n");
+        else
+            logging.error("abc_parser tests FAILED.\n");
+        return result;
     }
 
     if (tests.empty())
@@ -517,7 +530,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 
         for (int i = 1; i <= proof_count; i++)
             points.emplace_back(BaseExp::State::read_file(file_proofpoint.children()[i].get()));
-        
+
         GWNum X(gw);
         X = Giant::rnd(gwstate.N->bitlen());
         BaseExp::StateSerialized point;
@@ -766,4 +779,292 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
         throw;
     }
     finally();
+}
+
+// ============================================================================
+// ABC Parser Unit Tests
+// ============================================================================
+
+#include <fstream>
+
+static bool write_test_file(const std::string& filename, const std::string& content)
+{
+    std::ofstream ofs(filename);
+    if (!ofs)
+        return false;
+    ofs << content;
+    ofs.close();
+    return true;
+}
+
+static void cleanup_test_file(const std::string& filename)
+{
+    remove(filename.data());
+}
+
+int ABCParserTest(Logging& logging)
+{
+    int failures = 0;
+    int tests_run = 0;
+
+    auto check = [&](bool condition, const char* test_name) {
+        tests_run++;
+        if (!condition)
+        {
+            logging.error("  FAIL: %s\n", test_name);
+            failures++;
+        }
+        else
+            logging.info("  PASS: %s\n", test_name);
+    };
+
+    // --- Test 1: detect_format ---
+    logging.info("Testing detect_format...\n");
+    check(detect_format("ABC $a*2^$b+1") == FORMAT_ABC, "detect ABC");
+    check(detect_format("ABCD $a*2^$b+1 [3 1000]") == FORMAT_ABCD, "detect ABCD");
+    check(detect_format("ABC2 $a*2^$b+1") == FORMAT_ABC2, "detect ABC2");
+    check(detect_format("abc $a*2^$b+1") == FORMAT_ABC, "detect ABC case-insensitive");
+    check(detect_format("3*2^100+1") == FORMAT_UNKNOWN, "detect raw expression");
+    check(detect_format("") == FORMAT_UNKNOWN, "detect empty string");
+
+    // --- Test 2: ABC format parsing ---
+    logging.info("Testing ABC format...\n");
+    {
+        std::string content =
+            "ABC $a*2^$b+1\n"
+            "3 1000\n"
+            "5 2000\n"
+            "7 3000\n";
+        write_test_file("prst_test_abc.txt", content);
+        auto source = parse_batch_file("prst_test_abc.txt", logging);
+        check(source != nullptr, "ABC: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 3, "ABC: 3 candidates");
+            check(source->is_abc(), "ABC: is_abc() = true");
+
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "3*2^1000+1", "ABC: first expression = 3*2^1000+1");
+            check(c.k_value == "3", "ABC: first k_value = 3");
+
+            source->get(1, c);
+            check(c.expression == "5*2^2000+1", "ABC: second expression = 5*2^2000+1");
+
+            source->get(2, c);
+            check(c.expression == "7*2^3000+1", "ABC: third expression = 7*2^3000+1");
+            check(c.k_value == "7", "ABC: third k_value = 7");
+
+            check(!source->get(3, c), "ABC: out-of-bounds returns false");
+        }
+        cleanup_test_file("prst_test_abc.txt");
+    }
+
+    // --- Test 3: ABC with comments and blank lines ---
+    logging.info("Testing ABC with comments...\n");
+    {
+        std::string content =
+            "ABC $a*2^$b+1\n"
+            "// This is a comment\n"
+            "3 1000\n"
+            "\n"
+            "5 2000\n";
+        write_test_file("prst_test_abc_comments.txt", content);
+        auto source = parse_batch_file("prst_test_abc_comments.txt", logging);
+        check(source != nullptr, "ABC comments: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 2, "ABC comments: 2 candidates (skipped comment/blank)");
+        }
+        cleanup_test_file("prst_test_abc_comments.txt");
+    }
+
+    // --- Test 4: ABCD format parsing ---
+    logging.info("Testing ABCD format...\n");
+    {
+        std::string content =
+            "ABCD $a*2^1000+1 [3]\n"
+            "2\n"
+            "4\n"
+            "6\n";
+        write_test_file("prst_test_abcd.txt", content);
+        auto source = parse_batch_file("prst_test_abcd.txt", logging);
+        check(source != nullptr, "ABCD: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 4, "ABCD: 4 candidates (initial + 3 deltas)");
+            check(source->is_abc(), "ABCD: is_abc() = true");
+
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "3*2^1000+1", "ABCD: first expression = 3*2^1000+1");
+            check(c.k_value == "3", "ABCD: first k_value = 3");
+
+            source->get(1, c);
+            check(c.expression == "5*2^1000+1", "ABCD: second expression = 5*2^1000+1 (3+2)");
+
+            source->get(2, c);
+            check(c.expression == "9*2^1000+1", "ABCD: third expression = 9*2^1000+1 (5+4)");
+
+            source->get(3, c);
+            check(c.expression == "15*2^1000+1", "ABCD: fourth expression = 15*2^1000+1 (9+6)");
+        }
+        cleanup_test_file("prst_test_abcd.txt");
+    }
+
+    // --- Test 5: ABCD multi-header ---
+    logging.info("Testing ABCD multi-header...\n");
+    {
+        std::string content =
+            "ABCD $a*2^1000+1 [3]\n"
+            "2\n"
+            "ABCD $a*2^2000+1 [7]\n"
+            "4\n";
+        write_test_file("prst_test_abcd_multi.txt", content);
+        auto source = parse_batch_file("prst_test_abcd_multi.txt", logging);
+        check(source != nullptr, "ABCD multi: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 4, "ABCD multi: 4 candidates (2 headers x 2 each)");
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "3*2^1000+1", "ABCD multi: header1 initial");
+            source->get(1, c);
+            check(c.expression == "5*2^1000+1", "ABCD multi: header1 delta");
+            source->get(2, c);
+            check(c.expression == "7*2^2000+1", "ABCD multi: header2 initial");
+            source->get(3, c);
+            check(c.expression == "11*2^2000+1", "ABCD multi: header2 delta");
+        }
+        cleanup_test_file("prst_test_abcd_multi.txt");
+    }
+
+    // --- Test 6: ABC2 format with ranges ---
+    logging.info("Testing ABC2 format...\n");
+    {
+        std::string content =
+            "ABC2 $a*2^$b+1\n"
+            "a: from 3 to 7 step 2\n"
+            "b: from 100 to 102\n";
+        write_test_file("prst_test_abc2.txt", content);
+        auto source = parse_batch_file("prst_test_abc2.txt", logging);
+        check(source != nullptr, "ABC2: parse succeeds");
+        if (source)
+        {
+            // a = {3,5,7}, b = {100,101,102} => 3*3 = 9 candidates
+            check(source->size() == 9, "ABC2: 9 candidates (3x3 Cartesian product)");
+            check(source->is_abc(), "ABC2: is_abc() = true");
+
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "3*2^100+1", "ABC2: first = 3*2^100+1");
+            source->get(1, c);
+            check(c.expression == "3*2^101+1", "ABC2: second = 3*2^101+1 (b increments first)");
+            source->get(3, c);
+            check(c.expression == "5*2^100+1", "ABC2: fourth = 5*2^100+1 (a=5, b=100)");
+            source->get(8, c);
+            check(c.expression == "7*2^102+1", "ABC2: last = 7*2^102+1");
+        }
+        cleanup_test_file("prst_test_abc2.txt");
+    }
+
+    // --- Test 7: ABC2 with explicit list ---
+    logging.info("Testing ABC2 with explicit list...\n");
+    {
+        std::string content =
+            "ABC2 $a*2^$b+1\n"
+            "a: in { 3 7 11 }\n"
+            "b: from 1000 to 1001\n";
+        write_test_file("prst_test_abc2_list.txt", content);
+        auto source = parse_batch_file("prst_test_abc2_list.txt", logging);
+        check(source != nullptr, "ABC2 list: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 6, "ABC2 list: 6 candidates (3x2)");
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "3*2^1000+1", "ABC2 list: first = 3*2^1000+1");
+            source->get(2, c);
+            check(c.expression == "7*2^1000+1", "ABC2 list: third = 7*2^1000+1");
+        }
+        cleanup_test_file("prst_test_abc2_list.txt");
+    }
+
+    // --- Test 8: ABC2 with primes ---
+    logging.info("Testing ABC2 with primes...\n");
+    {
+        std::string content =
+            "ABC2 $a*2^1000+1\n"
+            "a: primes from 2 to 11\n";
+        write_test_file("prst_test_abc2_primes.txt", content);
+        auto source = parse_batch_file("prst_test_abc2_primes.txt", logging);
+        check(source != nullptr, "ABC2 primes: parse succeeds");
+        if (source)
+        {
+            // primes 2..11 = {2,3,5,7,11}
+            check(source->size() == 5, "ABC2 primes: 5 candidates (primes 2..11)");
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "2*2^1000+1", "ABC2 primes: first = 2*2^1000+1");
+            source->get(4, c);
+            check(c.expression == "11*2^1000+1", "ABC2 primes: last = 11*2^1000+1");
+        }
+        cleanup_test_file("prst_test_abc2_primes.txt");
+    }
+
+    // --- Test 9: Raw format (no ABC header) ---
+    logging.info("Testing raw format...\n");
+    {
+        std::string content =
+            "3*2^1000+1\n"
+            "5*2^2000+1\n"
+            "7*2^3000+1\n";
+        write_test_file("prst_test_raw.txt", content);
+        auto source = parse_batch_file("prst_test_raw.txt", logging);
+        check(source != nullptr, "Raw: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 3, "Raw: 3 candidates");
+            check(!source->is_abc(), "Raw: is_abc() = false");
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "3*2^1000+1", "Raw: first expression");
+            check(c.k_value.empty(), "Raw: no k_value");
+        }
+        cleanup_test_file("prst_test_raw.txt");
+    }
+
+    // --- Test 10: Empty file ---
+    logging.info("Testing empty file...\n");
+    {
+        write_test_file("prst_test_empty.txt", "");
+        auto source = parse_batch_file("prst_test_empty.txt", logging);
+        check(source == nullptr, "Empty: returns nullptr");
+        cleanup_test_file("prst_test_empty.txt");
+    }
+
+    // --- Test 11: ABC with single variable (no k-multiplier) ---
+    logging.info("Testing ABC single variable...\n");
+    {
+        std::string content =
+            "ABC 2^$a+1\n"
+            "100\n"
+            "200\n";
+        write_test_file("prst_test_abc_single.txt", content);
+        auto source = parse_batch_file("prst_test_abc_single.txt", logging);
+        check(source != nullptr, "ABC single var: parse succeeds");
+        if (source)
+        {
+            check(source->size() == 2, "ABC single var: 2 candidates");
+            Candidate c;
+            source->get(0, c);
+            check(c.expression == "2^100+1", "ABC single var: first = 2^100+1");
+            check(c.k_value == "1", "ABC single var: k_value = 1 (no k-multiplier)");
+        }
+        cleanup_test_file("prst_test_abc_single.txt");
+    }
+
+    // --- Summary ---
+    logging.info("ABC Parser tests: %d/%d passed.\n", tests_run - failures, tests_run);
+    return failures;
 }
