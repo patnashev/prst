@@ -149,7 +149,6 @@ int batch_main(int argc, char *argv[])
     // --- Parse batch file via CandidateSource or stdin fallback ---
 
     std::unique_ptr<CandidateSource> source;
-    std::vector<std::string> stdin_lines;
 
     if (batch_name != "stdin")
     {
@@ -160,8 +159,6 @@ int batch_main(int argc, char *argv[])
             return 0;
         }
     }
-    else
-        stdin_lines.emplace_back();
 
     size_t total = source ? source->size() : 0;
 
@@ -173,20 +170,12 @@ int batch_main(int argc, char *argv[])
     File batch_progress(batch_name + filename_suffix + ".param", 0);
     batch_progress.hash = false;
     logging_batch.file_progress(&batch_progress);
-    int cur = 0;
-    if (!logging_batch.progress().param("cur").empty())
-    {
-        cur = logging_batch.progress().param_int("cur");
-        if (cur > 0)
-            logging_batch.info("Restarting at %d.\n", cur + 1);
-    }
+    int cur = logging_batch.progress().param_int("cur");
+    if (cur > 0)
+        logging_batch.info("Restarting at %d.\n", cur + 1);
 
-    int primes = 0;
-    if (!logging_batch.progress().param("primes").empty())
-        primes = logging_batch.progress().param_int("primes");
-    int composites = 0;
-    if (!logging_batch.progress().param("composites").empty())
-        composites = logging_batch.progress().param_int("composites");
+    int primes = logging_batch.progress().param_int("primes");
+    int composites = logging_batch.progress().param_int("composites");
 
     // Per-k tracking: k_value -> whether a prime has been found for this k
     std::map<std::string, bool> k_prime_found;
@@ -217,12 +206,10 @@ int batch_main(int argc, char *argv[])
         if (batch_name == "stdin")
         {
             double time = logging_batch.progress().time_total();
-            std::getline(std::cin, stdin_lines.back());
+            std::getline(std::cin, expression);
             logging_batch.progress().time_init(time);
-            if (stdin_lines.back().empty() || Task::abort_flag())
+            if (expression.empty() || Task::abort_flag())
                 break;
-            expression = stdin_lines.back();
-            stdin_lines.emplace_back();
         }
         else
         {
@@ -420,7 +407,7 @@ int batch_main(int argc, char *argv[])
         GWState gwstate_cur;
         gwstate_cur.copy(gwstate);
         gwstate_cur.information_only = gwstate.information_only;
-        if (!logging.progress().param("next_fft").empty() && gwstate_cur.next_fft_count < logging.progress().param_int("next_fft"))
+        if (gwstate_cur.next_fft_count < logging.progress().param_int("next_fft"))
             gwstate_cur.next_fft_count = logging.progress().param_int("next_fft");
         gwstate_cur.maxmulbyconst = options.maxmulbyconst;
         input.setup(gwstate_cur);
