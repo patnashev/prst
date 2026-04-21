@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
 #endif
         .check_code("-v", [&] {
                 print_banner();
-                exit(0);
+                exit(PRST_EXIT_NORMAL);
             })
         .value_code("-ini", ' ', [&](const char* param) {
                 File ini_file(param, 0);
@@ -276,17 +276,17 @@ int main(int argc, char *argv[])
         printf("\t-proof save <count> [name <proof> <product>] [pack <name>] [keep]\n");
         printf("\t-proof build <count> [security <seed>] [roots <depth>] [name <proof> <product>] [pack <name>] [cert <name>] [keep]\n");
         printf("\t-proof cert {<name> | default}\n");
-        return 0;
+        return PRST_EXIT_NORMAL;
     }
     if (input.empty())
     {
         printf("No input.\n");
-        return 1;
+        return PRST_EXIT_FAILURE;
     }
     if (show_info)
         input.print_info();
     if (show_info && !gwstate.information_only)
-        return 0;
+        return PRST_EXIT_NORMAL;
 
     Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
     if (!log_file.empty())
@@ -301,13 +301,13 @@ int main(int argc, char *argv[])
         {
             logging.result(true, "%s is prime!\n", input.display_text().data());
             logging.result_save(input.input_text() + " is prime!\n");
-            return 2;
+            return PRST_EXIT_PRIMEFOUND;
         }
         else
         {
             logging.result(false, "%s is not prime.\n", input.display_text().data());
             logging.result_save(input.input_text() + " is not prime.\n");
-            return 0;
+            return PRST_EXIT_NORMAL;
         }
     }
     else if (trial_division)
@@ -318,7 +318,7 @@ int main(int argc, char *argv[])
             logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
             logging.result(false, "%s is not prime.\n", input.display_text().data());
             logging.result_save(input.input_text() + " is not prime.\n");
-            return 0;
+            return PRST_EXIT_NORMAL;
         }
     }
 
@@ -362,7 +362,7 @@ int main(int argc, char *argv[])
         if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
         {
             logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
-            return 1;
+            return PRST_EXIT_FAILURE;
         }
         order.reset(new Order(order_a, input, options, logging));
         fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
@@ -471,19 +471,19 @@ int main(int argc, char *argv[])
     {
         printf("FFT setup error: %s\n", e.what());
         gwstate.done();
-        return 1;
+        return PRST_EXIT_FAILURE;
     }
     catch (const std::exception& e)
     {
         printf("Setup error: %s\n", e.what());
         gwstate.done();
-        return 1;
+        return PRST_EXIT_FAILURE;
     }
     catch (...)
     {
         printf("Unknown error during FFT setup.\n");
         gwstate.done();
-        return 1;
+        return PRST_EXIT_FAILURE;
     }
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -556,5 +556,5 @@ int main(int argc, char *argv[])
 
     gwstate.done();
 
-    return success ? 2 : failed ? 1 : 0;
+    return success ? PRST_EXIT_PRIMEFOUND : failed ? PRST_EXIT_FAILURE : PRST_EXIT_NORMAL;
 }

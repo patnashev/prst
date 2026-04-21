@@ -16,7 +16,7 @@ Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_ce
     if ((op == SAVE || op == BUILD) && (count & (count - 1)) != 0)
     {
         logging.error("proof count is not a power of 2.\n");
-        exit(0);
+        exit(PRST_EXIT_FAILURE);
     }
 
     bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
@@ -31,7 +31,7 @@ Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_ce
         if (!file_cert.read(cert))
         {
             logging.error("Invalid certificate file.\n");
-            exit(0);
+            exit(PRST_EXIT_FAILURE);
         }
         file_cert.free_buffer();
         _Li = (cert.a_power() != 0);
@@ -309,7 +309,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
 
     logging.info("Verifying certificate of %s, complexity = %d.\n", input.display_text().data(), (int)logging.progress().cost_total());
     if (gwstate.information_only)
-        exit(0);
+        exit(PRST_EXIT_NORMAL);
     logging.set_prefix(input.display_text() + " ");
 
     if (Li())

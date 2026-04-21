@@ -139,7 +139,7 @@ int batch_main(int argc, char *argv[])
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>]]\n");
         printf("\t-stop [on error] [on prime] [on composites <count>] [on kprime]\n");
         printf("Batch file formats: raw (one expression per line), ABC, ABCD, ABC2\n");
-        return 0;
+        return PRST_EXIT_NORMAL;
     }
 
     Logging logging_batch(log_batch_level);
@@ -156,7 +156,7 @@ int batch_main(int argc, char *argv[])
         if (!source || source->size() == 0)
         {
             logging_batch.warning("Batch %s is empty or could not be parsed.\n", batch_name.data());
-            return 0;
+            return PRST_EXIT_FAILURE;
         }
     }
 
@@ -184,8 +184,7 @@ int batch_main(int argc, char *argv[])
     for (; batch_name == "stdin" || cur < (int)total; cur++)
     {
         logging_batch.report_param("cur", cur);
-        if (total > 0)
-            logging_batch.progress().update(cur/(double)total, 0);
+        logging_batch.progress().update(total > 0 ? cur/(double)total : 0, 0);
         logging_batch.progress_save();
         if (success && stop_prime)
         {
@@ -465,15 +464,17 @@ int batch_main(int argc, char *argv[])
             break;
     }
 
-    if (total > 0)
-        logging_batch.progress().update(cur/(double)total, 0);
+    logging_batch.progress().update(total > 0 ? cur/(double)total : 0, 0);
     if (Task::abort_flag() && batch_name != "stdin")
+    {
         logging_batch.progress_save();
+        return PRST_EXIT_FAILURE;
+    }
     else
     {
         batch_progress.clear();
         logging_batch.info("Batch of %d, primes: %d, time: %.1f s.\n", cur, primes, logging_batch.progress().time_total());
     }
 
-    return 0;
+    return PRST_EXIT_NORMAL;
 }

@@ -3,6 +3,10 @@
 #include <optional>
 #include <string>
 
+#define PRST_EXIT_NORMAL 0
+#define PRST_EXIT_FAILURE 1
+#define PRST_EXIT_PRIMEFOUND 2
+
 class Options
 {
 public:

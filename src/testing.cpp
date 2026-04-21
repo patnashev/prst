@@ -100,7 +100,7 @@ int testing_main(int argc, char *argv[])
         printf("\tall = 321plus + 321minus + b5plus + b5minus + gfn13 + special + error + freeform + deterministic + prime\n");
         printf("\tslow = gfn13more + 100186b5minus + 109208b5plus\n");
         printf("\tabc_parser\n");
-        return 0;
+        return PRST_EXIT_NORMAL;
     }
 
     TestLogging logging(log_level);
@@ -213,14 +213,20 @@ int testing_main(int argc, char *argv[])
             logging.error("All abc_parser tests completed successfully.\n");
         else
             logging.error("abc_parser tests FAILED.\n");
-        return result;
+        return result == 0 ? PRST_EXIT_NORMAL : PRST_EXIT_FAILURE;
     }
 
     if (tests.empty())
     {
         FreeFormTest ffTest = { subset.data(), 0, 0, 0 };
         Test test(ffTest);
-        if (test.input.parse(test.input_text))
+        InputNum::ParseResult res = test.input.parse(test.input_text);
+        if (!res)
+        {
+            printf("Error parsing %s, pos %d: %s.\n", test.input_text.data(), res.pos + 1, res.message.data());
+            return PRST_EXIT_FAILURE;
+        }
+        else
         {
             test.input_bitlen = test.input.bitlen();
             test.res64 = 0;
@@ -277,9 +283,10 @@ int testing_main(int argc, char *argv[])
             logging.warning("Test aborted.\n");
         else
             logging.error("Failed test: %s.\n", test_text.data());
+        return PRST_EXIT_FAILURE;
     }
 
-    return 0;
+    return PRST_EXIT_NORMAL;
 }
 
 void Test::run(Logging& logging, Options& global_options, GWState& global_state)

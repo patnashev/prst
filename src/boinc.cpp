@@ -264,7 +264,7 @@ int boinc_main(int argc, char *argv[])
     if (input.empty())
     {
         printf("No input.\n");
-        return 0;
+        return PRST_EXIT_FAILURE;
     }
 
     BoincLogging logging;
@@ -367,11 +367,11 @@ int boinc_main(int argc, char *argv[])
         proof_container->close();
     gwstate.done();
 
-    if (!failed)             bow_finish(0);   // Boinc task completed, or exit(0) in standalone mode
-    if (!Task::abort_flag()) bow_finish(1);   // Failed and it's NOT a Ctrl-C (or quit request), abort Boinc job
+    if (!failed)             bow_finish(PRST_EXIT_NORMAL);   // Boinc task completed, or exit(0) in standalone mode
+    if (!Task::abort_flag()) bow_finish(PRST_EXIT_FAILURE);   // Failed and it's NOT a Ctrl-C (or quit request), abort Boinc job
     // otherwise it's Boinc temporary exit, just return from program.
 
-    return 0;
+    return PRST_EXIT_NORMAL;
 }
 
 #endif

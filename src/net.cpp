@@ -398,7 +398,7 @@ int net_main(int argc, char *argv[])
         .value_enum("-log", ' ', log_level, Enum<int>().add("debug", Logging::LEVEL_DEBUG).add("info", Logging::LEVEL_INFO).add("warning", Logging::LEVEL_WARNING).add("error", Logging::LEVEL_ERROR))
         .check_code("-v", [&] {
                 print_banner();
-                exit(0);
+                exit(PRST_EXIT_NORMAL);
             })
         .value_code("-ini", ' ', [&](const char* param) {
                 File ini_file(param, 0);
@@ -420,7 +420,7 @@ int net_main(int argc, char *argv[])
     if (url.empty() || worker_id.empty())
     {
         printf("Usage: PRST -net -i <WorkerID> http://<host>:<port>/api/\n");
-        return 0;
+        return PRST_EXIT_NORMAL;
     }
 
     NetContext net(url, worker_id, log_level, net_log_level);
@@ -439,7 +439,7 @@ int net_main(int argc, char *argv[])
 	while (true)
 	{
         if (Task::abort_flag())
-            return 1;
+            return PRST_EXIT_FAILURE;
         logging.set_prefix("");
         net.task().reset(new PRSTTask());
 
@@ -605,7 +605,7 @@ int net_main(int argc, char *argv[])
             continue;
         }
         if (Task::abort_flag())
-            return 1;
+            return PRST_EXIT_FAILURE;
 
 		// Run our example in a lambda co-routine
 		auto doneRet = net.client()->ProcessWithPromise([&](Context& ctx) {
@@ -639,7 +639,7 @@ int net_main(int argc, char *argv[])
 
     net.done();
 
-    return 0;
+    return PRST_EXIT_NORMAL;
 }
 
 #endif
