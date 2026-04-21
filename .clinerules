@@ -1,0 +1,404 @@
+# PRST Contribution Guidelines
+
+## Project Overview
+PRST is a high-performance primality testing utility written in C++ that leverages the GWnum library for FFT-based modular arithmetic. The project is designed for systematic searches of large prime numbers and supports multiple primality testing algorithms with cryptographic proof generation capabilities.
+
+## Architecture Principles
+
+### 1. Task-Based Execution System
+- All computational work is encapsulated in `Task` classes that inherit from `InputTask`
+- Tasks manage their own state, checkpointing, and recovery mechanisms
+- Each task type has associated `State` classes for serialization
+- Use the task lifecycle: `init()` → `setup()` → `execute()` → `done()` → `release()`
+
+**Example Pattern:**
+```cpp
+class MyTask : public InputTask {
+    void setup() override { /* allocate resources */ }
+    void execute() override { /* perform computation with checkpointing */ }
+    void done() override { /* finalize results */ }
+    void release() override { /* free resources */ }
+};
+```
+
+### 2. State Management & Serialization
+- Two state types: `StateValue` (stores Giant) and `StateSerialized` (stores SerializedGWNum)
+- Use `StateValue` for final results, `StateSerialized` for intermediate checkpoints
+- All states must implement `read()` and `write()` methods for persistence
+- Type identifiers are static constants (e.g., `static const char TYPE = 1`)
+
+### 3. Test Selection Hierarchy
+The main function routes numbers to appropriate tests based on:
+1. **Number form** (KBNC, factorial, primorial, arbitrary)
+2. **Factorization depth** (is_half_factored() checks if >50% factored)
+3. **User overrides** (force_fermat flag)
+
+**Selection Order:**
+- Factorials/Primorials with C=±1 → PocklingtonGeneric/MorrisonGeneric
+- K*B^N+1 with factors → Pocklington
+- K*B^N-1 with factors → Morrison (includes LLR for K*2^N-1)
+- Default/fallback → Fermat (probabilistic) or Proth (for K*2^N+1)
+
+### 4. Exponentiation Strategies
+Multiple exponentiation implementations for different use cases:
+- **CarefulExp**: Simple, careful exponentiation with error checking
+- **FastExp/SlidingWindowExp**: Optimized binary/sliding window methods
+- **MultipointExp**: Supports intermediate checkpoints for proofs
+- **GerbiczCheckExp**: Smooth exponentials (b^n) with Gerbicz error checking
+- **LiCheckExp**: General exponentials with Li error checking
+
+Choose based on:
+- Smooth vs. non-smooth exponents
+- Need for intermediate points (proofs)
+- Error checking requirements
+
+### 5. Lucas Arithmetic
+Lucas arithmetic provides an alternative to standard exponentiation for deterministic tests with C=-1:
+- Provides multiplication by an integer for Lucas chain elements (an analogue to exponentiation)
+- Used in deterministic tests with C=-1 (Morrison family)
+- Implements Gerbicz-Li strong error checking for reliability
+- **Performance tradeoff**: Works approximately two times slower than standard exponentiation
+- Despite the performance cost, it's essential for certain primality proofs where the mathematical properties of Lucas sequences are required
+
+## Coding Conventions
+
+### Naming Standards
+- **Private members**: Prefix with underscore (`_variable`, `_function()`)
+- **Protected members**: Prefix with underscore
+- **Public members**: No prefix
+- **Classes**: PascalCase (`MultipointExp`, `GerbiczCheckExp`)
+- **Functions**: camelCase (`init_smooth()`, `is_half_factored()`)
+- **Constants**: UPPER_CASE for static/defines (`static const int AUTO = 0`)
+- **Type identifiers**: `TYPE` constant in state classes
+
+### File Organization
+- Header files (`.h`) contain class declarations, inline templates
+- Implementation files (`.cpp`) contain complex method definitions
+- One primary class per file pair (e.g., `fermat.h`/`fermat.cpp`)
+- Related classes can share files (e.g., `Fermat` and `Pocklington` family)
+
+### Header Structure
+```cpp
+#pragma once
+
+#include "framework_headers.h"  // arithmetic, task, etc.
+#include "local_dependencies.h"  // other PRST headers
+
+class ClassName {
+public:
+    // Static constants
+    static const int CONSTANT = value;
+
+    // Constructors
+    ClassName(...);
+    virtual ~ClassName() { }
+
+    // Public interface
+    void publicMethod();
+
+    // Getters (inline when trivial)
+    Type& getter() { return _member; }
+
+protected:
+    // Protected interface for inheritance
+
+protected:
+    // Protected members
+
+private:
+    // Private members with _ prefix
+};
+```
+
+### Template Usage
+- Use perfect forwarding for move semantics: `template<class T> init(T&& param)`
+- Forward parameters: `std::forward<T>(param)`
+- Prefer templates over overloading for initialization methods
+- Use `std::unique_ptr` for owned resources, raw pointers for references
+
+**Template Initialization Pattern:**
+```cpp
+template<class T>
+void init_giant(InputNum* input, arithmetic::GWState* gwstate,
+                Logging* logging, T&& X0) {
+    _X0 = std::forward<T>(X0);
+    init(input, gwstate, logging);
+}
+```
+
+### Memory Management
+- Use `std::unique_ptr` for owned objects
+- Use raw pointers for non-owning references (e.g., callbacks, parent refs)
+- Allocate GWNum objects on heap: `_X.reset(new arithmetic::GWNum(gw()))`
+- Free arithmetic objects explicitly when needed: `_tail.arithmetic().free(_tail)`
+- RAII pattern: allocate in `setup()`, deallocate in `release()`
+
+## Error Handling & Reliability
+
+### 1. Roundoff Error Checking
+- Monitor `gw().maxerr()` after operations
+- Compare against `gw().max_roundoff_error()`
+- Three modes: `never`, `near` (default, near FFT size change), `always`
+- Log warnings when errors approach limits
+- Auto-increment FFT size on excessive errors
+
+### 2. Strong Error Checking (Gerbicz/Li Algorithms)
+- **Gerbicz**: For smooth exponentials (b^n)
+  - Compute checksum every L iterations
+  - Verify block integrity every L2 iterations
+  - Rollback to previous checkpoint on error
+
+- **Li**: For general exponentials
+  - Adapts Gerbicz for sliding window exponentiation
+  - Maintains hash of computation
+
+**Implementation Requirements:**
+- Maintain two checkpoint files (main + recovery)
+- Store intermediate states (_state_recovery)
+- Implement verification logic in `execute()` loop
+
+### 3. Checkpointing Strategy
+- Default: write to disk every 30 seconds (`Task::DISK_WRITE_TIME`)
+- `commit_execute<StateType>(iteration, ...)` provides an opportunity to checkpoint, but checkpoints are made only rarely based on `state_update_period()`
+  - Checkpoints are initially made in-memory; only some are saved to disk depending on `DISK_WRITE_TIME`
+  - Flow: `commit_execute` → `set_state<StateType>`, `on_state` → `write_state`
+  - `commit_execute` is where `abort_flag` is checked (if called rarely, Ctrl-C can be unresponsive)
+  - `set_state` makes an in-memory checkpoint unconditionally
+  - `on_state` is where progress is output to console and BOINC interoperation happens
+  - `write_state` is called only once per `DISK_WRITE_TIME` under normal operation, regardless of how many in-memory checkpoints happen
+- Support resume from any checkpoint
+- Two files: `.ckpt` (main), `.rcpt` (recovery for strong checks)
+
+### 4. Exception Handling
+- Use `TaskAbortException` for clean termination
+- Catch in main, clean up GWState before exit
+- Signal handlers (SIGTERM, SIGINT) call `Task::abort()`
+- Always call `gwstate.done()` before exit
+
+## Proof System Integration
+
+### Proof Lifecycle
+1. **SAVE Mode**: During primality test, save intermediate values
+   - Define proof points via `calc_points()`
+   - Save at each point using `on_point()` callback
+   - Store in `.proof` and `.prod` files
+
+2. **BUILD Mode**: Construct certificate from saved points
+   - Read proof files
+   - Build product tree
+   - Optionally encrypt with security seed
+   - Detect root-of-unity attacks
+   - Output `.cert` file
+
+3. **CERT Mode**: Verify certificate
+   - Read certificate
+   - Verify mathematical properties
+   - Independent of original test
+
+### Adding Proof Support to Tests
+```cpp
+// 1. Create MultipointExp with proof points
+std::vector<MultipointExp::Point> points;
+for (auto& pt : proof->points())
+    points.push_back(pt);
+
+// 2. Initialize with on_point callback
+task->init(..., [proof](int index, State* state, Logging& logging) {
+    return proof->on_point(index, state, logging);
+});
+
+// 3. Run task, proof saves automatically
+task->run(...);
+```
+
+**Current Limitations:**
+- Proofs only implemented for Fermat-based tests
+- Morrison test doesn't support proofs (requires Fermat preprocessing; can be done but would be two times slower, so it makes no sense to implement)
+- Order computation doesn't support proofs
+
+## GWnum Library Integration
+
+### Initialization Pattern
+```cpp
+GWState gwstate;
+// Configure before setup
+gwstate.thread_count = ...;
+gwstate.next_fft_count = ...;
+gwstate.maxmulbyconst = ...;
+
+// Setup for specific number
+input.setup(gwstate);  // Analyzes number, picks FFT
+
+// Use through arithmetic
+arithmetic::GWArithmetic gw(gwstate);
+arithmetic::GWNum X(gw);
+```
+
+### Common Operations
+- **Multiplication**: `gw.mul(A, B, result)` or `gw.carefully().mul(...)`
+- **Squaring**: `gw.square(A, result)` (faster than mul)
+- **Modular reduction**: `gwstate.mod(giant, giant)`
+- **FFT setup**: `gw.setup()` before operations
+- **Cleanup**: `gwstate.done()` at program end
+
+### Performance Tuning
+- **Thread count**: Generally 1 thread per physical core with L3 cache
+- **Spin threads**: Uses spinlocks instead of OS synchronization primitives
+  - 0 (low CPU), 1 (main only, default), or all (max performance)
+  - Can be detrimental in virtualized environments
+- **CPU instructions**: Auto-detect or force (SSE2, AVX, FMA3, AVX512F)
+- **FFT safety margin**: Default 0.0, increase for stability
+- **Next FFT**: Manually increment with `+<count>` or auto on errors
+
+## Testing & Validation
+
+### Built-in Tests
+- Run with `-test` flag
+- Located in `testing.cpp`
+- Add new test cases to `test.data` or inline
+
+### Number Validation
+- Small numbers (<= 40 bits): trial division
+- Optional trial division: `-trial` (not recommended for large numbers)
+- Factor validation: all factors must divide N-1 (Pocklington) or N+1 (Morrison)
+
+### Verification Strategies
+1. **Deterministic tests**: Pocklington, Morrison (with sufficient factors), Proth, LLR (for base 2)
+2. **Probabilistic**: Fermat (requires multiple bases for confidence)
+3. **Independent verification**: Use proof certificates
+
+## Number Input Parsing
+
+### Supported Forms
+- **K*B^N/D+C**: `3*2^100000+1`, `(12*5+7)*3^50000/11+1`
+- **Factorials**: `100!+1`, `50!3+1` (multifactorial)
+- **Primorials**: `100#+1`, `p100#+1` (p prefix = nth prime)
+- **Phi functions**: `Phi(3,-5)` = `5^2-5+1`
+- **Division**: `(N)/F` where F can be recursive
+- **Arbitrary**: Large decimal numbers
+
+### Factor Specification
+- **List**: `-factors list 3,5,7,...`
+- **File**: `-factors file factors.txt` (one per line)
+- **Auto-expand**: Factorials/primorials auto-expand factor list
+- **Half-factored**: Need product of factors > sqrt(N-1) or sqrt(N+1)
+
+## Dependencies
+
+### Required External Libraries
+- **GWnum**: George Woltman's library (included via framework)
+- **arithmetic framework**: Git submodule (patnashev/arithmetic.git)
+  - Provides: Giant, GWNum, GWState, GWArithmetic classes
+  - File I/O, task management, logging
+
+### Submodule Management
+```bash
+git submodule update --init --recursive  # Initialize
+git submodule update --remote           # Update to latest
+```
+
+### Platform-Specific Code
+- Use `#ifdef _MSC_VER` for MSVC-specific code
+- Use `#ifdef BOINC` for BOINC integration
+- Use `#ifdef NETPRST` for networking features
+- Makefiles provided for Linux64, Mac64, Visual Studio for Win64
+
+## Best Practices
+
+### 1. Algorithm Implementation
+- Document mathematical basis in comments
+- Reference papers/theorems (e.g., Morrison test references)
+- Validate edge cases (small N, boundary conditions)
+- Compare with known prime/composite test cases
+
+### 2. Performance Optimization
+- Profile before optimizing
+- Minimize GWNum allocations in hot loops
+- Prefer squaring over multiplication when possible
+- Use sliding window for large exponents
+- Consider smooth exponent optimizations (b^n faster than general)
+
+### 3. Logging
+- Use appropriate levels: `debug`, `info`, `warning`, `error`
+- Log setup information at `info` level
+- Progress updates via Task system (automatic)
+- Results via `logging.result(is_prime, message)`
+- Save results via `logging.result_save()`
+
+### 4. Configuration
+- Support INI files: `-ini sample.ini`
+- Group related options (e.g., `-fft`, `-check`, `-proof`)
+- Provide sensible defaults
+- Document all options in README
+
+### 5. Backward Compatibility
+- Support LLR2 file format: `-support LLR2`
+- Maintain checkpoint compatibility across versions
+- Version checkpointing format when changing
+
+## Common Pitfalls
+
+### ❌ Don't:
+- Mix StateValue and StateSerialized incorrectly
+- Forget to call `gwstate.done()` before exit
+- Allocate GWNum on stack in long-lived objects
+- Ignore roundoff errors
+- Skip checkpoint testing (simulate crashes)
+- Modify _exp or _tail after init without understanding implications
+
+### ✅ Do:
+- Use `GWASSERT()` for internal consistency checks
+- Test with small numbers first (faster iteration)
+- Verify against known primes/composites
+- Test checkpoint recovery (kill and restart)
+- Profile long-running operations
+- Document algorithm choices and trade-offs
+
+## Contributing Workflow
+
+1. **Understand the math**: Know the primality test you're implementing
+2. **Study existing patterns**: Look at similar test implementations
+3. **Start with skeleton**: Create Task class with proper lifecycle
+4. **Add state management**: Define State class for checkpointing
+5. **Implement algorithm**: Use GWnum operations carefully
+6. **Add error checking**: Implement roundoff and strong checks
+7. **Test thoroughly**: Small numbers, edge cases, checkpoint recovery
+8. **Document**: Comments, README updates, test cases
+9. **Optimize**: Profile and improve hot paths
+
+## Code Review Checklist
+
+- [ ] Follows naming conventions (underscore prefix for private)
+- [ ] Proper task lifecycle (setup/execute/done/release)
+- [ ] State class with read/write methods
+- [ ] Checkpoint support tested
+- [ ] Error checking implemented
+- [ ] Logging at appropriate levels
+- [ ] Memory properly managed (unique_ptr, explicit free)
+- [ ] Templates use perfect forwarding
+- [ ] Comments explain algorithm
+- [ ] Edge cases handled
+- [ ] Tested with known primes/composites
+
+## Resources
+
+- **GWnum documentation**: mersenne.org/download
+- **Arithmetic framework**: github.com/patnashev/arithmetic
+- **Primality testing theory**:
+  - Pocklington: Classical number theory
+  - Morrison: "Lucas Pseudoprimes" papers
+  - LLR: eprint.iacr.org/2023/195
+- **Error checking**:
+  - Gerbicz: Robert Gerbicz's algorithm
+  - Li: Yinan Li's adaptation
+
+## Contact & Support
+
+- **Author**: Pavel Atnashev
+- **Repository**: github.com/patnashev/prst
+- **Issues**: Use GitHub issue tracker
+- **Donations**: See README for XMR address
+
+---
+
+Remember: PRST is used for mathematical discoveries. Code quality directly impacts scientific results. When in doubt, prioritize correctness over performance.
