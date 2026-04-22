@@ -4,10 +4,13 @@
 #include "inputnum.h"
 #include "task.h"
 #include "file.h"
-#include "options.h"
-#include "exp.h"
+#include "container.h"
 
-class Proof
+#include "prst.h"
+#include "exp.h"
+#include "fermat.h"
+
+class Proof : public Run
 {
 public:
     static const int NO_OP = 0;
@@ -77,6 +80,10 @@ public:
 public:
     Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging);
 
+    friend class Fermat;
+    std::unique_ptr<Fermat>& fermat() { return _fermat; }
+    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+
     void calc_points(int iterations, bool smooth, InputNum& input, Options& options, Logging& logging);
     void init_files(File* file_point, File* file_product, File* file_cert);
     void init_state(MultipointExp* task, arithmetic::GWState& gwstate, InputNum& input, Logging& logging, int a);
@@ -84,7 +91,6 @@ public:
     BaseExp::State* read_point(int index, BaseExp::StateValue* state_value, BaseExp::StateSerialized* state_serialized, Logging& logging);
     void read_product(int index, TaskState& state, Logging& logging);
     bool on_point(int index, BaseExp::State* state, Logging& logging);
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
     void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
     double cost();
 
@@ -94,19 +100,19 @@ public:
     int depth() { int t = 0; while ((1 << t) < _count) t++; return t; }
     std::vector<MultipointExp::Point>& points() { return _points; }
     int M() { return _M; }
-    void set_cache_points(bool value) { _cache_points = value; }
-    InputTask* task() { return _task.get(); }
-    CarefulExp* taskRoot() { return _taskRoot.get(); }
-    std::string& res64() { return _res64; }
 
+    void set_keep_points(bool value) { _keep_points = value; }
+    void set_cache_points(bool value) { _cache_points = value; }
+    std::unique_ptr<container::FileContainer>& container() { return _container; }
     std::vector<File*>& file_points() { return _file_points; }
     std::vector<File*>& file_products() { return _file_products; }
     File* file_cert() { return _file_cert; }
+
     arithmetic::Giant& r_0() { return _r_0; }
     arithmetic::Giant& r_count() { return _r_count; }
     arithmetic::Giant& r_exp() { return *_r_exp; }
-
-protected:
+    InputTask* task() { return _task.get(); }
+    CarefulExp* taskRoot() { return _taskRoot.get(); }
 
 protected:
     int _op = 0;
@@ -114,17 +120,21 @@ protected:
     bool _Li = false;
     std::vector<MultipointExp::Point> _points;
     int _M = 0;
+
+    bool _keep_points = false;
     bool _cache_points = false;
+    std::unique_ptr<container::FileContainer> _container;
     std::vector<File*> _file_points;
     std::vector<File*> _file_products;
     File* _file_cert = nullptr;
+
     arithmetic::Giant _r_0;
     arithmetic::Giant _r_count;
     arithmetic::Giant* _r_exp;
     std::unique_ptr<InputTask> _task;
     std::unique_ptr<MultipointExp> _taskA;
     std::unique_ptr<CarefulExp> _taskRoot;
-    std::string _res64;
+    std::unique_ptr<Fermat> _fermat;
 };
 
 class ProofSave : public InputTask

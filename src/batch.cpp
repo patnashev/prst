@@ -16,7 +16,8 @@
 #include "file.h"
 #include "logging.h"
 #include "task.h"
-#include "options.h"
+
+#include "prst.h"
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
@@ -31,8 +32,6 @@ int batch_main(int argc, char *argv[])
 {
     GWState gwstate;
     Options options;
-    bool force_fermat = false;
-    InputNum order_a;
     bool show_info = false;
     bool trial_division = false;
     int log_level = Logging::LEVEL_WARNING;
@@ -74,8 +73,8 @@ int batch_main(int argc, char *argv[])
         .group("-fermat")
             .value_number("a", ' ', options.FermatBase, 2, INT_MAX)
             .end()
-            .on_check(force_fermat, true)
-        .value_code("-order", ' ', [&](const char* param) { return order_a.parse(param, false) && order_a.value() > 1; })
+            .on_check(options.ForceFermat, true)
+        .value_code("-order", ' ', [&](const char* param) { options.OrderA.reset(new InputNum()); return options.OrderA->parse(param, false) && options.OrderA->value() > 1; })
         .group("-factors")
             .check("all", options.AllFactors, true)
             .end()
@@ -163,8 +162,8 @@ int batch_main(int argc, char *argv[])
     size_t total = source ? source->size() : 0;
 
     std::string filename_suffix;
-    if (!order_a.empty() && order_a.value() > 1)
-        filename_suffix = "." + std::to_string(order_a.fingerprint());
+    if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
+        filename_suffix = "." + std::to_string(options.OrderA->fingerprint());
     else if (options.FermatBase)
         filename_suffix = "." + std::to_string(options.FermatBase.value());
     File batch_progress(batch_name + filename_suffix + ".param", 0);
@@ -213,7 +212,7 @@ int batch_main(int argc, char *argv[])
         else
         {
             Candidate cand;
-            if (!source->get(cur, cand))
+            if (!source->get(cur, cand) || Task::abort_flag())
                 break;
             expression = std::move(cand.expression);
             k_value = std::move(cand.k_value);
@@ -239,14 +238,13 @@ int batch_main(int argc, char *argv[])
             }
             continue;
         }
-        else if (show_info)
+        if (show_info)
         {
             input.print_info();
             if (!gwstate.information_only)
                 continue;
         }
-        else if (batch_name != "stdin")
-            logging_batch.info("%d of %d: %s", cur + 1, (int)total, input.display_text().data());
+        std::string run_name = std::to_string(cur + 1) + " of " + std::to_string(total) + ": " + input.display_text();
 
         Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
         if (!log_file.empty())
@@ -257,7 +255,7 @@ int batch_main(int argc, char *argv[])
         if (input.bitlen() <= 40)
         {
             if (batch_name != "stdin")
-                logging_batch.info(", Trial division test.\n");
+                logging_batch.info("%s, Trial division test.\n", run_name.data());
             else
                 logging.info("Trial division test of %s.\n", input.display_text().data());
             auto factors = input.factorize_small();
@@ -281,7 +279,7 @@ int batch_main(int argc, char *argv[])
             if (!factors.empty())
             {
                 if (batch_name != "stdin")
-                    logging_batch.info(", trial division found factor %d.\n", factors[0]);
+                    logging_batch.info("%s, trial division found factor %d.\n", run_name.data(), factors[0]);
                 else
                     logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
                 logging.result(false, "%s is not prime.\n", input.display_text().data());
@@ -298,108 +296,13 @@ int batch_main(int argc, char *argv[])
         file_progress.hash = false;
         logging.file_progress(&file_progress);
 
-        std::unique_ptr<Fermat> fermat;
-        std::unique_ptr<PocklingtonGeneric> pocklington;
-        std::unique_ptr<Morrison> morrison;
-        std::unique_ptr<Order> order;
+        std::unique_ptr<Run> run(Run::create(input, options, logging));
+        if (!run)
+            continue;
+        if (batch_name != "stdin")
+            logging_batch.info("%s, %s.\n", run_name.data(), run->name().data());
 
-        if (!order_a.empty() && order_a.value() > 1)
-        {
-            if (batch_name != "stdin")
-                logging_batch.info(", Order.\n");
-            if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
-            {
-                logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
-                continue;
-            }
-            order.reset(new Order(order_a, input, options, logging));
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
-        }
-        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == 1 && !force_fermat)
-        {
-            input.expand_factors();
-            if (input.is_half_factored())
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", generic Pocklington test.\n");
-                pocklington.reset(new PocklingtonGeneric(input, options, logging));
-            }
-            else
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", Fermat test.\n");
-                logging.warning("Not enough factors for Pocklington test.\n");
-                fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
-            }
-        }
-        else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
-        {
-            if (input.is_half_factored())
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", Pocklington test.\n");
-                fermat.reset(new Pocklington(input, options, logging, nullptr));
-            }
-            else
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", Fermat test.\n");
-                std::string factors;
-                for (auto it = input.factors().begin(); it != input.factors().end(); it++)
-                    factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
-                logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
-                fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
-            }
-        }
-        else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == -1 && !force_fermat)
-        {
-            input.expand_factors();
-            if (input.is_half_factored())
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", generic Morrison test.\n");
-                morrison.reset(new MorrisonGeneric(input, options, logging));
-            }
-            else
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", Fermat test.\n");
-                logging.warning("Not enough factors for Morrison test.\n");
-                fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
-            }
-        }
-        else if (input.type() == InputNum::KBNC && input.c() == -1 && !force_fermat)
-        {
-            if (input.is_half_factored())
-            {
-                morrison.reset(new Morrison(input, options, logging));
-                if (batch_name != "stdin" && morrison->is_LLR())
-                    logging_batch.info(", Morrison (LLR) test.\n");
-                else if (batch_name != "stdin")
-                    logging_batch.info(", Morrison test.\n");
-            }
-            else
-            {
-                if (batch_name != "stdin")
-                    logging_batch.info(", Fermat test.\n");
-                std::string factors;
-                for (auto it = input.factors().begin(); it != input.factors().end(); it++)
-                    factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
-                logging.warning("Not enough factors for Morrison test. Factored part: %s.\n", factors.data());
-                fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, nullptr));
-            }
-        }
-        else
-        {
-            fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, nullptr));
-            if (batch_name != "stdin" && fermat->type() == Fermat::PROTH)
-                logging_batch.info(", Proth test.\n");
-            else if (batch_name != "stdin")
-                logging_batch.info(", Fermat test.\n");
-        }
-
-        if (fermat)
-            fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
+        fingerprint = run->fingerprint();
         File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
         File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
@@ -416,24 +319,8 @@ int batch_main(int argc, char *argv[])
         bool failed = false;
         try
         {
-            if (order)
-                order->run(order_a, options, input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
-            else if (pocklington)
-            {
-                pocklington->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
-                success = pocklington->success();
-            }
-            else if (morrison)
-            {
-                morrison->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
-                success = morrison->success();
-            }
-            else if (fermat)
-            {
-                fermat->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging, nullptr);
-                success = fermat->success();
-            }
-
+            run->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
+            success = run->success();
             file_progress.clear();
         }
         catch (const TaskAbortException&)

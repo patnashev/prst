@@ -2,17 +2,18 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "gwnum.h"
 #include "cpuid.h"
-
 #include "md5.h"
 #include "task.h"
 #include "exception.h"
 #include "config.h"
+
+#include "prst.h"
 #include "fermat.h"
 #include "pocklington.h"
 #include "proof.h"
-#include "options.h"
 #include "version.h"
 
 #ifdef NETPRST

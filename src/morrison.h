@@ -4,24 +4,20 @@
 #include "inputnum.h"
 #include "task.h"
 #include "file.h"
-#include "options.h"
+
+#include "prst.h"
 #include "lucasmul.h"
 #include "pocklington.h"
 
-class Morrison
+class Morrison : public Run
 {
 protected:
-    Morrison() { }
+    Morrison(const char* name, Options& options) : Run(name, options) { }
 public:
     Morrison(InputNum& input, Options& options, Logging& logging);
     virtual ~Morrison() { }
 
-    virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
-
-    bool success() { return _success; }
-    bool prime() { return _prime; }
-    std::string& res64() { return _res64; }
-    bool is_LLR() { return _LLR; }
+    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
     class FactorTask
@@ -34,32 +30,26 @@ protected:
     };
 
 protected:
-    bool _all_factors = false;
-    bool _LLR = false;
     std::unique_ptr<LucasVMul> _task;
     std::unique_ptr<LucasVMulFast> _taskCheck;
     std::vector<FactorTask> _factor_tasks;
     int _P;
     bool _negQ;
-
-    bool _success = false;
-    bool _prime = false;
-    std::string _res64;
 };
 
-class MorrisonGeneric : public Morrison
+class MorrisonGeneric : public Run
 {
 public:
     MorrisonGeneric(InputNum& input, Options& options, Logging& logging);
 
-    virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
-    Options& _options;
     std::unique_ptr<SubLogging> _logging;
-
     arithmetic::Giant _done;
     std::set<int> _done_factors;
     std::unique_ptr<FactorTree> _tree;
     std::vector<int> _dac_index;
+    int _P;
+    bool _negQ;
 };

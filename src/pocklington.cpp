@@ -24,6 +24,7 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
         _a = logging.progress().param_int("a");
         options.maxmulbyconst = _a;
     }
+    _fingerprint = input.fingerprint();
 
     _done = 1;
     _tasks.reserve(input.factors().size());
@@ -41,9 +42,6 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
         }
         else
             _done *= power(input.factors()[i].first, input.factors()[i].second);
-
-    if (options.AllFactors)
-        _all_factors = options.AllFactors.value();
 }
 
 void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
@@ -133,7 +131,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
                 logging.report_param("factor" + std::to_string(*it), "done");
         }
 
-        if (_tasks.empty() || (!_all_factors && _done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
+        if (_tasks.empty() || (!(_options.AllFactors && _options.AllFactors.value()) && _done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
             (_done.bitlen()*2 > gwstate.N->bitlen() + 10 || square(_done) > *gwstate.N)))
         {
             _prime = true;
@@ -182,13 +180,14 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     file_recoverypoint.clear(true);
 }
 
-PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Logging& logging) : _options(options)
+PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Logging& logging) : Run("generic Pocklington test", options)
 {
     if (logging.progress().param_int("a") != 0)
         _a = logging.progress().param_int("a");
     else
         _a = options.FermatBase ? options.FermatBase.value() : 3;
     options.maxmulbyconst = (_a > GWMULBYCONST_MAX ? 1 : _a);
+    _fingerprint = input.fingerprint();
 
     std::string& st = logging.progress().param("factors");
     for (std::string::const_iterator it = st.begin(), it_p = st.begin(); it != st.end(); )
@@ -351,7 +350,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
             snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
             logging.report(buf, Logging::LEVEL_PROGRESS);
         }
-        logging.progress().update((_options.AllFactors && _options.AllFactors.value() ? 1 : 2)*_done.bitlen()/pct_bitlen/1000.0, 0);
+        logging.progress().update(((_options.AllFactors && _options.AllFactors.value()) ? 1 : 2)*_done.bitlen()/pct_bitlen/1000.0, 0);
         logging.heartbeat();
         last_progress = 0;
     };
@@ -417,7 +416,7 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
 
             if (_done_factors.size() == input.factors().size())
                 GWASSERT((input.cofactor().empty() ? _done : _done*input.cofactor()) == input.value() - 1);
-            if (_done_factors.size() == input.factors().size() || ((!_options.AllFactors || !_options.AllFactors.value()) && _done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
+            if (_done_factors.size() == input.factors().size() || (!(_options.AllFactors && _options.AllFactors.value()) && _done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
                 (_done.bitlen()*2 > gwstate.N->bitlen() + 10 || square(_done) > *gwstate.N)))
             {
                 _prime = true;
@@ -471,8 +470,8 @@ void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File
                 if (stack.size() == 1 || (stack.size() == 2 && stack[0]->exp() == 1))
                 {
                     std::string file_num = std::to_string(_a) + "." + _done.to_res64() + "." + std::to_string(_done.bitlen());
-                    checkpoint = file_checkpoint.add_child(file_num, File::unique_fingerprint(file_checkpoint.fingerprint(), file_num));
-                    recoverypoint = file_recoverypoint.add_child(file_num, File::unique_fingerprint(file_recoverypoint.fingerprint(), file_num));
+                    checkpoint = file_checkpoint.add_child(file_num, File::unique_fingerprint(_fingerprint, file_num));
+                    recoverypoint = file_recoverypoint.add_child(file_num, File::unique_fingerprint(_fingerprint, file_num));
                 }
                 if (!stack_value.empty())
                 {

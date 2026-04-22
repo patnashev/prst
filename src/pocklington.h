@@ -21,39 +21,29 @@ protected:
     };
 
 protected:
-    bool _all_factors = false;
     std::vector<FactorTask> _tasks;
     arithmetic::Giant _done;
 };
 
 class FactorTree;
 
-class PocklingtonGeneric
+class PocklingtonGeneric : public Run
 {
 public:
     PocklingtonGeneric(InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging);
-
-    bool success() { return _success; }
-    bool prime() { return _prime; }
-    std::string& res64() { return _res64; }
+    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
     void create_tasks(InputNum& input, Logging& logging, arithmetic::Giant& exp);
 
 protected:
-    Options& _options;
     std::unique_ptr<SubLogging> _logging;
 
     arithmetic::Giant _done;
     std::set<int> _done_factors;
     std::unique_ptr<FactorTree> _tree;
     int _a;
-
-    bool _success = false;
-    bool _prime = false;
-    std::string _res64;
 };
 
 class FactorTree

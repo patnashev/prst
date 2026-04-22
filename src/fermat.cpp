@@ -4,10 +4,12 @@
 
 #include "gwnum.h"
 #include "cpuid.h"
-#include "fermat.h"
 #include "integer.h"
 #include "exception.h"
 #include "container.h"
+
+#include "fermat.h"
+#include "proof.h"
 
 using namespace arithmetic;
 
@@ -101,7 +103,7 @@ int genProthBase(Giant& k, uint32_t n) {
 }
 // END LLR code
 
-Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Proof* proof)
+Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Proof* proof) : Run("Fermat test", options)
 {
     bool smooth = (input.type() == InputNum::KBNC && input.b() == 2 && log2(input.gk()) < 1000 && log2(input.gk()) < input.n()/4);
     uint32_t n = input.n();
@@ -204,6 +206,11 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
     }
 
     bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
+    if (_type == PROTH)
+        _name = "Proth test";
+    if (_type == POCKLINGTON)
+        _name = "Pocklington test";
+    _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(_a));
 
     if (proof == nullptr && !CheckStrong)
     {
@@ -237,8 +244,10 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
     }
     else
     {
-        auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         proof->calc_points(smooth ? n : exp.bitlen() - 1, smooth, input, options, logging);
+        proof->_fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(_a) + "." + std::to_string(proof->points()[proof->count()].pos));
+        proof->_name = name();
+
         int L = 0, L2 = 0;
         if (CheckStrong)
         {
@@ -255,6 +264,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
                 StrongCheckMultipointExp::Gerbicz_params(L2, 1.0, L, L2);
         }
 
+        auto on_point = std::bind(&Proof::on_point, proof, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         if (proof->Li())
         {
             if (!CheckStrong)
@@ -293,9 +303,13 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
         _task_fermat_simple->set_error_check(false, true);
 }
 
+void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+{
+    run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
+}
+
 void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
-    _proof = proof;
     _success = false;
     _res64 = "";
     Giant ak;

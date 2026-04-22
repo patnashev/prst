@@ -11,7 +11,7 @@
 
 using namespace arithmetic;
 
-Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging) : _op(op), _count(count)
+Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging) : Run(options), _op(op), _count(count)
 {
     if ((op == SAVE || op == BUILD) && (count & (count - 1)) != 0)
     {
@@ -27,6 +27,9 @@ Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_ce
         _task.reset(new ProofBuild(options.ProofSecuritySeed));
     if (op == CERT)
     {
+        _name = "Verifying certificate";
+        _fingerprint = File::unique_fingerprint(input.fingerprint(), file_cert.filename());
+
         Certificate cert;
         if (!file_cert.read(cert))
         {
@@ -128,6 +131,7 @@ void Proof::calc_points(int iterations, bool smooth, InputNum& input, Options& o
     }
     int points_per_check = options.ProofPointsPerCheck ? options.ProofPointsPerCheck.value() : 1;
     bool value_points = input.type() == input.KBNC && input.k() != 0 && input.b() == 2; // base 2 FFT, not general, not need_mod
+    _points.clear();
 
     /*if (input.b() != 2 && options.ProofPointsPerCheck && !Li())
     {
@@ -303,6 +307,44 @@ bool Proof::on_point(int index, BaseExp::State* state, Logging& logging)
 
 void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
+    if (op() == SAVE)
+    {
+        _fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, this);
+        _success = _fermat->success();
+        _prime = _fermat->prime();
+        _res64 = _fermat->res64();
+
+        if (_container)
+            _container->close();
+        if (!_keep_points)
+        {
+            for (int i = 1; i < count(); i++)
+                file_points()[i]->clear();
+        }
+        return;
+    }
+    if (op() == BUILD)
+    {
+        _fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, this);
+
+        if (_container)
+            _container->close();
+        if (!_keep_points)
+        {
+            if (_container)
+                remove(_container->filename().data());
+            else
+            {
+                if (!Li())
+                    file_points()[0]->clear();
+                file_points()[count()]->clear();
+                for (auto& file : file_products())
+                    file->clear();
+            }
+        }
+        return;
+    }
+
     MultipointExp* task = dynamic_cast<MultipointExp*>(_task.get());
     if (task == nullptr)
         return;

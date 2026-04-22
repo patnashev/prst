@@ -10,10 +10,10 @@
 #include "config.h"
 #include "inputnum.h"
 #include "file.h"
-#include "container.h"
 #include "logging.h"
 #include "task.h"
-#include "options.h"
+
+#include "prst.h"
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
@@ -73,10 +73,8 @@ int main(int argc, char *argv[])
     bool proof_keep = false;
     std::optional<bool> proof_write;
     bool supportLLR2 = false;
-    bool force_fermat = false;
     std::vector<Giant> factors;
     InputNum input;
-    InputNum order_a;
     bool show_info = false;
     bool trial_division = false;
     int log_level = Logging::LEVEL_WARNING;
@@ -146,8 +144,8 @@ int main(int argc, char *argv[])
         .group("-fermat")
             .value_number("a", ' ', options.FermatBase, 2, INT_MAX)
             .end()
-            .on_check(force_fermat, true)
-        .value_code("-order", ' ', [&](const char* param) { return order_a.parse(param, false) && order_a.value() > 1; })
+            .on_check(options.ForceFermat, true)
+        .value_code("-order", ' ', [&](const char* param) { options.OrderA.reset(new InputNum()); return options.OrderA->parse(param, false) && options.OrderA->value() > 1; })
         .group("-factors")
             .list("list", ' ', ',', false)
                 .value_code([&](const char* param) {
@@ -325,8 +323,8 @@ int main(int argc, char *argv[])
     uint32_t fingerprint = input.fingerprint();
     gwstate.fingerprint = fingerprint;
     std::string filename_suffix;
-    if (!order_a.empty() && order_a.value() > 1)
-        filename_suffix = "." + std::to_string(order_a.fingerprint());
+    if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
+        filename_suffix = "." + std::to_string(options.OrderA->fingerprint());
     else if (options.FermatBase)
         filename_suffix = "." + std::to_string(options.FermatBase.value());
     else if (proof_op == Proof::CERT)
@@ -350,113 +348,55 @@ int main(int argc, char *argv[])
     if (proof_op != Proof::NO_OP)
         proof.reset(new Proof(proof_op, proof_count, input, options, *file_cert, logging));
 
-    std::unique_ptr<Fermat> fermat;
-    std::unique_ptr<PocklingtonGeneric> pocklington;
-    std::unique_ptr<Morrison> morrison;
-    std::unique_ptr<Order> order;
+    std::unique_ptr<Run> run(Run::create(input, options, logging, proof.get()));
+    if (!run)
+        return PRST_EXIT_FAILURE;
+    if (run == proof)
+        proof.release();
 
-    if (!order_a.empty() && order_a.value() > 1)
-    {
-        if (proof_op != Proof::NO_OP)
-            logging.warning("Proofs are not implemented in order mode.\n");
-        if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
-        {
-            logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
-            return PRST_EXIT_FAILURE;
-        }
-        order.reset(new Order(order_a, input, options, logging));
-        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(order_a.fingerprint()));
-    }
-    else if (proof_op == Proof::CERT)
-    {
-        fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-    }
-    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == 1 && !force_fermat && !proof)
-    {
-        input.expand_factors();
-        if (input.is_half_factored())
-           pocklington.reset(new PocklingtonGeneric(input, options, logging));
-        else
-        {
-            logging.warning("Not enough factors for Pocklington test.\n");
-            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
-        }
-    }
-    else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
-    {
-        if (input.is_half_factored())
-            fermat.reset(new Pocklington(input, options, logging, proof.get()));
-        else
-        {
-            std::string factors;
-            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
-                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) :  "");
-            logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
-            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
-        }
-    }
-    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == -1 && !force_fermat && !proof)
-    {
-        input.expand_factors();
-        if (input.is_half_factored())
-            morrison.reset(new MorrisonGeneric(input, options, logging));
-        else
-        {
-            logging.warning("Not enough factors for Morrison test.\n");
-            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
-        }
-    }
-    else if (input.type() == InputNum::KBNC && input.c() == -1 && !force_fermat)
-    {
-        if (input.is_half_factored())
-        {
-            morrison.reset(new Morrison(input, options, logging));
-            if (proof_op != Proof::NO_OP)
-                logging.warning("Proofs are not implemented in Morrison test. Use -fermat first.\n");
-        }
-        else
-        {
-            std::string factors;
-            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
-                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
-            logging.warning("Not enough factors for Morrison test. Factored part: %s.\n", factors.data());
-            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
-        }
-    }
-    else
-        fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
-
-    std::unique_ptr<container::FileContainer> proof_container;
-    if (!proof_pack.empty())
-    {
-        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack"));
-        if (proof_container->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof_container->error() != container::container_error::EMPTY))
-            logging.warning("Pack %s is corrupted.\n", proof_pack.data());
-    }
     std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
-    if (fermat && proof)
+    if (proof)
     {
-        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
-        newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", fingerprint);
-        if (proof_container)
-            file_proofproduct.reset(new FilePacked(!options.ProofProductFilename.empty() ? options.ProofProductFilename : "prod", fingerprint, *proof_container));
-        else
-            newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
-        proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
-        if (proof_container)
+        proof->fermat().reset(dynamic_cast<Fermat*>(run.get()));
+        if (proof->fermat())
         {
-            file_proofpacked.reset(new FilePacked(!options.ProofPointFilename.empty() ? options.ProofPointFilename : "proof", fingerprint, *proof_container));
-            proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
-            proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
+            run.release();
+            if (!proof_pack.empty())
+            {
+                proof->container().reset(new container::FileContainer(proof_pack != "default" ? proof_pack : filename_prefix + ".pack"));
+                if (proof->container()->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof->container()->error() != container::container_error::EMPTY))
+                    logging.warning("Pack %s is corrupted.\n", proof_pack.data());
+            }
+            fingerprint = proof->fingerprint();
+            newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", fingerprint);
+            if (proof->container())
+                file_proofproduct.reset(new FilePacked(!options.ProofProductFilename.empty() ? options.ProofProductFilename : "prod", fingerprint, *proof->container()));
+            else
+                newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
+            proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
+            if (proof->container())
+            {
+                file_proofpacked.reset(new FilePacked(!options.ProofPointFilename.empty() ? options.ProofPointFilename : "proof", fingerprint, *proof->container()));
+                proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
+                proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
+            }
+            proof->set_keep_points(proof_keep);
+            if (proof_write)
+                for (int i = 1; i < proof_count; i++)
+                    proof->fermat()->task()->points()[i].value = proof_write.value();
+            run.reset(proof.release());
         }
-        if (proof_write)
-            for (int i = 1; i < proof_count; i++)
-                fermat->task()->points()[i].value = proof_write.value();
+        else
+        {
+            logging.warning("Proofs are not implemented in %s. Use -fermat first.\n", run->name().data());
+            proof.reset();
+        }
     }
-    else if (fermat)
-        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
+
+    fingerprint = run->fingerprint();
+    GWASSERT(fingerprint);
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
@@ -491,51 +431,8 @@ int main(int argc, char *argv[])
     bool failed = false;
     try
     {
-        if (order)
-            order->run(order_a, options, input, gwstate, file_checkpoint, file_recoverypoint, logging);
-        else if (proof_op == Proof::CERT)
-            proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-        else if (pocklington)
-        {
-            pocklington->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-            success = pocklington->success();
-        }
-        else if (morrison)
-        {
-            morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-            success = morrison->success();
-        }
-        else if (proof)
-        {
-            fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
-            if (proof_op != Proof::BUILD)
-                success = fermat->success();
-
-            if (proof_container)
-                proof_container->close();
-            if (!proof_keep)
-            {
-                if (proof_op == Proof::SAVE)
-                    for (int i = 1; i < proof->count(); i++)
-                        proof->file_points()[i]->clear();
-                if (proof_op == Proof::BUILD && proof_container)
-                    remove(proof_container->filename().data());
-                else if (proof_op == Proof::BUILD)
-                {
-                    if (!proof->Li())
-                        proof->file_points()[0]->clear();
-                    proof->file_points()[proof->count()]->clear();
-                    for (auto& file : proof->file_products())
-                        file->clear();
-                }
-            }
-        }
-        else if (fermat)
-        {
-            fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
-            success = fermat->success();
-        }
-
+        run->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        success = run->success();
         file_progress.clear();
     }
     catch (const TaskAbortException&)
@@ -557,4 +454,65 @@ int main(int argc, char *argv[])
     gwstate.done();
 
     return success ? PRST_EXIT_PRIMEFOUND : failed ? PRST_EXIT_FAILURE : PRST_EXIT_NORMAL;
+}
+
+Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* proof)
+{
+    Run* run = nullptr;
+    if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
+    {
+        if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
+        {
+            logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
+            return nullptr;
+        }
+        run = new Order(input, options, logging);
+    }
+    else if (proof != nullptr && proof->op() == Proof::CERT)
+    {
+        run = proof;
+    }
+    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == 1 && !options.ForceFermat && proof == nullptr)
+    {
+        input.expand_factors();
+        if (input.is_half_factored())
+            run = new PocklingtonGeneric(input, options, logging);
+        else
+            logging.warning("Not enough factors for Pocklington test.\n");
+    }
+    else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !options.ForceFermat)
+    {
+        if (input.is_half_factored())
+            run = new Pocklington(input, options, logging, proof);
+        else
+        {
+            std::string factors;
+            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
+                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
+            logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
+        }
+    }
+    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == -1 && !options.ForceFermat && proof == nullptr)
+    {
+        input.expand_factors();
+        if (input.is_half_factored())
+            run = new MorrisonGeneric(input, options, logging);
+        else
+            logging.warning("Not enough factors for Morrison test.\n");
+    }
+    else if (input.type() == InputNum::KBNC && input.c() == -1 && !options.ForceFermat)
+    {
+        if (input.is_half_factored())
+            run = new Morrison(input, options, logging);
+        else
+        {
+            std::string factors;
+            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
+                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
+            logging.warning("Not enough factors for Morrison test. Factored part: %s.\n", factors.data());
+        }
+    }
+    if (run == nullptr)
+        run = new Fermat(options.ForceFermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof);
+    return run;
 }

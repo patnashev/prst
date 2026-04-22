@@ -13,7 +13,8 @@
 #include "container.h"
 #include "logging.h"
 #include "task.h"
-#include "options.h"
+
+#include "prst.h"
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
@@ -178,7 +179,6 @@ int boinc_main(int argc, char *argv[])
     int proof_count = 0;
     std::string proof_cert;
     std::string proof_pack;
-    bool force_fermat = false;
     InputNum input;
 
     bow_init();
@@ -238,7 +238,7 @@ int boinc_main(int argc, char *argv[])
         .group("-fermat")
             .value_number("a", ' ', options.FermatBase, 2, INT_MAX)
             .end()
-            .on_check(force_fermat, true)
+            .on_check(options.ForceFermat, true)
         .group("-time")
             .value_number("write", ' ', Task::DISK_WRITE_TIME, 1, INT_MAX)
             .value_number("progress", ' ', Task::PROGRESS_TIME, 1, INT_MAX)
@@ -285,56 +285,56 @@ int boinc_main(int argc, char *argv[])
     if (proof_op != Proof::NO_OP)
         proof.reset(new Proof(proof_op, proof_count, input, options, *file_cert, logging));
 
-    std::unique_ptr<Fermat> fermat;
-    
+    std::unique_ptr<Run> run;
     if (proof_op == Proof::CERT)
     {
-        fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
+        run.reset(proof.release());
     }
-    else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !force_fermat)
+    else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !options.ForceFermat)
     {
         if (input.is_half_factored())
-            fermat.reset(new Pocklington(input, options, logging, proof.get()));
+            run.reset(new Pocklington(input, options, logging, proof.get()));
         else
         {
             std::string factors;
             for (auto it = input.factors().begin(); it != input.factors().end(); it++)
                 factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
             logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
-            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
         }
     }
-    else
-        fermat.reset(new Fermat(force_fermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
-
-    std::unique_ptr<container::FileContainer> proof_container;
-    if (!proof_pack.empty())
-    {
-        proof_container.reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack"));
-        if (proof_container->error() != container::container_error::OK && proof_container->error() != container::container_error::EMPTY)
-            logging.warning("Pack %s is corrupted.\n", proof_pack.data());
-    }
+    if (!run)
+        run.reset(new Fermat(options.ForceFermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
+    
     std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
-    if (fermat && proof)
+    if (proof)
     {
-        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
+        proof->fermat().reset(dynamic_cast<Fermat*>(run.release()));
+        if (!proof_pack.empty())
+        {
+            proof->container().reset(new container::FileContainer(proof_pack != "default" ? proof_pack : "proof.pack"));
+            if (proof->container()->error() != container::container_error::OK && proof->container()->error() != container::container_error::EMPTY)
+                logging.warning("Pack %s is corrupted.\n", proof_pack.data());
+        }
+        fingerprint = proof->fingerprint();
         file_proofpoint.reset(new File(options.ProofPointFilename, fingerprint));
-        if (proof_container)
-            file_proofproduct.reset(new FilePacked(options.ProofProductFilename, fingerprint, *proof_container));
+        if (proof->container())
+            file_proofproduct.reset(new FilePacked(options.ProofProductFilename, fingerprint, *proof->container()));
         else
             file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
         proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
-        if (proof_container)
+        if (proof->container())
         {
-            file_proofpacked.reset(new FilePacked(options.ProofPointFilename, fingerprint, *proof_container));
+            file_proofpacked.reset(new FilePacked(options.ProofPointFilename, fingerprint, *proof->container()));
             proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
             proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
         }
+        proof->set_keep_points(true);
+        run.reset(proof.release());
     }
-    else if (fermat)
-        fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()));
+
+    fingerprint = run->fingerprint();
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
@@ -348,14 +348,7 @@ int boinc_main(int argc, char *argv[])
     try
     {
         logging.progress().time_init(bow_get_starting_elapsed_time());
-
-        if (proof_op == Proof::CERT)
-            proof->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-        else if (proof)
-            fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof.get());
-        else if (fermat)
-            fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
-
+        run->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
         file_progress.clear();
     }
     catch (const TaskAbortException&)
@@ -363,8 +356,6 @@ int boinc_main(int argc, char *argv[])
         failed = true;
     }
 
-    if (proof_container)
-        proof_container->close();
     gwstate.done();
 
     if (!failed)             bow_finish(PRST_EXIT_NORMAL);   // Boinc task completed, or exit(0) in standalone mode

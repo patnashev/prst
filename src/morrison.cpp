@@ -17,15 +17,14 @@ using namespace arithmetic;
 // For Q = -1 : gcd(U_{(N+1)/q}, N) = gcd(V_{(N+1)/2q}, N) due to BLS proof of Theorem 14.
 // For Q = -1 factor 2 is tested for free.
 
-Morrison::Morrison(InputNum& input, Options& options, Logging& logging)
+Morrison::Morrison(InputNum& input, Options& options, Logging& logging) : Run("Morrison test", options)
 {
     int i;
     Giant tmp;
     std::vector<std::pair<Giant, int>> factors;
 
     bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
-    if (options.AllFactors)
-        _all_factors = options.AllFactors.value();
+    _fingerprint = input.fingerprint();
 
     LucasVMulFast* taskV = nullptr;
     if (!CheckStrong)
@@ -86,7 +85,7 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging)
 
     if (log2(exp) < n)
     {
-        _LLR = true;
+        _name = "Morrison (LLR) test";
         _factor_tasks.clear();
         if (CheckStrong)
             exp_morrison = exp;
@@ -216,7 +215,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         }
 
         logging.set_prefix("");
-        logging.info("%sMorrison%s test of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", _LLR ? " (LLR)" : "", input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
+        logging.info("%s%s of %s, P = %d, Q = %d, complexity = %d.\n", restart ? "Restarting " : "", _name.data(), input.display_text().data(), _P, _negQ ? -1 : 1, (int)logging.progress().cost_total());
         logging.set_prefix(input.display_text() + " ");
         if (gwstate.information_only)
             throw TaskAbortException();
@@ -280,7 +279,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
                     ftask.taskFactor->run();
                     if (ftask.taskFactor->state()->V() == (_negQ ? 0 : 2))
                     {
-                        if (_all_factors)
+                        if (_options.AllFactors && _options.AllFactors.value())
                         {
                             done = 0;
                             break;
@@ -355,15 +354,14 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         recoverypoint->clear();
 }
 
-MorrisonGeneric::MorrisonGeneric(InputNum& input, Options& options, Logging& logging) : _options(options)
+MorrisonGeneric::MorrisonGeneric(InputNum& input, Options& options, Logging& logging) : Run("generic Morrison test", options)
 {
     bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
     if (!CheckStrong)
         logging.error("The implementation of the Morrison test for such numbers requires the strong check.\n");
     CheckStrong = true;
+    _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(input.factors().size()));
     options.maxmulbyconst = 2;
-    if (options.AllFactors)
-        _all_factors = options.AllFactors.value();
 
     std::string& st = logging.progress().param("factors");
     for (std::string::const_iterator it = st.begin(), it_p = st.begin(); it != st.end(); )
@@ -489,7 +487,7 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
             snprintf(buf, 50, "%.1f%% of factors tested. ", std::floor(_done.bitlen()/pct_bitlen)/10.0);
             logging.report(buf, Logging::LEVEL_PROGRESS);
         }
-        logging.progress().update((_all_factors ? 1 : 2)*_done.bitlen()/pct_bitlen/1000.0, 0);
+        logging.progress().update(((_options.AllFactors && _options.AllFactors.value()) ? 1 : 2)*_done.bitlen()/pct_bitlen/1000.0, 0);
         logging.heartbeat();
         last_progress = 0;
     };
@@ -515,7 +513,7 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
             break;
         }
 
-        uint32_t fingerprint = File::unique_fingerprint(file_checkpoint.fingerprint(), std::to_string(input.factors().size()) + "." + std::to_string(_P));
+        uint32_t fingerprint = File::unique_fingerprint(_fingerprint, std::to_string(_P));
         double last_write = 0;
         std::vector<FactorTree*> stack;
         std::vector<LucasVMulFast::State> stack_value;
@@ -569,7 +567,7 @@ void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& f
                 _done *= tmp_done;
             tmp_done = 1;
 
-            if ((!_all_factors || stack.empty()) && (_done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
+            if ((!(_options.AllFactors && _options.AllFactors.value()) || stack.empty()) && (_done.bitlen()*2 + 10 > gwstate.N->bitlen() &&
                 (_done.bitlen()*2 > gwstate.N->bitlen() + 10 || square(_done) > *gwstate.N)))
             {
                 _prime = true;

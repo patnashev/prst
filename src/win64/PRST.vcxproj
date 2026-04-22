@@ -191,7 +191,7 @@
     <ClInclude Include="..\boinc.h" />
     <ClInclude Include="..\exp.h" />
     <ClInclude Include="..\fermat.h" />
-    <ClInclude Include="..\options.h" />
+    <ClInclude Include="..\prst.h" />
     <ClInclude Include="..\lucasmul.h" />
     <ClInclude Include="..\morrison.h" />
     <ClInclude Include="..\order.h" />

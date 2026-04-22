@@ -4,19 +4,22 @@
 
 #include "gwnum.h"
 #include "cpuid.h"
-#include "order.h"
 #include "integer.h"
+
+#include "order.h"
 
 using namespace arithmetic;
 
-Order::Order(InputNum& a, InputNum& input, Options& options, Logging& logging)
+Order::Order(InputNum& input, Options& options, Logging& logging) : Run("Order", options)
 {
     _factors = input.factors();
-    Giant ga = a.value();
+    Giant ga = options.OrderA->value();
     create_tasks(ga, options, logging, false);
 
     if (_task && ga <= GWMULBYCONST_MAX)
         options.maxmulbyconst = ga.data()[0];
+
+    _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(options.OrderA->fingerprint()));
 }
 
 void Order::create_tasks(Giant& a, Options& options, Logging& logging, bool restart)
@@ -116,13 +119,13 @@ bool Order::on_point(int index, BaseExp::State* state)
     return false;
 }
 
-void Order::run(InputNum& a, Options& options, InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Order::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
-    Giant ga = a.value();
-    logging.info("Computing multiplicative order of %s modulo prime %s.\n", a.display_text().data(), input.display_text().data());
+    Giant ga = _options.OrderA->value();
+    logging.info("Computing multiplicative order of %s modulo prime %s.\n", _options.OrderA->display_text().data(), input.display_text().data());
     if (gwstate.information_only)
         throw TaskAbortException();
-    logging.set_prefix("ord(" + a.display_text() + ") mod " + input.display_text() + " ");
+    logging.set_prefix("ord(" + _options.OrderA->display_text() + ") mod " + input.display_text() + " ");
 
     while (!_factors.empty())
     {
@@ -191,7 +194,7 @@ void Order::run(InputNum& a, Options& options, InputNum& input, arithmetic::GWSt
             for (auto it = _factors.begin(); it != _factors.end(); it++)
                 if (it->second > _sub)
                     it->second -= _sub;
-            create_tasks(ga, options, logging, true);
+            create_tasks(ga, _options, logging, true);
             continue;
         }
 
@@ -246,7 +249,7 @@ void Order::run(InputNum& a, Options& options, InputNum& input, arithmetic::GWSt
         }
 
         if (!_factors.empty())
-            create_tasks(ga, options, logging, true);
+            create_tasks(ga, _options, logging, true);
     }
 
     Giant order_div;
@@ -282,8 +285,8 @@ void Order::run(InputNum& a, Options& options, InputNum& input, arithmetic::GWSt
     }
 
     logging.set_prefix("");
-    logging.result(true, "ord(%s) mod %s = %s.\n", a.display_text().data(), input.display_text().data(), order.data());
-    logging.result_save("ord(" + a.display_text() + ") mod " + input.input_text() + " = " + order + ".\n");
+    logging.result(true, "ord(%s) mod %s = %s.\n", _options.OrderA->display_text().data(), input.display_text().data(), order.data());
+    logging.result_save("ord(" + _options.OrderA->display_text() + ") mod " + input.input_text() + " = " + order + ".\n");
 
     file_checkpoint.clear(true);
     file_recoverypoint.clear(true);

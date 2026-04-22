@@ -14,7 +14,8 @@
 #include "file.h"
 #include "logging.h"
 #include "task.h"
-#include "options.h"
+
+#include "prst.h"
 #include "fermat.h"
 #include "proof.h"
 #include "pocklington.h"
@@ -410,17 +411,7 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     if (!input.is_half_factored())
         throw std::runtime_error("Not enough factors.");
 
-    std::unique_ptr<Pocklington> pocklington;
-    std::unique_ptr<PocklingtonGeneric> pocklingtonGeneric;
-    std::unique_ptr<Morrison> morrison;
-    if (input.c() == 1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))))
-        pocklingtonGeneric.reset(new PocklingtonGeneric(input, options, logging));
-    else if (input.c() == 1)
-        pocklington.reset(new Pocklington(input, options, logging, nullptr));
-    if (input.c() == -1 && (input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))))
-        morrison.reset(new MorrisonGeneric(input, options, logging));
-    else if (input.c() == -1)
-        morrison.reset(new Morrison(input, options, logging));
+    std::unique_ptr<Run> run(Run::create(input, options, logging));
 
     File file_checkpoint("prst_ckpt", fingerprint);
     File file_recoverypoint("prst_rcpt", fingerprint);
@@ -442,26 +433,9 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     };
     try
     {
-        bool prime = false;
-        std::string sres64 = "0";
-        if (pocklington)
-        {
-            pocklington->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
-            prime = pocklington->prime();
-            sres64 = pocklington->res64();
-        }
-        if (pocklingtonGeneric)
-        {
-            pocklingtonGeneric->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-            prime = pocklingtonGeneric->prime();
-            sres64 = pocklingtonGeneric->res64();
-        }
-        if (morrison)
-        {
-            morrison->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
-            prime = morrison->prime();
-            sres64 = morrison->res64();
-        }
+        run->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        bool prime = run->prime();
+        std::string sres64 = run->res64();
         if (res64 == 0)
             res64 = prime ? 1 : std::stoull(sres64, nullptr, 16);
         if (prime != (res64 == 1))
@@ -503,7 +477,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
     Proof proof_build(Proof::BUILD, proof_count, input, options, file_cert, logging);
     proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
 
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
+    fingerprint = proof.fingerprint();
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
     File file_checkpoint("prst_ckpt", fingerprint);
@@ -661,14 +635,12 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 
     input.parse("960^128+1");
 
-    proof = Proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
     Fermat fermat2(Fermat::AUTO, input, options, logging, &proof);
-    proof_build = Proof(Proof::BUILD, proof_count, input, options, file_cert, logging);
     proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat2.a()) + "." + std::to_string(proof.points()[proof_count].pos));
+    fingerprint = proof.fingerprint();
     file_proofpoint = File("prst_proof", fingerprint);
     file_proofproduct = File("prst_prod", fingerprint);
     file_checkpoint = File("prst_ckpt", fingerprint);
@@ -731,14 +703,12 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 
     input.parse("2*5^178-1");
 
-    proof = Proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
     Fermat fermat3(Fermat::AUTO, input, options, logging, &proof);
-    proof_build = Proof(Proof::BUILD, proof_count, input, options, file_cert, logging);
     proof_build.calc_points(proof.points()[proof_count].pos, !proof.Li(), input, options, logging);
 
     fingerprint = input.fingerprint();
     file_cert = File("prst_cert", fingerprint);
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat3.a()) + "." + std::to_string(proof.points()[proof_count].pos));
+    fingerprint = proof.fingerprint();
     file_proofpoint = File("prst_proof", fingerprint);
     file_proofproduct = File("prst_prod", fingerprint);
     file_checkpoint = File("prst_ckpt", fingerprint);
