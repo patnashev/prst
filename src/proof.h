@@ -82,7 +82,7 @@ public:
 
     friend class Fermat;
     std::unique_ptr<Fermat>& fermat() { return _fermat; }
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+    void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
     void calc_points(int iterations, bool smooth, InputNum& input, Options& options, Logging& logging);
     void init_files(File* file_point, File* file_product, File* file_cert);
@@ -91,7 +91,7 @@ public:
     BaseExp::State* read_point(int index, BaseExp::StateValue* state_value, BaseExp::StateSerialized* state_serialized, Logging& logging);
     void read_product(int index, TaskState& state, Logging& logging);
     bool on_point(int index, BaseExp::State* state, Logging& logging);
-    void run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
+    void run(arithmetic::GWState& gwstate, Logging& logging, arithmetic::Giant* X);
     double cost();
 
     int op() { return _op; }

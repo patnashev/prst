@@ -11,13 +11,11 @@
 
 class Morrison : public Run
 {
-protected:
-    Morrison(const char* name, Options& options) : Run(name, options) { }
 public:
     Morrison(InputNum& input, Options& options, Logging& logging);
     virtual ~Morrison() { }
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+    void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
     class FactorTask
@@ -42,7 +40,7 @@ class MorrisonGeneric : public Run
 public:
     MorrisonGeneric(InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+    void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
     std::unique_ptr<SubLogging> _logging;

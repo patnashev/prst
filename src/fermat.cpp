@@ -103,7 +103,7 @@ int genProthBase(Giant& k, uint32_t n) {
 }
 // END LLR code
 
-Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Proof* proof) : Run("Fermat test", options)
+Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Proof* proof) : Run("Fermat test", input, options)
 {
     bool smooth = (input.type() == InputNum::KBNC && input.b() == 2 && log2(input.gk()) < 1000 && log2(input.gk()) < input.n()/4);
     uint32_t n = input.n();
@@ -290,6 +290,10 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
             if (exp != 1)
                 _task_ak_simple.reset(new CarefulExp(std::move(exp)));
         }
+        if (options.ProofPointWriteMode)
+            for (int i = 1; i < proof->count(); i++)
+                _task->points()[i].value = options.ProofPointWriteMode.value();
+
         logging.progress().add_stage(_task->cost());
         logging.progress().add_stage(proof->cost());
     }
@@ -303,12 +307,12 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
         _task_fermat_simple->set_error_check(false, true);
 }
 
-void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
-    run(input, gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
+    run(gwstate, file_checkpoint, file_recoverypoint, logging, nullptr);
 }
 
-void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
+void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
     _success = false;
     _res64 = "";
@@ -435,7 +439,7 @@ void Fermat::run(InputNum& input, arithmetic::GWState& gwstate, File& file_check
         *_task->result() -= 1;
 
     if (proof != nullptr)
-        proof->run(input, gwstate, logging, _success ? nullptr : _task->result());
+        proof->run(gwstate, logging, _success ? nullptr : _task->result());
 
     file_checkpoint.clear();
     file_recoverypoint.clear();

@@ -44,11 +44,11 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
             _done *= power(input.factors()[i].first, input.factors()[i].second);
 }
 
-void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
+void Pocklington::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
     if (type() != POCKLINGTON || _a < 0)
     {
-        Fermat::run(input, gwstate, file_checkpoint, file_recoverypoint, logging, proof);
+        Fermat::run(gwstate, file_checkpoint, file_recoverypoint, logging, proof);
         return;
     }
 
@@ -57,7 +57,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     File* recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
 
     logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
-    Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, proof);
+    Fermat::run(gwstate, *checkpoint, *recoverypoint, logging, proof);
 
     Giant tmp;
     while (!_tasks.empty())
@@ -166,7 +166,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
             logging.progress_save();
 
             logging.info("Restarting Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
-            Fermat::run(input, gwstate, *checkpoint, *recoverypoint, logging, nullptr);
+            Fermat::run(gwstate, *checkpoint, *recoverypoint, logging, nullptr);
         }
     }
 
@@ -180,7 +180,7 @@ void Pocklington::run(InputNum& input, arithmetic::GWState& gwstate, File& file_
     file_recoverypoint.clear(true);
 }
 
-PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Logging& logging) : Run("generic Pocklington test", options)
+PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Logging& logging) : Run("generic Pocklington test", input, options)
 {
     if (logging.progress().param_int("a") != 0)
         _a = logging.progress().param_int("a");
@@ -324,7 +324,7 @@ void PocklingtonGeneric::create_tasks(InputNum& input, Logging& logging, arithme
     */
 }
 
-void PocklingtonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     _success = false;
     _res64 = "";

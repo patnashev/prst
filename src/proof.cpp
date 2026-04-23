@@ -11,7 +11,7 @@
 
 using namespace arithmetic;
 
-Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging) : Run(options), _op(op), _count(count)
+Proof::Proof(int op, int count, InputNum& input, Options& options, File& file_cert, Logging& logging) : Run(input, options), _op(op), _count(count)
 {
     if ((op == SAVE || op == BUILD) && (count & (count - 1)) != 0)
     {
@@ -184,11 +184,23 @@ void Proof::init_files(File* file_point, File* file_product, File* file_cert)
     _file_points.clear();
     _file_points.reserve(_count + 1);
     for (i = 0; i <= _count; i++)
-        _file_points.push_back(file_point->add_child(std::to_string(i), file_point->fingerprint()));
+    {
+        if (_container && (i == 0 || i == _count))
+            file_point->children().emplace_back(new FilePacked(file_point->filename() + "." + std::to_string(i), file_point->fingerprint(), *_container));
+        else
+            file_point->add_child(std::to_string(i), file_point->fingerprint());
+        _file_points.push_back(file_point->children().back().get());
+    }
     _file_products.clear();
     if (file_product != nullptr)
         for (i = 0; (1 << i) < _count; i++)
-            _file_products.push_back(file_product->add_child(std::to_string(i), file_product->fingerprint()));
+        {
+            if (_container)
+                file_product->children().emplace_back(new FilePacked(file_product->filename() + "." + std::to_string(i), file_product->fingerprint(), *_container));
+            else
+                file_product->add_child(std::to_string(i), file_product->fingerprint());
+            _file_products.push_back(file_product->children().back().get());
+        }
     _file_cert = file_cert;
 }
 
@@ -305,11 +317,11 @@ bool Proof::on_point(int index, BaseExp::State* state, Logging& logging)
     return true;
 }
 
-void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Proof::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     if (op() == SAVE)
     {
-        _fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, this);
+        _fermat->run(gwstate, file_checkpoint, file_recoverypoint, logging, this);
         _success = _fermat->success();
         _prime = _fermat->prime();
         _res64 = _fermat->res64();
@@ -325,7 +337,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
     }
     if (op() == BUILD)
     {
-        _fermat->run(input, gwstate, file_checkpoint, file_recoverypoint, logging, this);
+        _fermat->run(gwstate, file_checkpoint, file_recoverypoint, logging, this);
 
         if (_container)
             _container->close();
@@ -417,7 +429,7 @@ void Proof::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkp
     file_recoverypoint.clear();
 }
 
-void Proof::run(InputNum& input, arithmetic::GWState& gwstate, Logging& logging, Giant* X)
+void Proof::run(arithmetic::GWState& gwstate, Logging& logging, Giant* X)
 {
     if (_taskRoot && X != nullptr)
     {

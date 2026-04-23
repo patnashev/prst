@@ -8,7 +8,7 @@ class Pocklington : public Fermat
 public:
     Pocklington(InputNum& input, Options& options, Logging& logging, Proof* proof);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof) override;
+    void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof) override;
 
 protected:
     class FactorTask
@@ -32,7 +32,7 @@ class PocklingtonGeneric : public Run
 public:
     PocklingtonGeneric(InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+    void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
     void create_tasks(InputNum& input, Logging& logging, arithmetic::Giant& exp);

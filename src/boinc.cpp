@@ -287,9 +287,7 @@ int boinc_main(int argc, char *argv[])
 
     std::unique_ptr<Run> run;
     if (proof_op == Proof::CERT)
-    {
         run.reset(proof.release());
-    }
     else if (input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !options.ForceFermat)
     {
         if (input.is_half_factored())
@@ -305,7 +303,6 @@ int boinc_main(int argc, char *argv[])
     if (!run)
         run.reset(new Fermat(options.ForceFermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
     
-    std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     if (proof)
@@ -317,19 +314,9 @@ int boinc_main(int argc, char *argv[])
             if (proof->container()->error() != container::container_error::OK && proof->container()->error() != container::container_error::EMPTY)
                 logging.warning("Pack %s is corrupted.\n", proof_pack.data());
         }
-        fingerprint = proof->fingerprint();
-        file_proofpoint.reset(new File(options.ProofPointFilename, fingerprint));
-        if (proof->container())
-            file_proofproduct.reset(new FilePacked(options.ProofProductFilename, fingerprint, *proof->container()));
-        else
-            file_proofproduct.reset(new File(options.ProofProductFilename, fingerprint));
+        file_proofpoint.reset(new File(options.ProofPointFilename, proof->fingerprint()));
+        file_proofproduct.reset(new File(options.ProofProductFilename, proof->fingerprint()));
         proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
-        if (proof->container())
-        {
-            file_proofpacked.reset(new FilePacked(options.ProofPointFilename, fingerprint, *proof->container()));
-            proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
-            proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
-        }
         proof->set_keep_points(true);
         run.reset(proof.release());
     }
@@ -348,7 +335,7 @@ int boinc_main(int argc, char *argv[])
     try
     {
         logging.progress().time_init(bow_get_starting_elapsed_time());
-        run->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        run->run(gwstate, file_checkpoint, file_recoverypoint, logging);
         file_progress.clear();
     }
     catch (const TaskAbortException&)

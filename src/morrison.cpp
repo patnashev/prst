@@ -17,7 +17,7 @@ using namespace arithmetic;
 // For Q = -1 : gcd(U_{(N+1)/q}, N) = gcd(V_{(N+1)/2q}, N) due to BLS proof of Theorem 14.
 // For Q = -1 factor 2 is tested for free.
 
-Morrison::Morrison(InputNum& input, Options& options, Logging& logging) : Run("Morrison test", options)
+Morrison::Morrison(InputNum& input, Options& options, Logging& logging) : Run("Morrison test", input, options)
 {
     int i;
     Giant tmp;
@@ -168,7 +168,7 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging) : Run("M
     logging.progress().add_stage(_task->cost());
 }
 
-void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     if (!_task)
         return;
@@ -354,7 +354,7 @@ void Morrison::run(InputNum& input, arithmetic::GWState& gwstate, File& file_che
         recoverypoint->clear();
 }
 
-MorrisonGeneric::MorrisonGeneric(InputNum& input, Options& options, Logging& logging) : Run("generic Morrison test", options)
+MorrisonGeneric::MorrisonGeneric(InputNum& input, Options& options, Logging& logging) : Run("generic Morrison test", input, options)
 {
     bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
     if (!CheckStrong)
@@ -457,7 +457,7 @@ MorrisonGeneric::MorrisonGeneric(InputNum& input, Options& options, Logging& log
     logging.progress().add_stage(input.bitlen()*std::log2(input.factors().size()));
 }
 
-void MorrisonGeneric::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     if (logging.progress().param_int("P") != 0)
         _P = logging.progress().param_int("P");

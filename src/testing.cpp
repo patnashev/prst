@@ -329,7 +329,7 @@ void Test::run(Logging& logging, Options& global_options, GWState& global_state)
     try
     {
         proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
-        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+        fermat.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
         if (res64 == 0)
             res64 = fermat.success() ? 1 : std::stoull(fermat.res64(), nullptr, 16);
         if (cert64 == 0)
@@ -360,7 +360,7 @@ void Test::run(Logging& logging, Options& global_options, GWState& global_state)
         proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
         logging.progress().add_stage(1);
         logging.progress().add_stage(proof_build.cost());
-        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
+        fermat.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
         if (std::stoull(options.ProofSecuritySeed.empty() ? proof_build.res64() : dynamic_cast<ProofBuild*>(proof_build.task())->raw_res64(), nullptr, 16) != cert64)
         {
             logging.error("Build raw certificate mismatch.\n");
@@ -383,7 +383,7 @@ void Test::run(Logging& logging, Options& global_options, GWState& global_state)
         logging.info("Using %s.\n", gwstate.fft_description.data());
 
         Proof proof_cert(Proof::CERT, 0, input, options, file_cert, logging);
-        proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        proof_cert.run(gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
             logging.error("Certificate mismatch.\n");
@@ -433,7 +433,7 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     };
     try
     {
-        run->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        run->run(gwstate, file_checkpoint, file_recoverypoint, logging);
         bool prime = run->prime();
         std::string sres64 = run->res64();
         if (res64 == 0)
@@ -507,7 +507,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
     points.emplace_back();
     try
     {
-        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+        fermat.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
 
         for (int i = 1; i <= proof_count; i++)
             points.emplace_back(BaseExp::State::read_file(file_proofpoint.children()[i].get()));
@@ -519,11 +519,11 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
         file_proofpoint.children()[1]->write(point);
 
         file_proofproduct.clear(true);
-        proof.run(input, gwstate, logging, nullptr);
-        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
+        proof.run(gwstate, logging, nullptr);
+        fermat.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
 
         Proof proof_cert(Proof::CERT, 0, input, options, file_cert, logging);
-        proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        proof_cert.run(gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() == proof_build.res64())
         {
             logging.error("Certificate failure.\n");
@@ -538,8 +538,8 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 
     auto test_attack = [&](Fermat& fermat)
     {
-        proof.run(input, gwstate, logging, nullptr);
-        fermat.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
+        proof.run(gwstate, logging, nullptr);
+        fermat.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof_build);
         if (fermat.success())
         {
             logging.error("Attack failure.\n");
@@ -547,7 +547,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
         }
 
         Proof proof_cert(Proof::CERT, 0, input, options, file_cert, logging);
-        proof_cert.run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        proof_cert.run(gwstate, file_checkpoint, file_recoverypoint, logging);
         if (proof_cert.res64() != proof_build.res64())
         {
             logging.error("Attacking certificate mismatch.\n");
@@ -557,7 +557,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
         Proof proof_root(Proof::ROOT, proof_count, input, options, file_cert, logging);
         try
         {
-            proof_root.run(input, gwstate, logging.level() > Logging::LEVEL_INFO ? noLogging : logging, &fermat.result());
+            proof_root.run(gwstate, logging.level() > Logging::LEVEL_INFO ? noLogging : logging, &fermat.result());
         }
         catch (const TaskAbortException&) {}
         if (*proof_root.taskRoot()->result() != 1)
@@ -656,7 +656,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 
     try
     {
-        fermat2.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+        fermat2.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
 
         FastExp task(power(input.gb()/3, 3)*power(input.gb(), input.n() - 3));
         task.init(&input, &gwstate, nullptr, &logging, fermat2.a());
@@ -724,7 +724,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
 
     try
     {
-        fermat3.run(input, gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
+        fermat3.run(gwstate, file_checkpoint, file_recoverypoint, logging, &proof);
 
         FastExp task((input.value() - 1)/3);
         task.init(&input, &gwstate, nullptr, &logging, 2);

@@ -10,7 +10,7 @@
 
 using namespace arithmetic;
 
-Order::Order(InputNum& input, Options& options, Logging& logging) : Run("Order", options)
+Order::Order(InputNum& input, Options& options, Logging& logging) : Run("Order", input, options)
 {
     _factors = input.factors();
     Giant ga = options.OrderA->value();
@@ -119,7 +119,7 @@ bool Order::on_point(int index, BaseExp::State* state)
     return false;
 }
 
-void Order::run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
 {
     Giant ga = _options.OrderA->value();
     logging.info("Computing multiplicative order of %s modulo prime %s.\n", _options.OrderA->display_text().data(), input.display_text().data());

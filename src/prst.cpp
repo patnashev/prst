@@ -71,7 +71,6 @@ int main(int argc, char *argv[])
     std::string proof_cert;
     std::string proof_pack;
     bool proof_keep = false;
-    std::optional<bool> proof_write;
     bool supportLLR2 = false;
     std::vector<Giant> factors;
     InputNum input;
@@ -104,7 +103,7 @@ int main(int argc, char *argv[])
                         .end()
                     .value_string("pack", ' ', proof_pack)
                     .check("keep", proof_keep, true)
-                    .value_enum("write", ' ', proof_write, Enum<bool>().add("fast", false).add("small", true))
+                    .value_enum("write", ' ', options.ProofPointWriteMode, Enum<bool>().add("fast", false).add("small", true))
                     .end()
                 .ex_case()
                     .value_number("build", ' ', proof_count, 2, 1048576)
@@ -354,7 +353,6 @@ int main(int argc, char *argv[])
     if (run == proof)
         proof.release();
 
-    std::unique_ptr<FilePacked> file_proofpacked;
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;
     if (proof)
@@ -369,23 +367,10 @@ int main(int argc, char *argv[])
                 if (proof->container()->error() != container::container_error::OK && (proof_op == Proof::BUILD || proof->container()->error() != container::container_error::EMPTY))
                     logging.warning("Pack %s is corrupted.\n", proof_pack.data());
             }
-            fingerprint = proof->fingerprint();
-            newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", fingerprint);
-            if (proof->container())
-                file_proofproduct.reset(new FilePacked(!options.ProofProductFilename.empty() ? options.ProofProductFilename : "prod", fingerprint, *proof->container()));
-            else
-                newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", fingerprint, Proof::Product::TYPE);
+            newFile(file_proofpoint, !options.ProofPointFilename.empty() ? options.ProofPointFilename : filename_prefix + ".proof", proof->fingerprint());
+            newFile(file_proofproduct, !options.ProofProductFilename.empty() ? options.ProofProductFilename : filename_prefix + ".prod", proof->fingerprint(), Proof::Product::TYPE);
             proof->init_files(file_proofpoint.get(), file_proofproduct.get(), file_cert.get());
-            if (proof->container())
-            {
-                file_proofpacked.reset(new FilePacked(!options.ProofPointFilename.empty() ? options.ProofPointFilename : "proof", fingerprint, *proof->container()));
-                proof->file_points()[0] = file_proofpacked->add_child(std::to_string(0), file_proofpoint->fingerprint());
-                proof->file_points()[proof->count()] = file_proofpacked->add_child(std::to_string(proof->count()), file_proofpoint->fingerprint());
-            }
             proof->set_keep_points(proof_keep);
-            if (proof_write)
-                for (int i = 1; i < proof_count; i++)
-                    proof->fermat()->task()->points()[i].value = proof_write.value();
             run.reset(proof.release());
         }
         else
@@ -431,7 +416,7 @@ int main(int argc, char *argv[])
     bool failed = false;
     try
     {
-        run->run(input, gwstate, file_checkpoint, file_recoverypoint, logging);
+        run->run(gwstate, file_checkpoint, file_recoverypoint, logging);
         success = run->success();
         file_progress.clear();
     }

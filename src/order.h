@@ -12,7 +12,7 @@ class Order : public Run
 public:
     Order(InputNum& input, Options& options, Logging& logging);
 
-    void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
+    void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
 
 protected:
     void create_tasks(arithmetic::Giant& a, Options& options, Logging& logging, bool restart);

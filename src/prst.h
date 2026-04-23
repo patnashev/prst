@@ -34,6 +34,7 @@ public:
     std::string ProofProductFilename;
     std::optional<int> ProofPointsPerCheck;
     std::optional<int> ProofChecksPerPoint;
+    std::optional<bool> ProofPointWriteMode;
     std::string ProofSecuritySeed;
 
     std::optional<bool> RootOfUnityCheck;
@@ -51,8 +52,8 @@ class Proof;
 class Run
 {
 public:
-    Run(Options& options) : _options(options) { }
-    Run(const char* name, Options& options) : _name(name), _options(options) { }
+    Run(InputNum& input_, Options& options) : input(input_), _options(options) { }
+    Run(const char* name, InputNum& input_, Options& options) : _name(name), input(input_), _options(options) { }
     virtual ~Run() { }
 
     const std::string& name() { return _name; }
@@ -61,11 +62,12 @@ public:
     bool prime() { return _prime; }
     std::string& res64() { return _res64; }
 
-    virtual void run(InputNum& input, arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) = 0;
+    virtual void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) = 0;
 
     static Run* create(InputNum& input, Options& options, Logging& logging, Proof* proof = nullptr);
 
 protected:
+    InputNum& input;
     Options& _options;
     std::string _name;
     uint32_t _fingerprint = 0;

@@ -319,7 +319,7 @@ int batch_main(int argc, char *argv[])
         bool failed = false;
         try
         {
-            run->run(input, gwstate_cur, file_checkpoint, file_recoverypoint, logging);
+            run->run(gwstate_cur, file_checkpoint, file_recoverypoint, logging);
             success = run->success();
             file_progress.clear();
         }
