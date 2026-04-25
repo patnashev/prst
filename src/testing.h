@@ -75,7 +75,7 @@ public:
     {
         if (input.type() == InputNum::ZERO && !input.parse(input_text))
             throw std::runtime_error("Parse failed.");
-        if (input.type() == InputNum::KBNC && input.c() == 1 && input.d() == 1 && input.b() == 2 && log2(input.gk()) < input.n())
+        if (input.type() == InputNum::KBNC && input.c() == 1 && input.b() == 2 && log2(input.gk()) < input.n())
             return input.display_text() + ", Proth test with certification.";
         return input.display_text() + ", Fermat test with certification.";
     }

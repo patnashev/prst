@@ -443,7 +443,7 @@ int main(int argc, char *argv[])
 
 Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* proof)
 {
-    Run* run = nullptr;
+    // -order
     if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
     {
         if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
@@ -451,53 +451,47 @@ Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* pro
             logging.error("Order can be computed only for fully factored K*B^N+1 primes.\n");
             return nullptr;
         }
-        run = new Order(input, options, logging);
+        return new Order(input, options, logging);
     }
-    else if (proof != nullptr && proof->op() == Proof::CERT)
+
+    // -proof cert
+    if (proof != nullptr && proof->op() == Proof::CERT)
+        return proof;
+    
+    // -fermat
+    if (options.ForceFermat || input.type() == InputNum::GENERIC || std::abs(input.c()) != 1)
+        return new Fermat(Fermat::FERMAT, input, options, logging, proof);
+
+    // Proth
+    if (input.type() == InputNum::KBNC && input.c() == 1 && input.b() == 2 && log2(input.gk()) < input.n())
+        return new Fermat(Fermat::PROTH, input, options, logging, proof);
+
+    input.expand_factors();
+    if (!input.is_half_factored())
     {
-        run = proof;
+        logging.warning("Not enough factors for an available deterministic test.\n");
+        return new Fermat(Fermat::AUTO, input, options, logging, proof);
     }
-    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == 1 && !options.ForceFermat && proof == nullptr)
+
+    // Pocklington
+    if (input.c() == 1)
     {
-        input.expand_factors();
-        if (input.is_half_factored())
-            run = new PocklingtonGeneric(input, options, logging);
-        else
-            logging.warning("Not enough factors for Pocklington test.\n");
+        // Simpler version of the test for small number of factors.
+        if (input.type() == InputNum::KBNC && input.n() > 10 && input.factors().size() < 10)
+            return new Pocklington(input, options, logging, proof);
+        return new PocklingtonGeneric(input, options, logging);
+
     }
-    else if (input.type() == InputNum::KBNC && input.c() == 1 && (input.b() != 2 || log2(input.gk()) >= input.n()) && !options.ForceFermat)
+
+    // Morrison (based on Lucas chains, 2 times slower)
+    if (input.c() == -1)
     {
-        if (input.is_half_factored())
-            run = new Pocklington(input, options, logging, proof);
-        else
-        {
-            std::string factors;
-            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
-                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
-            logging.warning("Not enough factors for Pocklington test. Factored part: %s.\n", factors.data());
-        }
+        // Simpler version of the test for small number of factors.
+        if (input.type() == InputNum::KBNC && input.n() > 10 && input.factors().size() < 10)
+            return new Morrison(input, options, logging);
+        return new MorrisonGeneric(input, options, logging);
+
     }
-    else if ((input.type() == InputNum::FACTORIAL || input.type() == InputNum::PRIMORIAL || (input.type() == InputNum::KBNC && (input.n() < 10 || input.factors().size() > 10))) && input.c() == -1 && !options.ForceFermat && proof == nullptr)
-    {
-        input.expand_factors();
-        if (input.is_half_factored())
-            run = new MorrisonGeneric(input, options, logging);
-        else
-            logging.warning("Not enough factors for Morrison test.\n");
-    }
-    else if (input.type() == InputNum::KBNC && input.c() == -1 && !options.ForceFermat)
-    {
-        if (input.is_half_factored())
-            run = new Morrison(input, options, logging);
-        else
-        {
-            std::string factors;
-            for (auto it = input.factors().begin(); it != input.factors().end(); it++)
-                factors += (!factors.empty() ? " * " : "") + it->first.to_string() + (it->second > 1 ? "^" + std::to_string(it->second) : "");
-            logging.warning("Not enough factors for Morrison test. Factored part: %s.\n", factors.data());
-        }
-    }
-    if (run == nullptr)
-        run = new Fermat(options.ForceFermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof);
-    return run;
+
+    return nullptr;
 }
