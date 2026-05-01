@@ -531,6 +531,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
                     Product taskP(G.begin(), G.end());
                     taskP.init(&input, &gwstate, _logging.get());
                     taskP.run();
+                    logging.progress().add_time(taskP.timer());
                     tmp = std::move(taskP.result());
                     if (a)
                         Task::abort();
@@ -728,6 +729,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
                 stack_value.emplace_back(0, task_num, std::move(*cur_task->result()), cur_task->negativeQ() && cur_task->result_parity());
                 last_progress += cur_task->timer();
                 last_write += cur_task->timer();
+                logging.progress().add_time(cur_task->timer());
                 _logging->progress().next_stage();
                 cur_task.reset();
                 if (checkpoint)

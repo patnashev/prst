@@ -377,6 +377,7 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
                 Product taskP(G.begin(), G.end());
                 taskP.init(&input, &gwstate, _logging.get());
                 taskP.run();
+                logging.progress().add_time(taskP.timer());
                 tmp = std::move(taskP.result());
             }
             else
@@ -499,6 +500,7 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
                 if (stack.size() == 1)
                     exp = std::move(cur_task->exp());
                 last_progress += cur_task->timer();
+                logging.progress().add_time(cur_task->timer());
                 _logging->progress().next_stage();
                 cur_task.reset();
 
