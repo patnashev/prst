@@ -500,6 +500,7 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
                     exp = std::move(cur_task->exp());
                 last_progress += cur_task->timer();
                 _logging->progress().next_stage();
+                logging.progress().update(logging.progress().progress_stage(), 0);
                 cur_task.reset();
 
                 if (stack.back()->is_factor())

@@ -729,6 +729,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
                 last_progress += cur_task->timer();
                 last_write += cur_task->timer();
                 _logging->progress().next_stage();
+                logging.progress().update(logging.progress().progress_stage(), 0);
                 cur_task.reset();
                 if (checkpoint)
                 {

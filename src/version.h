@@ -3,8 +3,8 @@
 //#define BOINC
 //#define NETPRST
 
-#define PRST_VERSION "13.4"
-#define VERSION_BUILD "1837"
+#define PRST_VERSION "14.0"
+#define VERSION_BUILD "1839"
 
 inline void print_banner()
 {
