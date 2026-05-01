@@ -122,7 +122,8 @@ static void send_trickle_message(Progress &progr)
 void BoincLogging::heartbeat()
 {
     Logging::heartbeat();
-    send_trickle_message(progress());
+    if (send_trickle_messages)
+        send_trickle_message(progress());
 }
 
 bool BoincLogging::state_save_flag()
@@ -184,6 +185,8 @@ int boinc_main(int argc, char *argv[])
     bow_init();
     Task::DISK_WRITE_TIME = bow_get_checkpoint_seconds(Task::DISK_WRITE_TIME);
     print_banner();
+
+    BoincLogging logging;
 
     options.ProofPointFilename = "prsproof";
     options.ProofProductFilename = "prsprod";
@@ -255,6 +258,7 @@ int boinc_main(int argc, char *argv[])
                     cnfg.parse_ini(ini_file);
                 return true;
             })
+        .check("-notrickle", logging.send_trickle_messages, false)
         .default_code([&](const char* param) {
             if (!input.parse(param))
                 printf("Unknown option %s.\n", param);
@@ -266,8 +270,6 @@ int boinc_main(int argc, char *argv[])
         printf("No input.\n");
         return PRST_EXIT_FAILURE;
     }
-
-    BoincLogging logging;
 
     uint32_t fingerprint = input.fingerprint();
     std::string filename_suffix;

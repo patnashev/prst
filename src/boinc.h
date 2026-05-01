@@ -12,4 +12,6 @@ public:
     bool state_save_flag() override;
     void progress_save() override;
     void heartbeat() override;
+
+    bool send_trickle_messages = true;
 };
