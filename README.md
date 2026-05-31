@@ -19,6 +19,8 @@ The following primality tests are currently implemented:
 
 The utility can provide a high level of reliability by employing several overlapping error checks and a verification mechanism based on secure mathematical algorithms.
 
+Developer documentation (architecture overview and per-subsystem deep-dives) is in [`docs/`](docs/lay-of-the-land.md).
+
 Donate XMR: 453MFNnC7N7NK9iK99FoNh3xZ4wY9yqt1Qk6F62iUZjg6bv6xD3oH3U2EABnUQMmco5BEK5FAhtKF18Mn43QQsysNHX9wB3,
 view key to see donations: 15427a794d172323ae22fa072239e80e13a1a3f6221b43f033d460f09b167e0a.
 
