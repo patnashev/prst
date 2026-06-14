@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <cmath>
 
 #include "gwnum.h"
@@ -60,6 +61,28 @@ static bool has_prefix_ci(const std::string& s, const char* prefix)
     return true;
 }
 
+static bool is_digit_string(const std::string& s)
+{
+    if (s.empty())
+        return false;
+    for (char ch : s)
+        if (!std::isdigit((unsigned char)ch))
+            return false;
+    return true;
+}
+
+// Parse a NewPGen header: <sievelimit>:<char>:<chainlen>:<base>:<mask>
+// Returns the number of fields scanned; >= 4 means a valid header.
+static int parse_newpgen_header(const std::string& line,
+                                unsigned long long& sievelimit, char& mode_char,
+                                unsigned long& chainlen, unsigned long long& base,
+                                unsigned long& mask)
+{
+    sievelimit = 0; mode_char = 0; chainlen = 0; base = 0; mask = 0;
+    return std::sscanf(line.c_str(), "%llu:%c:%lu:%llu:%lu",
+                       &sievelimit, &mode_char, &chainlen, &base, &mask);
+}
+
 FileFormat detect_format(const std::string& first_line)
 {
     if (has_prefix_ci(first_line, "ABCD "))
@@ -68,6 +91,17 @@ FileFormat detect_format(const std::string& first_line)
         return FORMAT_ABC2;
     if (has_prefix_ci(first_line, "ABC "))
         return FORMAT_ABC;
+
+    // NewPGen sieve header (e.g. "1000000000000:M:1:105:258"). Requires >= 4
+    // colon-separated fields so a stray "123:foo" line is not misdetected.
+    {
+        unsigned long long sievelimit, base;
+        char mode_char;
+        unsigned long chainlen, mask;
+        if (parse_newpgen_header(first_line, sievelimit, mode_char, chainlen, base, mask) >= 4)
+            return FORMAT_NEWPGEN;
+    }
+
     return FORMAT_UNKNOWN;
 }
 
@@ -699,12 +733,153 @@ static std::unique_ptr<CandidateSource> parse_abc2_source(
 }
 
 // ============================================================================
+// NewPGen format parser (materializes into vectors)
+//
+// Standard NewPGen sieve output, as read by LLR. Header:
+//   <sievelimit>:<char>:<chainlen>:<base>:<mask>
+// followed by "k n" data lines (k-first). Only the single-test forms
+// k*b^n+1 (MODE_PLUS / 'P') and k*b^n-1 (MODE_MINUS / 'M') are supported;
+// every other form (twin, SG, CC, chains, primorial, +5/+7, AP, dual) is
+// warned about and skipped. Column order can be reversed to "n k" via
+// col_order == NEWPGEN_NK for merge scripts that emit n first.
+// ============================================================================
+
+static bool parse_newpgen_file(
+    const std::vector<std::string>& raw_lines,
+    std::vector<std::string>& out_batch,
+    std::vector<std::string>& out_batch_k,
+    int col_order,
+    Logging& logging)
+{
+    // NewPGen mask bits (see Llr.c:222-237). Non-form flags are stripped before
+    // matching: 0x100 = "Mode 'k' sieve" (variable k), 0x400 = NOTGENERALISED.
+    const unsigned long MODE_PLUS  = 0x01;
+    const unsigned long MODE_MINUS = 0x02;
+    const unsigned long MODE_PRIMORIAL = 0x40;
+    const unsigned long NON_FORM_FLAGS = 0x100UL | 0x400UL;
+
+    bool any_header = false;
+    int header_count = 0;
+
+    // Current block state (reset on every header line).
+    bool block_valid = false;
+    int block_sign = 0;            // +1 for k*b^n+1, -1 for k*b^n-1
+    std::string block_base;        // base, as a string
+    size_t block_rows = 0;         // candidates emitted in the current block
+
+    for (size_t i = 0; i < raw_lines.size(); i++)
+    {
+        const std::string& raw_line = raw_lines[i];
+        if (is_skip_line(raw_line))
+            continue;
+
+        unsigned long long sievelimit = 0, base = 0;
+        char mode_char = 0;
+        unsigned long chainlen = 0, mask = 0;
+        int fields = parse_newpgen_header(raw_line, sievelimit, mode_char, chainlen, base, mask);
+        if (fields >= 4)
+        {
+            // Start a new block; reset all per-block state.
+            any_header = true;
+            header_count++;
+            block_valid = false;
+            block_sign = 0;
+            block_rows = 0;
+            block_base = std::to_string(base);
+
+            if (fields < 5)
+                mask = 0;   // LLR: a 4-field header falls back to the char code
+
+            int sign = 0;
+            if (mask & MODE_PRIMORIAL)
+            {
+                logging.warning("NewPGen: primorial form (mask 0x40) is not supported; skipping block at line %d.\n", (int)i + 1);
+            }
+            else if (mask != 0)
+            {
+                unsigned long form_bits = mask & ~NON_FORM_FLAGS;
+                if (form_bits == MODE_PLUS)
+                    sign = +1;
+                else if (form_bits == MODE_MINUS)
+                    sign = -1;
+                else
+                    logging.warning("NewPGen: unsupported form (mask %lu) at line %d; only k*b^n+1 and k*b^n-1 are handled, skipping block.\n", mask, (int)i + 1);
+            }
+            else
+            {
+                char c = (char)std::toupper((unsigned char)mode_char);
+                if (c == 'P')
+                    sign = +1;
+                else if (c == 'M')
+                    sign = -1;
+                else
+                    logging.warning("NewPGen: unsupported type '%c' at line %d; only P and M are handled, skipping block.\n", mode_char, (int)i + 1);
+            }
+
+            if (sign != 0)
+            {
+                block_valid = true;
+                block_sign = sign;
+                logging.info("NewPGen header: base %s, form k*%s^n%s, columns %s.\n",
+                    block_base.data(), block_base.data(), sign > 0 ? "+1" : "-1",
+                    col_order == NEWPGEN_NK ? "n k (reversed)" : "k n");
+            }
+            continue;
+        }
+
+        // Data line: flush until a valid header has been seen.
+        if (!block_valid)
+            continue;
+
+        std::istringstream iss(raw_line);
+        std::string t0, t1;
+        if (!(iss >> t0 >> t1))
+        {
+            logging.warning("NewPGen: skipping malformed data line %d: %s\n", (int)i + 1, raw_line.data());
+            continue;
+        }
+
+        std::string k_str, n_str;
+        if (col_order == NEWPGEN_NK)
+        {
+            n_str = t0;
+            k_str = t1;
+        }
+        else
+        {
+            k_str = t0;
+            n_str = t1;
+        }
+
+        if (!is_digit_string(k_str) || !is_digit_string(n_str))
+        {
+            logging.warning("NewPGen: skipping non-numeric data line %d: %s\n", (int)i + 1, raw_line.data());
+            continue;
+        }
+
+        std::string expression = k_str + "*" + block_base + "^" + n_str + (block_sign > 0 ? "+1" : "-1");
+
+        if (block_rows == 0)
+            logging.info("NewPGen: first candidate %s (k=%s).\n", expression.data(), k_str.data());
+
+        out_batch.push_back(std::move(expression));
+        out_batch_k.push_back(std::move(k_str));
+        block_rows++;
+    }
+
+    if (any_header)
+        logging.info("NewPGen: parsed %d header block(s), %d candidates.\n", header_count, (int)out_batch.size());
+    return any_header && !out_batch.empty();
+}
+
+// ============================================================================
 // Factory: parse_batch_file
 // ============================================================================
 
 std::unique_ptr<CandidateSource> parse_batch_file(
     const std::string& filename,
-    Logging& logging)
+    Logging& logging,
+    int newpgen_column_order)
 {
     File batch_file(filename, 0);
     batch_file.read_buffer();
@@ -773,6 +948,18 @@ std::unique_ptr<CandidateSource> parse_batch_file(
             return std::unique_ptr<CandidateSource>(
                 new VectorCandidateSource(std::move(batch), std::move(batch_k), true));
         }
+    }
+
+    if (format == FORMAT_NEWPGEN)
+    {
+        std::vector<std::string> batch, batch_k;
+        if (!parse_newpgen_file(raw_lines, batch, batch_k, newpgen_column_order, logging))
+        {
+            logging.warning("NewPGen batch %s has no supported candidates.\n", filename.data());
+            return nullptr;
+        }
+        return std::unique_ptr<CandidateSource>(
+            new VectorCandidateSource(std::move(batch), std::move(batch_k), true));
     }
 
     // Raw format: each line is an expression, no k-values

@@ -44,6 +44,7 @@ int batch_main(int argc, char *argv[])
     bool stop_prime = false;
     int stop_composites = 0;
     bool stop_k_prime = false;
+    int newpgen_col_order = NEWPGEN_KN;
 
     Config cnfg;
     cnfg.ignore("-batch")
@@ -101,9 +102,11 @@ int batch_main(int argc, char *argv[])
                 .check("error", stop_error, true)
                 .check("prime", stop_prime, true)
                 .value_number("composites", ' ', stop_composites, 1, INT_MAX)
+                .check("primek", stop_k_prime, true)
                 .check("kprime", stop_k_prime, true)
                 .end()
             .end()
+        .value_enum("-newpgen", ' ', newpgen_col_order, Enum<int>().add("kn", NEWPGEN_KN).add("nk", NEWPGEN_NK))
         .value_code("-ini", ' ', [&](const char* param) {
                 File ini_file(param, 0);
                 ini_file.read_buffer();
@@ -136,8 +139,11 @@ int batch_main(int argc, char *argv[])
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-factors all\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>]]\n");
-        printf("\t-stop [on error] [on prime] [on composites <count>] [on kprime]\n");
-        printf("Batch file formats: raw (one expression per line), ABC, ABCD, ABC2\n");
+        printf("\t-stop [on error] [on prime] [on primek] [on composites <count>]\n");
+        printf("\t\ton prime stops the whole batch; on primek stops only the current k.\n");
+        printf("\t-newpgen {kn | nk}\n");
+        printf("\t\tNewPGen data-line column order (k-first default, nk for reversed files).\n");
+        printf("Batch file formats: raw (one expression per line), ABC, ABCD, ABC2, NewPGen\n");
         return PRST_EXIT_NORMAL;
     }
 
@@ -151,7 +157,7 @@ int batch_main(int argc, char *argv[])
 
     if (batch_name != "stdin")
     {
-        source = parse_batch_file(batch_name, logging_batch);
+        source = parse_batch_file(batch_name, logging_batch, newpgen_col_order);
         if (!source || source->size() == 0)
         {
             logging_batch.warning("Batch %s is empty or could not be parsed.\n", batch_name.data());
