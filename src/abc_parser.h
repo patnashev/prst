@@ -36,9 +36,13 @@ static const size_t MAX_ABC2_IN_LIST_VALUES = 1000;
 // File format detection
 // ============================================================================
 
-enum FileFormat { FORMAT_UNKNOWN, FORMAT_ABC, FORMAT_ABCD, FORMAT_ABC2 };
+enum FileFormat { FORMAT_UNKNOWN, FORMAT_ABC, FORMAT_ABCD, FORMAT_ABC2, FORMAT_NEWPGEN };
 
 FileFormat detect_format(const std::string& first_line);
+
+// NewPGen data-line column order. Standard NewPGen (and LLR) is k-first ("k n");
+// NEWPGEN_NK is for files whose columns are reversed ("n k").
+enum NewPgenColumnOrder { NEWPGEN_KN = 0, NEWPGEN_NK = 1 };
 
 // ============================================================================
 // Candidate: a single number expression with optional k-value for tracking
@@ -85,4 +89,5 @@ public:
 
 std::unique_ptr<CandidateSource> parse_batch_file(
     const std::string& filename,
-    Logging& logging);
+    Logging& logging,
+    int newpgen_column_order = NEWPGEN_KN);
