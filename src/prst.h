@@ -42,9 +42,30 @@ public:
 
     std::optional<bool> AllFactors;
 
-    // Set by Run::create()
-    
-    int maxmulbyconst = 1;
+    // GWState options
+
+    int thread_count = 1;
+    int spin_threads = 1;
+    std::string instructions;
+    int next_fft_count = 0;
+    double safety_margin = 0;
+    int force_mod_type = 0;
+    bool information_only = false;
+    int maxmulbyconst = 1; // Set by Run::create()
+
+    void configure(arithmetic::GWState& gwstate)
+    {
+        gwstate.thread_count = thread_count;
+        gwstate.next_fft_count = next_fft_count;
+        gwstate.safety_margin = safety_margin;
+        gwstate.force_mod_type = force_mod_type;
+        gwstate.spin_threads = spin_threads;
+        gwstate.instructions = instructions;
+
+        gwstate.information_only = information_only;
+        gwstate.maxmulbyconst = maxmulbyconst;
+        gwstate.known_factors = 1;
+    }
 };
 
 class Proof;

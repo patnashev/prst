@@ -378,7 +378,7 @@ void NetContext::done()
 
 int net_main(int argc, char *argv[])
 {
-    GWState gwstate;
+    Options options;
     std::string url;
     std::string worker_id;
     int log_level = Logging::LEVEL_INFO;
@@ -387,9 +387,9 @@ int net_main(int argc, char *argv[])
 
     Config cnfg;
     cnfg.ignore("-net")
-        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
-        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_number("-t", ' ', options.thread_count, 1, 256)
+        .value_number("-spin", ' ', options.spin_threads, 0, 256)
+        .value_enum("-cpu", ' ', options.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
         .value_string("-i", ' ', worker_id)
         .group("-time")
             .value_number("write", ' ', disk_write_time, 1, INT_MAX)
@@ -496,17 +496,12 @@ int net_main(int argc, char *argv[])
             continue;
         }
 
-        Options options;
         logging.progress() = Progress();
         logging.progress().time_init(net.task()->time);
         if (net.task()->options.find("write_time") != net.task()->options.end())
             Task::DISK_WRITE_TIME = std::stoi(net.task()->options["write_time"]);
         else
             Task::DISK_WRITE_TIME = disk_write_time;
-        if (net.task()->options.find("FFT_Increment") != net.task()->options.end())
-            gwstate.next_fft_count = std::stoi(net.task()->options["FFT_Increment"]);
-        if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
-            gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
         bool supportLLR2 = false;
         if (net.task()->options.find("support") != net.task()->options.end())
             supportLLR2 = net.task()->options["support"] == "LLR2";
@@ -532,12 +527,11 @@ int net_main(int argc, char *argv[])
         auto newFile = [&](const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
         {
             if (supportLLR2)
-                return files.emplace_back(new LLR2NetFile(net, filename, gwstate.fingerprint, type)).get();
+                return files.emplace_back(new LLR2NetFile(net, filename, input.fingerprint(), type)).get();
             else
                 return files.emplace_back(new NetFile(net, filename, fingerprint)).get();
         };
         uint32_t fingerprint = input.fingerprint();
-        gwstate.fingerprint = fingerprint;
         File* file_cert = newFile("cert", fingerprint, Proof::Certificate::TYPE);
         std::unique_ptr<Proof> proof;
         if (proof_op != Proof::NO_OP)
@@ -545,19 +539,32 @@ int net_main(int argc, char *argv[])
         if (proof && net.task()->options.find("CachePoints") != net.task()->options.end())
             proof->set_cache_points(true);
 
-        std::unique_ptr<Fermat> fermat;
-
+        std::unique_ptr<Run> run;
         if (proof_op == Proof::CERT)
-        {
-        }
+            run.reset(proof.release());
         else if (net.task()->type == "Pocklington")
-        {
-            fermat.reset(new Pocklington(input, options, logging, proof.get()));
-        }
+            run.reset(new Pocklington(input, options, logging, proof.get()));
         else
-            fermat.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
+            run.reset(new Fermat(Fermat::AUTO, input, options, logging, proof.get()));
 
-        gwstate.maxmulbyconst = options.maxmulbyconst;
+        fingerprint = run->fingerprint();
+        if (proof)
+        {
+            fingerprint = proof->fingerprint();
+            File* file_proofpoint = newFile("proof", fingerprint);
+            File* file_proofproduct = newFile("prod", fingerprint, Proof::Product::TYPE);
+            proof->init_files(file_proofpoint, file_proofproduct, file_cert);
+        }
+
+        File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
+        File* file_recoverypoint = newFile("recoverypoint", fingerprint);
+
+        GWState gwstate;
+        options.configure(gwstate);
+        if (net.task()->options.find("FFT_Increment") != net.task()->options.end())
+            gwstate.next_fft_count = std::stoi(net.task()->options["FFT_Increment"]);
+        if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
+            gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
         logging.report_param("fft_desc", gwstate.fft_description);
@@ -566,37 +573,16 @@ int net_main(int argc, char *argv[])
 
         try
         {
-            if (proof_op == Proof::CERT)
-            {
-                fingerprint = File::unique_fingerprint(fingerprint, file_cert->filename());
-                File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
-                File* file_recoverypoint = newFile("recoverypoint", fingerprint);
-                proof->run(input, gwstate, *file_checkpoint, *file_recoverypoint, logging);
-            }
-            else if (proof)
-            {
-                fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat->a()) + "." + std::to_string(proof->points()[proof_count].pos));
-                File* file_proofpoint = newFile("proof", fingerprint);
-                File* file_proofproduct = newFile("prod", fingerprint, Proof::Product::TYPE);
-                proof->init_files(file_proofpoint, file_proofproduct, file_cert);
-
-                File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
-                File* file_recoverypoint = newFile("recoverypoint", fingerprint);
-                fermat->run(input, gwstate, *file_checkpoint, *file_recoverypoint, logging, proof.get());
-            }
-            else if (fermat)
-            {
-                File* file_checkpoint = files.emplace_back(new NetFile(net, "checkpoint", fingerprint)).get();
-                File* file_recoverypoint = newFile("recoverypoint", fingerprint);
-                fermat->run(input, gwstate, *file_checkpoint, *file_recoverypoint, logging, nullptr);
-            }
+            if (proof)
+                static_cast<Fermat*>(run.get())->run(gwstate, *file_checkpoint, *file_recoverypoint, logging, proof.get());
+            else
+                run->run(gwstate, *file_checkpoint, *file_recoverypoint, logging);
         }
         catch (const TaskAbortException&)
         {
         }
 
         gwstate.done();
-        gwstate.known_factors = 1;
         net.task()->gwstate = nullptr;
 
         net.upload_wait();
@@ -620,8 +606,8 @@ int net_main(int argc, char *argv[])
 					RequestBuilder(ctx)
 						.Post(net.url() + "prst/res/" + net.task_id())
 						.Argument("workerID", net.worker_id())
-                        .Argument("res", proof_op == Proof::CERT ? proof->res64() : fermat->prime() ? "prime" : (fermat->success() && fermat->res64().empty() ? "prp" : fermat->success() ? "prp/" : "") + fermat->res64())
-                        .Argument("cert", proof && proof_op != Proof::CERT ? proof->res64() : "")
+                        .Argument("res", run->prime() ? "prime" : (run->success() && run->res64().empty() ? "prp" : run->success() ? "prp/" : "") + run->res64())
+                        .Argument("cert", proof ? proof->res64() : "")
                         .Argument("time", std::to_string(logging.progress().time_total()))
                         .Argument("version", PRST_VERSION "." VERSION_BUILD)
 

@@ -29,7 +29,6 @@ using namespace arithmetic;
 
 int testing_main(int argc, char *argv[])
 {
-    GWState gwstate;
     Options options;
     std::string subset;
     int log_level = Logging::LEVEL_PROGRESS;
@@ -38,15 +37,15 @@ int testing_main(int argc, char *argv[])
 
     Config cnfg;
     cnfg.ignore("-test")
-        .value_number("-t", 0, gwstate.thread_count, 1, 256)
-        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
-        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
-        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+        .value_number("-t", 0, options.thread_count, 1, 256)
+        .value_number("-t", ' ', options.thread_count, 1, 256)
+        .value_number("-spin", ' ', options.spin_threads, 0, 256)
+        .value_enum("-cpu", ' ', options.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_number("-fft", '+', options.next_fft_count, 0, 5)
         .group("-fft")
-            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
-            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
-            .check("generic", gwstate.force_mod_type, 1)
+            .value_number("+", 0, options.next_fft_count, 0, 5)
+            .value_number("safety", ' ', options.safety_margin, -10.0, 10.0)
+            .check("generic", options.force_mod_type, 1)
             .end()
         .group("-check")
             .exclusive()
@@ -258,7 +257,7 @@ int testing_main(int argc, char *argv[])
                     subLogging.file_result(log_file);
                 else
                     subLogging.file_log(log_file);
-                RootsTest(subLogging, options, gwstate);
+                RootsTest(subLogging, options);
             }
             else
                 for (auto& test : std::get<2>(subsetTests))
@@ -271,7 +270,7 @@ int testing_main(int argc, char *argv[])
                         subLogging.file_result(log_file);
                     else
                         subLogging.file_log(log_file);
-                    test->run(subLogging, options, gwstate);
+                    test->run(subLogging, options);
                     std::get<1>(subsetTests).progress().next_stage();
                 }
             logging.progress().next_stage();
@@ -290,12 +289,8 @@ int testing_main(int argc, char *argv[])
     return PRST_EXIT_NORMAL;
 }
 
-void Test::run(Logging& logging, Options& global_options, GWState& global_state)
+void Test::run(Logging& logging, Options& options)
 {
-    Options options;
-    options.Check = global_options.Check;
-    options.CheckNear = global_options.CheckNear;
-    options.CheckStrong = global_options.CheckStrong;
     options.ProofSecuritySeed = "12345";
     options.RootOfUnityCheck = false;
     int proof_count = 16;
@@ -312,8 +307,7 @@ void Test::run(Logging& logging, Options& global_options, GWState& global_state)
     File file_recoverypoint("prst_rcpt", fingerprint);
 
     GWState gwstate;
-    gwstate.copy(global_state);
-    gwstate.maxmulbyconst = options.maxmulbyconst;
+    options.configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -398,14 +392,8 @@ void Test::run(Logging& logging, Options& global_options, GWState& global_state)
     finally();
 }
 
-void DeterministicTest::run(Logging& logging, Options& global_options, GWState& global_state)
+void DeterministicTest::run(Logging& logging, Options& options)
 {
-    Options options;
-    options.Check = global_options.Check;
-    options.CheckNear = global_options.CheckNear;
-    options.CheckStrong = global_options.CheckStrong;
-    options.AllFactors = global_options.AllFactors;
-
     uint32_t fingerprint = input.fingerprint();
     input.expand_factors();
     if (!input.is_half_factored())
@@ -419,8 +407,7 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     logging.file_progress(&file_params);
 
     GWState gwstate;
-    gwstate.copy(global_state);
-    gwstate.maxmulbyconst = options.maxmulbyconst;
+    options.configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -457,13 +444,10 @@ void DeterministicTest::run(Logging& logging, Options& global_options, GWState& 
     finally();
 }
 
-void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
+void RootsTest(Logging& logging, Options& options)
 {
     SubLogging noLogging(logging, Logging::LEVEL_ERROR + 1);
-    Options options;
-    options.Check = global_options.Check;
-    options.CheckNear = global_options.CheckNear;
-    options.CheckStrong = global_options.CheckStrong;
+    options.ProofSecuritySeed.clear();
     options.RootOfUnityCheck = false;
     InputNum input;
     int proof_count = 4;
@@ -487,7 +471,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
     GWState gwstate;
-    gwstate.copy(global_state);
+    options.configure(gwstate);
     gwstate.maxmulbyconst = fermat.a();
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
@@ -649,8 +633,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
-    gwstate.copy(global_state);
-    gwstate.maxmulbyconst = fermat2.a();
+    options.configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -717,8 +700,7 @@ void RootsTest(Logging& logging, Options& global_options, GWState& global_state)
     proof.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
-    gwstate.copy(global_state);
-    gwstate.maxmulbyconst = fermat3.a();
+    options.configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 

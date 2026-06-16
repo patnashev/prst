@@ -174,7 +174,6 @@ check_again:
 
 int boinc_main(int argc, char *argv[])
 {
-    GWState gwstate;
     Options options;
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
@@ -193,16 +192,16 @@ int boinc_main(int argc, char *argv[])
 
     Config cnfg;
     cnfg.ignore("-boinc")
-        .value_number("-t", 0, gwstate.thread_count, 1, 256)
-        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("--nthreads", ' ', gwstate.thread_count, 1, 256)  // alias for '-t', set by Boinc
-        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
-        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
-        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+        .value_number("-t", 0, options.thread_count, 1, 256)
+        .value_number("-t", ' ', options.thread_count, 1, 256)
+        .value_number("--nthreads", ' ', options.thread_count, 1, 256)  // alias for '-t', set by Boinc
+        .value_number("-spin", ' ', options.spin_threads, 0, 256)
+        .value_enum("-cpu", ' ', options.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_number("-fft", '+', options.next_fft_count, 0, 5)
         .group("-fft")
-            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
-            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
-            .check("generic", gwstate.force_mod_type, 1)
+            .value_number("+", 0, options.next_fft_count, 0, 5)
+            .value_number("safety", ' ', options.safety_margin, -10.0, 10.0)
+            .check("generic", options.force_mod_type, 1)
             .end()
         .group("-proof")
             .exclusive()
@@ -327,9 +326,10 @@ int boinc_main(int argc, char *argv[])
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
-    if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
-        gwstate.next_fft_count = logging.progress().param_int("next_fft");
-    gwstate.maxmulbyconst = options.maxmulbyconst;
+    if (options.next_fft_count < logging.progress().param_int("next_fft"))
+        options.next_fft_count = logging.progress().param_int("next_fft");
+    GWState gwstate;
+    options.configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 

@@ -211,6 +211,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
     if (_type == POCKLINGTON)
         _name = "Pocklington test";
     _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(_a));
+    options.maxmulbyconst = 1;
 
     if (proof == nullptr && !CheckStrong)
     {

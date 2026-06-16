@@ -64,7 +64,6 @@ int main(int argc, char *argv[])
     // 10 LucasUV checkpoint
     // 11 LucasUV strong check checkpoint
 
-    GWState gwstate;
     Options options;
     int proof_op = Proof::NO_OP;
     int proof_count = 0;
@@ -80,16 +79,16 @@ int main(int argc, char *argv[])
     std::string log_file;
 
     Config cnfg;
-    cnfg.value_number("-t", 0, gwstate.thread_count, 1, 256)
-        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
-        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
-        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+    cnfg.value_number("-t", 0, options.thread_count, 1, 256)
+        .value_number("-t", ' ', options.thread_count, 1, 256)
+        .value_number("-spin", ' ', options.spin_threads, 0, 256)
+        .value_enum("-cpu", ' ', options.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_number("-fft", '+', options.next_fft_count, 0, 5)
         .group("-fft")
-            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
-            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
-            .check("generic", gwstate.force_mod_type, 1)
-            .check("info", gwstate.information_only, true)
+            .value_number("+", 0, options.next_fft_count, 0, 5)
+            .value_number("safety", ' ', options.safety_margin, -10.0, 10.0)
+            .check("generic", options.force_mod_type, 1)
+            .check("info", options.information_only, true)
             .end()
         .group("-proof")
             .exclusive()
@@ -282,10 +281,10 @@ int main(int argc, char *argv[])
     }
     if (show_info)
         input.print_info();
-    if (show_info && !gwstate.information_only)
+    if (show_info && !options.information_only)
         return PRST_EXIT_NORMAL;
 
-    Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
+    Logging logging(options.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
     if (!log_file.empty())
         logging.file_log(log_file);
 
@@ -320,7 +319,6 @@ int main(int argc, char *argv[])
     }
 
     uint32_t fingerprint = input.fingerprint();
-    gwstate.fingerprint = fingerprint;
     std::string filename_suffix;
     if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
         filename_suffix = "." + std::to_string(options.OrderA->fingerprint());
@@ -336,7 +334,7 @@ int main(int argc, char *argv[])
     auto newFile = [&](std::unique_ptr<File>& file, const std::string& filename, uint32_t fingerprint, char type = BaseExp::StateValue::TYPE)
     {
         if (supportLLR2)
-            file.reset(new LLR2File(filename, gwstate.fingerprint, type));
+            file.reset(new LLR2File(filename, input.fingerprint(), type));
         else
             file.reset(new File(filename, fingerprint));
     };
@@ -385,9 +383,10 @@ int main(int argc, char *argv[])
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
-    if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
-        gwstate.next_fft_count = logging.progress().param_int("next_fft");
-    gwstate.maxmulbyconst = options.maxmulbyconst;
+    if (options.next_fft_count < logging.progress().param_int("next_fft"))
+        options.next_fft_count = logging.progress().param_int("next_fft");
+    GWState gwstate;
+    options.configure(gwstate);
     try
     {
         input.setup(gwstate);
@@ -443,6 +442,8 @@ int main(int argc, char *argv[])
 
 Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* proof)
 {
+    options.maxmulbyconst = 1;
+
     // -order
     if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
     {
@@ -493,5 +494,6 @@ Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* pro
 
     }
 
+    // Unreachable
     return nullptr;
 }

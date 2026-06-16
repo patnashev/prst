@@ -80,7 +80,7 @@ public:
         return input.display_text() + ", Fermat test with certification.";
     }
 
-    virtual void run(Logging& logging, Options& global_options, arithmetic::GWState& global_state);
+    virtual void run(Logging& logging, Options& options);
 
 public:
     std::string input_text;
@@ -113,7 +113,7 @@ public:
         return input.display_text() + ", No deterministic test.";
     }
 
-    void run(Logging& logging, Options& global_options, arithmetic::GWState& global_state) override;
+    void run(Logging& logging, Options& options) override;
 };
 
 class TestLogging : public Logging
@@ -134,5 +134,5 @@ private:
     std::chrono::system_clock::time_point _last_progress = std::chrono::system_clock::now();
 };
 
-void RootsTest(Logging& logging, Options& global_options, arithmetic::GWState& global_state);
+void RootsTest(Logging& logging, Options& options);
 int ABCParserTest(Logging& logging);

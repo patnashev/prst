@@ -30,7 +30,6 @@ using namespace arithmetic;
 
 int batch_main(int argc, char *argv[])
 {
-    GWState gwstate;
     Options options;
     bool show_info = false;
     bool trial_division = false;
@@ -48,16 +47,16 @@ int batch_main(int argc, char *argv[])
 
     Config cnfg;
     cnfg.ignore("-batch")
-        .value_number("-t", 0, gwstate.thread_count, 1, 256)
-        .value_number("-t", ' ', gwstate.thread_count, 1, 256)
-        .value_number("-spin", ' ', gwstate.spin_threads, 0, 256)
-        .value_enum("-cpu", ' ', gwstate.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
-        .value_number("-fft", '+', gwstate.next_fft_count, 0, 5)
+        .value_number("-t", 0, options.thread_count, 1, 256)
+        .value_number("-t", ' ', options.thread_count, 1, 256)
+        .value_number("-spin", ' ', options.spin_threads, 0, 256)
+        .value_enum("-cpu", ' ', options.instructions, Enum<std::string>().add("SSE2", "SSE2").add("AVX", "AVX").add("FMA3", "FMA3").add("AVX512F", "AVX512F"))
+        .value_number("-fft", '+', options.next_fft_count, 0, 5)
         .group("-fft")
-            .value_number("+", 0, gwstate.next_fft_count, 0, 5)
-            .value_number("safety", ' ', gwstate.safety_margin, -10.0, 10.0)
-            .check("generic", gwstate.force_mod_type, 1)
-            .check("info", gwstate.information_only, true)
+            .value_number("+", 0, options.next_fft_count, 0, 5)
+            .value_number("safety", ' ', options.safety_margin, -10.0, 10.0)
+            .check("generic", options.force_mod_type, 1)
+            .check("info", options.information_only, true)
             .end()
         .group("-check")
             .exclusive()
@@ -247,12 +246,12 @@ int batch_main(int argc, char *argv[])
         if (show_info)
         {
             input.print_info();
-            if (!gwstate.information_only)
+            if (!options.information_only)
                 continue;
         }
         std::string run_name = std::to_string(cur + 1) + " of " + std::to_string(total) + ": " + input.display_text();
 
-        Logging logging(gwstate.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
+        Logging logging(options.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
         if (!log_file.empty())
             logging.file_log(log_file);
         if (batch_name == "stdin")
@@ -294,8 +293,6 @@ int batch_main(int argc, char *argv[])
             }
         }
 
-        options.maxmulbyconst = 1;
-
         uint32_t fingerprint = input.fingerprint();
         std::string filename_prefix = "prst_" + std::to_string(fingerprint);
         File file_progress(filename_prefix + filename_suffix + ".param", fingerprint);
@@ -312,30 +309,28 @@ int batch_main(int argc, char *argv[])
         File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
         File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
-        GWState gwstate_cur;
-        gwstate_cur.copy(gwstate);
-        gwstate_cur.information_only = gwstate.information_only;
-        if (gwstate_cur.next_fft_count < logging.progress().param_int("next_fft"))
-            gwstate_cur.next_fft_count = logging.progress().param_int("next_fft");
-        gwstate_cur.maxmulbyconst = options.maxmulbyconst;
-        input.setup(gwstate_cur);
-        logging.info("Using %s.\n", gwstate_cur.fft_description.data());
+        GWState gwstate;
+        options.configure(gwstate);
+        if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
+            gwstate.next_fft_count = logging.progress().param_int("next_fft");
+        input.setup(gwstate);
+        logging.info("Using %s.\n", gwstate.fft_description.data());
 
         success = false;
         bool failed = false;
         try
         {
-            run->run(gwstate_cur, file_checkpoint, file_recoverypoint, logging);
+            run->run(gwstate, file_checkpoint, file_recoverypoint, logging);
             success = run->success();
             file_progress.clear();
         }
         catch (const TaskAbortException&)
         {
-            if (!gwstate.information_only)
+            if (!options.information_only)
                 failed = true;
         }
 
-        gwstate_cur.done();
+        gwstate.done();
 
         if (success)
         {
