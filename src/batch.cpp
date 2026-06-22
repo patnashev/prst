@@ -269,6 +269,7 @@ int batch_main(int argc, char *argv[])
             {
                 logging.result(true, "%s is prime!\n", input.display_text().data());
                 logging.result_save(input.input_text() + " is prime!\n");
+                output_prime(input.input_text());
                 continue;
             }
             else
@@ -334,6 +335,7 @@ int batch_main(int argc, char *argv[])
 
         if (success)
         {
+            output_prime(input.input_text());
             primes++;
             logging_batch.report_param("primes", primes);
             composites = 0;

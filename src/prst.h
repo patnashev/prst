@@ -7,6 +7,9 @@
 #define PRST_EXIT_FAILURE 1
 #define PRST_EXIT_PRIMEFOUND 2
 
+// Appends a found prime/PRP expression as one line to prime.txt (always-on, like result.txt).
+void output_prime(const std::string& text);
+
 class Options
 {
 public:

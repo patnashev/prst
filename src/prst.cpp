@@ -40,6 +40,15 @@ void sigterm_handler(int signo)
     signal(signo, sigterm_handler);
 }
 
+void output_prime(const std::string& text)
+{
+    FILE *fp = fopen("prime.txt", "a");
+    if (!fp)
+        return;
+    fprintf(fp, "%s\n", text.data());
+    fclose(fp);
+}
+
 int main(int argc, char *argv[])
 {
     signal(SIGTERM, sigterm_handler);
@@ -297,6 +306,7 @@ int main(int argc, char *argv[])
         {
             logging.result(true, "%s is prime!\n", input.display_text().data());
             logging.result_save(input.input_text() + " is prime!\n");
+            output_prime(input.input_text());
             return PRST_EXIT_PRIMEFOUND;
         }
         else
@@ -436,6 +446,9 @@ int main(int argc, char *argv[])
     }
 
     gwstate.done();
+
+    if (success)
+        output_prime(input.input_text());
 
     return success ? PRST_EXIT_PRIMEFOUND : failed ? PRST_EXIT_FAILURE : PRST_EXIT_NORMAL;
 }
