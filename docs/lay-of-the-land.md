@@ -1,6 +1,10 @@
 # PRST — Lay of the Land
 
-A high-level orientation to the codebase for contributors new to PRST. For deeper dives see the per-subsystem docs in this folder.
+A high-level orientation to the PRST application for contributors new to the codebase. For deeper dives
+into the test-orchestration subsystems see the per-subsystem docs in this folder. PRST is built on a
+shared library, the **arithmetic framework** (`patnashev/arithmetic`, consumed here as the `framework/`
+submodule); that library has its own orientation and deep-dives in its repo's `docs/` folder — see
+[The framework](#the-framework-shared-library) below.
 
 ## What PRST is
 
@@ -27,7 +31,7 @@ When defined, each adds a runtime subcommand to `main()`'s option parser (`-boin
 prst/                                ← repository root (fork of patnashev/prst)
 ├── README.md
 ├── sample.ini                       ← example config
-├── docs/                            ← this folder
+├── docs/                            ← this folder (PRST application docs)
 ├── src/                             ← PRST-specific code (~10k LoC)
 │   ├── prst.cpp / prst.h        ← entry point, option parsing, Run::create dispatcher
 │   ├── fermat.cpp / fermat.h    ← Fermat / Proth (also base for Pocklington)
@@ -46,31 +50,25 @@ prst/                                ← repository root (fork of patnashev/prst
 │   ├── version.h                ← version + build feature flags
 │   ├── win64/  linux64/  mac64/ ← per-platform build files
 │   └── test.data                ← canned inputs for self-tests
-└── framework/                   ← submodule → patnashev/arithmetic
+└── framework/                   ← the shared library (submodule → patnashev/arithmetic, documented there)
     ├── arithmetic/              ← Giant, GWArithmetic, lucas, edwards, montgomery, poly …
-    ├── gwnum/                   ← prebuilt GWnum library (Woltman's FFT-based bignum)
-    ├── gmp/                     ← prebuilt GMP for Windows
-    ├── bow/                     ← Big Object Writer (state serialization)
-    ├── inputnum.cpp / .h        ← number parser + form classification
-    ├── logging.cpp / .h         ← Logging / SubLogging / Progress
-    ├── task.cpp / .h            ← Task / InputTask base classes
-    ├── file.cpp / .h            ← File abstraction with checkpoints
-    ├── config.cpp / .h          ← option-parser DSL used in prst.cpp
-    ├── container.cpp / .h       ← FileContainer (proof packs)
-    └── md5.c / md5.h            ← hashing
+    ├── gwnum/ gmp/ bow/         ← prebuilt GWnum / GMP / BOINC state-serialization glue
+    ├── inputnum.* logging.*     ← number parser; Logging / SubLogging / Progress
+    ├── task.* file.*            ← Task / InputTask base classes; File checkpoint abstraction
+    └── config.* container.* md5.*  ← option-parser DSL; FileContainer (proof packs); hashing
 ```
 
-Mental model: **`src/` is "what test do we run and how do we orchestrate it?"; `framework/` is "the shared bignum + arithmetic + checkpointing primitives every test reuses."** The framework lives in a separate repo (`patnashev/arithmetic`) and is consumed by both PRST and other Atnashev-family tools.
+Mental model: **`src/` is "what test do we run and how do we orchestrate it?"; `framework/` is "the shared bignum + arithmetic + checkpointing primitives every test reuses."** The framework lives in a separate repo (`patnashev/arithmetic`) and is consumed by both PRST and other Atnashev-family tools — so its docs live with it (see below).
 
 ## End-to-end execution flow
 
 A typical invocation `prst "30006!4-1" -d` flows:
 
 1. **`main()` in `src/prst.cpp:43`** — install signal handlers, set up `GWState`, declare `Options`.
-2. **Option parsing** — uses the `Config` DSL (`framework/config.h`) to parse argv into `Options`, `gwstate`, `proof_op`, log level, etc. (`prst.cpp:82` onward.)
-3. **Input parsing** — `InputNum::parse` (`framework/inputnum.cpp`) classifies the candidate as one of `KBNC` / `FACTORIAL` / `PRIMORIAL` / `GENERIC` and stores k, b, n, c, factors.
+2. **Option parsing** — uses the framework `Config` DSL to parse argv into `Options`, `gwstate`, `proof_op`, log level, etc. (`prst.cpp:82` onward.)
+3. **Input parsing** — `InputNum::parse` (framework) classifies the candidate as one of `KBNC` / `FACTORIAL` / `PRIMORIAL` / `GENERIC` and stores k, b, n, c, factors.
 4. **Trial-division shortcut** — small inputs (`bitlen <= 40`) or `-trial` are handled inline at `prst.cpp:292`.
-5. **Progress file wiring** — a `File` for `prst_<fingerprint>*.param` is opened so progress survives restarts (`logging.file_progress(...)` at `prst.cpp:334`).
+5. **Progress file wiring** — a framework `File` for `prst_<fingerprint>*.param` is opened so progress survives restarts (`logging.file_progress(...)` at `prst.cpp:334`).
 6. **`Run::create()` (`prst.cpp:444`)** — the dispatcher, in code order:
    - `-order` → `Order`
    - `-proof cert` → reuse the `Proof` instance directly
@@ -101,18 +99,15 @@ Run                         (abstract base — name, fingerprint, success/prime 
 
 Two patterns repeat:
 - **Small-factor variants** (`Morrison`, `Pocklington`) work directly on the parent `Logging`. They are picked when `n > 10` and `factors.size() < 10` (`prst.cpp:480, 490`).
-- **`*Generic` variants** (`MorrisonGeneric`, `PocklingtonGeneric`) build a `FactorTree`, walk it, and run sub-tasks under their own `SubLogging _logging`. This is where sub-task time accounting happens, and it is a subtle area (the inner `SubLogging` progress must be propagated to the parent).
+- **`*Generic` variants** (`MorrisonGeneric`, `PocklingtonGeneric`) build a `FactorTree`, walk it, and run sub-tasks under their own `SubLogging _logging`. This is where sub-task time accounting happens, and it is a subtle area (the inner `SubLogging` progress must be propagated to the parent — see the framework's `logging-and-progress.md`).
 
 `Run::create` (a static factory in `prst.cpp:444`) is the single source of truth for which class handles which form.
 
 ## The Task layer
 
-Tests don't do the heavy math themselves — they construct one or more `Task` subclasses from the framework + `src/exp.h` / `src/lucasmul.h`, configure them, and call `task->run()`. The Task base lives in `framework/task.h:61`:
+Tests don't do the heavy math themselves — they construct one or more `Task` subclasses from the framework + `src/exp.h` / `src/lucasmul.h`, configure them, and call `task->run()`. The `Task` / `InputTask` base classes live in the framework (`task.{h,cpp}`); their restart/checkpoint lifecycle is documented in the framework's `task-lifecycle.md`. This doc covers the PRST-side concrete tasks and how the tests drive them.
 
-- `Task` — abstract; manages `_state`, checkpointing cadence (`MULS_PER_STATE_UPDATE`, `DISK_WRITE_TIME`, `PROGRESS_TIME`), the global `_abort_flag` (signal handlers call `Task::abort()` from `prst.cpp:38`), and the `commit_setup`/`commit_execute` lifecycle.
-- `InputTask : Task` — adds `_input`, `_timer`, error-check toggles. This is the more common base.
-
-Concrete tasks of interest:
+Concrete tasks of interest (all defined in `src/`):
 - `CarefulExp`, `MultipointExp`, `BaseExp` — exponentiation variants with strong-error-check (Gerbicz/Gerbicz-Li) options. Defined in `src/exp.h`.
 - `LucasVMul`, `LucasVMulFast`, `LucasUVMul` — Lucas-sequence multipliers. Defined in `src/lucasmul.h`.
 - `Product` — accumulates a product of giants. Used in MorrisonGeneric/PocklingtonGeneric.
@@ -123,39 +118,28 @@ A test class typically:
 3. Loops: call `task->run()`, inspect `task->result()`, advance the algorithm.
 4. Writes the result line via `logging.result(...)` and `logging.result_save(...)`.
 
-## Cross-cutting infrastructure
+## The framework (shared library)
 
-### `Logging` / `SubLogging` / `Progress` — the hot zone
+PRST builds on the **arithmetic framework** (`patnashev/arithmetic`, the `framework/` submodule). These
+primitives are documented in that repo's `docs/` folder — only their PRST-facing role is summarized here:
 
-(Detailed write-up: see `logging-and-progress.md` in this folder.)
+- **`Logging` / `SubLogging` / `Progress`** — results, factor/log files, progress checkpoints, and staged
+  progress/time accounting. Tests emit results through `logging.result(...)`; `*Generic` tests run inner
+  work under a `SubLogging`. (Framework: `logging-and-progress.md`.)
+- **`Task` / `InputTask`** — the restart/checkpoint/abort lifecycle every concrete PRST task inherits.
+  (Framework: `task-lifecycle.md`.)
+- **`InputNum`** — the parsed candidate (k/b/n/c, form type, factors, fingerprint). Most of
+  `Run::create`'s branching keys off this. (Framework: `inputnum-parsing.md`.)
+- **`File`** — checkpoint storage (`*.param`/`*.ckpt`/`*.rcpt`), fingerprint header, `File::FILE_APPID = 4`
+  for PRST; `LLR2File` (`src/support.cpp`) is a PRST-side variant. (Framework: `state-serialization.md`.)
+- **`GWState` / `GWArithmetic`** — the GWnum math runtime (FFT config, instruction set, modulus).
+  (Framework: `arithmetic-foundation.md`.)
+- **`Config`** — the option-parser DSL that turns argv into `Options`. (Framework: `config-dsl.md`.)
+- **`FileContainer`** — the `.pack` bundle backing `-proof … pack`. (Framework: `container-format.md`.)
 
-- `Logging` (`framework/logging.h:50`) owns one `Progress`, the result file, the factor file, the log file, and the progress checkpoint file. All `info/warning/error/result` flow through `report()`.
-- `SubLogging` (`framework/logging.h:108`) wraps a parent. Used when a test runs an inner sub-task that should see its own progress, but whose results, params, factors, and progress saves still bubble up to the parent. **Its constructor calls `progress().set_parent(&parent.progress())`** — an easy detail to overlook.
-- `Progress` tracks staged costs (`add_stage`), current stage progress, and time. It maintains:
-  - `_time_total` — durable; only `update()` and `time_init()` change it.
-  - `_time_stage` — transient; reset to 0 by every `update()` call on this Progress; receives `+= elapsed` walks from descendants.
-  - `time_total() = _time_total + _time_stage`.
-  - `update()` walks up `_parent` and pokes `_time_stage` / `_cur_progress` on each ancestor.
+### `Options` — PRST's user-facing knobs
 
-Non-obvious invariants worth pinning:
-- `_time_stage` **is meant to be transient** between successive `update()` calls. Anyone relying on it persisting after a sibling `update()` is wrong.
-- Time only reaches `_time_total` of an outer Progress if `update()` is called on that outer Progress (capturing the wall-clock since its previous `update`). Sub-progress updates do NOT increment ancestors' `_time_total`.
-
-### `InputNum` — the parsed candidate
-
-`framework/inputnum.h:10`. Stores k/b/n/c plus factor lists and pretty-printed text. Exposes `type()` (`KBNC`/`FACTORIAL`/`PRIMORIAL`/`GENERIC`), `value()`, `bitlen()`, `fingerprint()` (32-bit hash used for filename uniqueness), `factors()`, `cofactor()`, `is_half_factored()`. Most of the dispatcher's branching keys off this.
-
-### `File` — checkpoint storage
-
-`framework/file.h`. Filename + 32-bit fingerprint header + appid (`File::FILE_APPID = 4` for PRST). Has children for sub-state. The progress file (`*.param`) and checkpoint files (`*.ckpt`, `*.rcpt`) all use this. `LLR2File` is a variant with a different on-disk format used for some compatibility cases (`prst.cpp:336`).
-
-### `GWState` — the math runtime
-
-Owned by `main()`. Configures GWnum: thread count, spin threads, instruction set (SSE2/AVX/FMA3/AVX512F), FFT size hints, safety margin, fingerprint. `input.setup(gwstate)` picks the actual FFT and reports it via `gwstate.fft_description`.
-
-### `Options` — user-facing knobs
-
-`src/prst.h:10`. Bag of `std::optional`s populated by the `Config` DSL. Test classes consult fields like `Check`, `CheckStrong`, `StrongCount`, `FermatBase`, `AllFactors`, `ProofPointFilename`. `Run::create` may also set `options.maxmulbyconst` as a side-effect.
+`src/prst.h:10` (PRST-owned). Bag of `std::optional`s populated by the framework `Config` DSL. Test classes consult fields like `Check`, `CheckStrong`, `StrongCount`, `FermatBase`, `AllFactors`, `ProofPointFilename`. `Run::create` may also set `options.maxmulbyconst` as a side-effect.
 
 ## Build
 
@@ -167,56 +151,52 @@ GWnum + GMP are prebuilt static libs shipped in the framework submodule (`framew
 
 ## Working with this codebase — practical notes
 
-1. **Read the framework before touching it.** The framework is a shared library used by other tools; its surface area is tighter than `src/`. Adding a method to `framework/logging.h` is a much higher-cost change than modifying a caller in `src/morrison.cpp`.
+1. **Read the framework before touching it.** The framework is a shared library used by other tools; its surface area is tighter than `src/`. Adding a method to the framework's `logging.h` is a much higher-cost change than modifying a caller in `src/morrison.cpp` — and lives in a separate repo/PR (`patnashev/arithmetic`).
 2. **`Run::create` is the dispatcher.** Any new test mode plugs in there. Any change to which class handles which input form lives there.
 3. **Result lines are user-visible contract.** The `logging.result(...)` strings (`is prime!`, `is not prime`, `time: %.1f s.`) are what mersenneforum users / BOINC parsers consume — don't change wording lightly.
 4. **Checkpoint format is on-disk contract.** `TaskState::read/write` and the `File` fingerprint scheme define resumability. Bumping any of them needs a version bump and ideally backward-compat reads.
 5. **Single-repo fixes preferred.** Coordinated `prst` + `framework` PRs are reviewable but unloved by upstream. Default to "can I express this with the existing framework API?" before reaching for a new one.
 6. **Bug reports come from mersenneforum.org.** Search the forum threads for the exact result-line snippet a user is complaining about — that's typically the fastest path to the failing code path.
 
-## Companion deep-dives in this folder
+## Companion deep-dives in this folder (PRST application)
 
-- **`logging-and-progress.md`** — `Logging` / `SubLogging` / `Progress`, the parent walk in `update()`, persistence, common patterns, pitfalls.
-- **`task-lifecycle.md`** — `TaskState` / `Task` / `InputTask`, the restart loop in `run()`, the cadence in `on_state()`, error-correction handshake, concrete subclass tour, pitfalls.
-- **`proof-system.md`** — the `-proof save / build / cert` pipeline; `Proof` as both `Run` and Fermat-wrapper; `ProofSave` / `ProofBuild` tasks; the binary product-tree schedule; roots-of-unity and security-seed defenses; the `.pack` container.
 - **`run-hierarchy.md`** — Fermat / Pocklington(Generic) / Morrison(Generic) / Order at the call-graph level; the `Run::create` dispatcher; the small-factor vs. `*Generic` boundary; `FactorTree` construction and walk; the result-line contract.
-- **`inputnum-parsing.md`** — `InputNum::parse` classification (`KBNC`/`FACTORIAL`/`PRIMORIAL`/`GENERIC`); the `(<num>)/F` cofactor-divisor form; `Phi`/`Quad`/`Hex` and auto-detected algebraic factoring; the negative-`Giant` factorial/primorial encoding; `mod`/fingerprinting; `is_half_factored`.
+- **`proof-system.md`** — the `-proof save / build / cert` pipeline; `Proof` as both `Run` and Fermat-wrapper; `ProofSave` / `ProofBuild` tasks; the binary product-tree schedule; roots-of-unity and security-seed defenses; the `.pack` container.
 - **`abc-batch.md`** — `-batch` as an alternate entry point; `CandidateSource` + `parse_batch_file`; the raw / ABC / ABCD / ABC2 formats and `ABCTemplate`; the `batch_main` driver loop; two-level progress/resume (`cur`/`primes`/`composites`); the `-stop on {error,prime,composites,kprime}` conditions.
 - **`boinc-and-net.md`** — the `BOINC` / `NETPRST` build flavors; `boinc_main` / `net_main` as `exit()`-into-sibling entry points; `BoincLogging` (control hooks: `state_save_flag`/`heartbeat`/trickles) vs. `NetLogging` (data hooks); `NetFile`/`LLR2NetFile` checkpoint shipping over HTTP; the reduced inline dispatcher; **`net.cpp` is stale vs. the run() refactor**.
-- **`state-serialization.md`** — the `Writer`/`Reader`/`File` on-disk format (magic + appid + `TYPE` + version + fingerprint header); the `TYPE` registry `{1,2,3,4,6,8,9,10,11}` and their `TaskState` owners; `Giant`/`SerializedGWNum` encoding; atomic write + `.md5` sidecar; `unique_fingerprint`; the `LLR2File` compatibility munging (byte 4 = appid).
-- **`arithmetic-foundation.md`** — the bignum substrate: the `Giant` heap model (`giant_struct`, ABI-compatible with gwnum's C `giant`) and its `Giants`/`GMP`/`GW` backends; `GWState::setup` (the three FFT-config paths, fingerprint, `known_factors` reduction); `GWArithmetic`/`GWNum`; `SerializedGWNum` (the checkpoint bridge); the `ReliableGWArithmetic` round-off escalation (`restart_flag`/`failure_flag`/`suspect_ops`).
-- **`config-dsl.md`** — the `Config` option-parser DSL: the runtime `ConfigObject` tree vs. the CRTP `*Setup` builder; the `delim` matching convention (glued / next-token / literal); the builder verbs (`check`/`value_*`/`group`/`exclusive`/`list`/`on_check`/`default_code`); the `parse_args` walk + group fixpoint + exclusive first-match; `.ini` parsing.
-- **`test-harness.md`** — `PRST -test`: the `Test`/`DeterministicTest` classes and the `test.data` vector arrays (`res64`/`cert64` oracle); `Test::run`'s SAVE→BUILD→CERT cross-check (incl. the cross-FFT consistency check); the subsets; `RootsTest` (proof-forgery defenses) and `ABCParserTest`; the separate standalone `arithmetic/test.cpp`.
+- **`test-harness.md`** — `PRST -test`: the `Test`/`DeterministicTest` classes and the `test.data` vector arrays (`res64`/`cert64` oracle); `Test::run`'s SAVE→BUILD→CERT cross-check (incl. the cross-FFT consistency check); the subsets; `RootsTest` (proof-forgery defenses) and `ABCParserTest`.
 - **`exponentiation-algorithms.md`** — the exp/Lucas `InputTask`s that do the modular work: `BaseExp`/`MultipointExp` (point schedule, sliding window, smooth-vs-non-smooth) and `StrongCheckMultipointExp`/`LucasUVMul` (the Gerbicz / Gerbicz-Li block check — `L≈√iters`, the `D` check-accumulator, recovery-point rollback); how `Fermat::run` picks the task; the `State` TYPEs (1/2/8, 9/10/11).
-- **`curves-and-polynomials.md`** — the specialized arithmetic *beside* the bignum layer: the full (`GroupArithmetic`, NAF) vs. differential (`DifferentialGroupArithmetic`, DAC ladder) group split; the five concrete arithmetics; `get_NAF_W`/`precomputed_DAC_S_d` chain construction. Key liveness fact: only `LucasV`/`LucasUV` (Morrison) is a **live** PRST consumer — the Edwards/Montgomery ECM curves are dormant (commented-out caller) and `PolyMult` has no live caller (the proof tree multiplies giants, not polynomials). An interface+usage map (the ~42k-line `group.cpp` formulas are fenced to the math doc).
 - **`math-and-theorems.md`** — the *why*: Fermat PRP vs. the deterministic Proth (iff) and Pocklington/BLS (`N−1`, `F>√N`) and Morrison/BLS-Theorem-14 (`N+1`, Lucas) criteria; the half-factored threshold; Gerbicz / Gerbicz-Li error checking; IBDWT multiplication; the theorem→code map. A reading guide tying each test's correctness to its code and to the authoritative references (BLS 1975, eprint 2023/195, the `mult_*.pdf`s) — proofs cited, not reproduced.
-- **`container-format.md`** — the `.pack` bundle format (live via `-proof … pack`): the newline-delimited-JSON-record on-disk layout (magic header; `[size, stream_id, codec]` chunks; `stream_id 0` index chunks of `{file,stream,size,offset,md5}`; the append/override model); `Packer`/`FileContainer`/`FilePacked`; codecs, MD5, and the `container_error` recovery codes. Grounded in the `FileContainer::open` parser; the writer byte-framing is fenced.
+
+### Framework deep-dives (in the `patnashev/arithmetic` repo, `docs/`)
+
+The shared-library subsystems PRST consumes are documented alongside their code: `task-lifecycle.md`,
+`logging-and-progress.md`, `inputnum-parsing.md`, `state-serialization.md`, `arithmetic-foundation.md`,
+`curves-and-polynomials.md`, `config-dsl.md`, `container-format.md`. Start from that repo's
+`lay-of-the-land.md`.
 
 ## Coverage status
 
-**Every *in-scope* subsystem has a deep-dive** (the fifteen in "Companion deep-dives" above); the only things without one are explicitly scoped out (the third-party prebuilts, `bow.cpp`'s BOINC-only build glue, and the fenced formula/byte details — all listed below). A durable caveat worth keeping in mind: **a "complete" claim has to survive a grep one level deeper, and lower-traffic, lower-level code is *more* worth documenting, not less.**
+**Every in-scope PRST subsystem has a deep-dive** (the seven above); the framework subsystems are covered
+by the companion series in the `patnashev/arithmetic` repo. A durable caveat worth keeping in mind: **a
+"complete" claim has to survive a grep one level deeper, and lower-traffic, lower-level code is *more*
+worth documenting, not less.**
 
-What's *intentionally* left without its own doc (not gaps — scoped-out by design):
-
-> **In scope vs. external.** `framework/arithmetic/` is patnashev's own source (the `patnashev/arithmetic` submodule) — documented in `arithmetic-foundation.md` + `curves-and-polynomials.md`. By contrast `framework/gwnum/` (Woltman's prebuilt FFT bignum) and `framework/gmp/` are **prebuilt third-party libraries**: PRST depends on their *interface* (`gwnum.h`, GMP) but owns no source, so they stay black boxes by nature — understood at the API level (mostly via `arithmetic.cpp`'s wrappers). `framework/bow/bow.cpp`'s implementation is BOINC-only build glue, relevant only under the `BOINC` build, so it stays out of scope (its "Big Object Writer" label in the repo-layout section is itself unverified — see `boinc-and-net.md` §8).
+What's *intentionally* left without its own doc on the PRST side:
 
 - **`main()`'s top half** — option parsing, the `bitlen ≤ 40` trial-division shortcut, and progress-file wiring before `Run::create` — is walked step-by-step in "End-to-end execution flow" above; that counts as covered.
 - **The full mathematical proofs** (BLS Theorem 14, the Gerbicz-Li soundness bound, the IBDWT error bound) live in the cited references; `math-and-theorems.md` is the reading guide to them, not a re-derivation.
-- **`group.cpp`'s ~42k lines of curve/poly formulas** and `container.cpp`'s writer byte-framing/codec internals are fenced in their docs (`curves-and-polynomials.md`, `container-format.md`) — interface + on-disk layout documented, formula/byte details pointed to.
 
-A caution for maintainers: the docs reflect the code at the time of writing and several embed verified line numbers and "this is the only live caller" claims — re-grep before trusting any such claim.
+A caution for maintainers: the docs reflect the code at the time of writing and several embed verified line numbers and "this is the only live caller" claims — re-grep before trusting any such claim. In particular, citations into `framework/...` files point at code that lives in the `patnashev/arithmetic` repo.
 
 ## Cross-cutting open questions (parked)
 
-These came up while writing the existing docs and didn't fit into one subsystem:
-
-- **Thread-safety boundary.** PRST's threads live inside GWnum's FFT layer; everything above is single-`Task` on the main thread. If multi-`Task` parallelism is ever added (e.g. parallel inner factors in `MorrisonGeneric`), the entire `Logging`/`Progress` subsystem needs locking. See `logging-and-progress.md` §12 and `task-lifecycle.md` Pitfall E.
-- **`ReliableGWArithmetic` semantics.** ~~Treated as a black box in `task-lifecycle.md` §8.~~ **Resolved:** the round-off escalation (`restart_flag`/`failure_flag`/`suspect_ops`/`op`) is documented in `arithmetic-foundation.md` §5.
-- **`_smooth` exponentiation path.** ~~`BaseExp::_smooth` toggles a different math path.~~ **Resolved:** the smooth (`b^n` by repeated squaring / windowed powering) vs. non-smooth (sliding-window over the full exponent) split is documented in `exponentiation-algorithms.md` §1, §2.
+- **Thread-safety boundary.** PRST's threads live inside GWnum's FFT layer; everything above is single-`Task` on the main thread. If multi-`Task` parallelism is ever added (e.g. parallel inner factors in `MorrisonGeneric`), the entire framework `Logging`/`Progress` subsystem needs locking. See the framework's `logging-and-progress.md` and `task-lifecycle.md`.
+- **`_smooth` exponentiation path.** The smooth (`b^n` by repeated squaring / windowed powering) vs. non-smooth (sliding-window over the full exponent) split is documented in `exponentiation-algorithms.md` §1, §2.
 
 ## How to write the next deep-dive
 
-The template is `docs/logging-and-progress.md` (and now `docs/task-lifecycle.md`). Sections, in this order:
+The template is the framework's `logging-and-progress.md` / `task-lifecycle.md`. Sections, in this order:
 
 1. One-paragraph intro + source file list + cross-references.
 2. Class hierarchy / data-model walkthrough.
@@ -228,4 +208,6 @@ The template is `docs/logging-and-progress.md` (and now `docs/task-lifecycle.md`
 8. Quick-reference table.
 9. Open questions / explicit non-coverage, with pointers to the relevant other doc(s).
 
-When a new deep-dive lands, add its bullet to "Companion deep-dives in this folder" above, and remove anything it now covers from a sibling doc's "open questions."
+When a new deep-dive lands, add its bullet to "Companion deep-dives in this folder" above (or the
+framework repo's index if it documents a framework subsystem), and remove anything it now covers from a
+sibling doc's "open questions."
