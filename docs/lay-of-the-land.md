@@ -120,6 +120,11 @@ A test class typically:
 4. Loops: call `task->run()`, inspect `task->result()`, advance the algorithm.
 5. Writes the result line via `logging.result(...)` and `logging.result_save(...)`.
 
+On every confirmed prime or probable prime, PRST also appends the candidate's expression (one
+per line) to `prime.txt` via `output_prime()` (`src/prst.cpp`). This is an always-on, clean
+primes-only list (composites are excluded), alongside the existing `result.txt` (all result
+lines) and `factors.txt` (found factors).
+
 ## The framework (shared library)
 
 PRST builds on the **arithmetic framework** (`patnashev/arithmetic`, the `framework/` submodule). These
