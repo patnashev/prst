@@ -14,7 +14,7 @@ Order::Order(InputNum& input, Options& options, Logging& logging) : Run("Order",
 {
     _factors = input.factors();
     Giant ga = options.OrderA->value();
-    create_tasks(ga, options, logging, false);
+    create_tasks(ga, logging, false);
 
     if (_task && ga <= GWMULBYCONST_MAX)
         options.maxmulbyconst = ga.data()[0];
@@ -22,10 +22,37 @@ Order::Order(InputNum& input, Options& options, Logging& logging) : Run("Order",
     _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(options.OrderA->fingerprint()));
 }
 
-void Order::create_tasks(Giant& a, Options& options, Logging& logging, bool restart)
+MultipointExp* Order::create_smooth_task(arithmetic::Giant& base, int power)
 {
-    bool CheckStrong = options.CheckStrong ? options.CheckStrong.value() : true;
-    int checks = options.StrongCount ? options.StrongCount.value() : 16;
+    bool CheckStrong = _options.CheckStrong ? _options.CheckStrong.value() : true;
+    int checks = _options.StrongCount ? _options.StrongCount.value() : 16;
+
+    MultipointExp* task;
+    if (CheckStrong)
+    {
+        task = new GerbiczCheckExp(base, power, checks, std::bind(&Order::on_point, this, std::placeholders::_1, std::placeholders::_2));
+        for (auto& p : task->points())
+            p.value = true;
+    }
+    else
+    {
+        int len = power/checks;
+        if (len == 0)
+            len = 1;
+        std::vector<MultipointExp::Point> points;
+        for (int i = 0; i <= checks && len*i <= power; i++)
+            points.emplace_back(len*i);
+        if (points.back().pos != power)
+            points.emplace_back(power);
+        task = new MultipointExp(base, true, points, std::bind(&Order::on_point, this, std::placeholders::_1, std::placeholders::_2));
+    }
+    return task;
+}
+
+void Order::create_tasks(Giant& a, Logging& logging, bool restart)
+{
+    bool CheckStrong = _options.CheckStrong ? _options.CheckStrong.value() : true;
+    int checks = _options.StrongCount ? _options.StrongCount.value() : 16;
 
     _tasks_smooth.clear();
     Giant exp;
@@ -37,25 +64,7 @@ void Order::create_tasks(Giant& a, Options& options, Logging& logging, bool rest
             continue;
         if (factor.first == 2 || restart)
         {
-            if (CheckStrong)
-            {
-                _tasks_smooth.emplace_back(new GerbiczCheckExp(factor.first, factor.second - _sub, checks, std::bind(&Order::on_point, this, std::placeholders::_1, std::placeholders::_2)));
-                for (auto& p : _tasks_smooth.back()->points())
-                    p.value = true;
-            }
-            else
-            {
-                int n = factor.second - _sub;
-                int len = n/checks;
-                if (len == 0)
-                    len = 1;
-                std::vector<MultipointExp::Point> points;
-                for (int i = 0; i <= checks && len*i <= n; i++)
-                    points.emplace_back(len*i);
-                if (points.back().pos != n)
-                    points.emplace_back(n);
-                _tasks_smooth.emplace_back(new MultipointExp(factor.first, true, points, std::bind(&Order::on_point, this, std::placeholders::_1, std::placeholders::_2)));
-            }
+            _tasks_smooth.emplace_back(create_smooth_task(factor.first, factor.second - _sub));
         }
         else
         {
@@ -184,7 +193,7 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
                 sub_val = 1;
                 auto it = _factors.begin();
                 for (; it != _factors.end() && it->first != task_smooth->exp(); it++);
-                it->second = task_smooth->points()[_task_break].pos;
+                it->second = task_smooth->points()[_task_break].pos + _sub;
             }
             logging.progress().next_stage();
         }
@@ -194,7 +203,7 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
             for (auto it = _factors.begin(); it != _factors.end(); it++)
                 if (it->second > _sub)
                     it->second -= _sub;
-            create_tasks(ga, _options, logging, true);
+            create_tasks(ga, logging, true);
             continue;
         }
 
@@ -249,7 +258,7 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
         }
 
         if (!_factors.empty())
-            create_tasks(ga, _options, logging, true);
+            create_tasks(ga, logging, true);
     }
 
     Giant order_div;
@@ -287,6 +296,246 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
     logging.set_prefix("");
     logging.result(true, "ord(%s) mod %s = %s.\n", _options.OrderA->display_text().data(), input.display_text().data(), order.data());
     logging.result_save("ord(" + _options.OrderA->display_text() + ") mod " + input.input_text() + " = " + order + ".\n");
+
+    file_checkpoint.clear(true);
+    file_recoverypoint.clear(true);
+}
+
+FermatDivisor::FermatDivisor(InputNum& input, Options& options, Logging& logging) : Order("FermatDivisor", input, options)
+{
+    GWASSERT(input.factors()[0].first == 2);
+    
+    int limit = options.Divides == "F" ? 2 : options.DividesLimit ? options.DividesLimit.value() : 12;
+    for (int i = 2; i <= limit; i++)
+    {
+        _bases.emplace_back(i);
+        if (is_prime(i))
+            create_task(logging, _bases.back());
+    }
+
+    _fingerprint = File::unique_fingerprint(input.fingerprint(), "div");
+}
+
+void FermatDivisor::create_task(Logging& logging, Base& base)
+{
+    base.task.reset();
+    base.exp = 1;
+
+    int n = input.factors()[0].second;
+    if (logging.progress().param_int("base_" + base.str) != 0)
+        n = logging.progress().param_int("base_" + base.str);
+    if (n <= _sub)
+    {
+        base.power = 0;
+        base.exp <<= n;
+        base.sub_val = base.base;
+    }
+    else
+    {
+        base.power = n - _sub;
+        base.exp <<= _sub;
+        base.task.reset(create_smooth_task(input.factors()[0].first, base.power));
+        logging.progress().add_stage(base.task->cost());
+    }
+}
+
+void FermatDivisor::run_task(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Base& base)
+{
+    while (base.task)
+    {
+        File* checkpoint = file_checkpoint.add_child(base.str, File::unique_fingerprint(file_checkpoint.fingerprint(), base.str + "." + std::to_string(base.power)));
+        File* recoverypoint = file_recoverypoint.add_child(base.str, File::unique_fingerprint(file_recoverypoint.fingerprint(), base.str + "." + std::to_string(base.power)));
+
+        logging.info("raising %s to power 2^%d.\n", base.str.data(), base.power);
+        if (GerbiczCheckExp* taskCheck = dynamic_cast<GerbiczCheckExp*>(base.task.get()))
+            taskCheck->init(&input, &gwstate, checkpoint, recoverypoint, &logging);
+        else
+            base.task->init_smooth(&input, &gwstate, checkpoint, &logging);
+        if (base.task->state() == nullptr)
+            base.task->init_state(new BaseExp::StateValue(0, base.base));
+
+        try
+        {
+            _task_break = -1;
+            base.task->run();
+            base.task->write_state();
+            base.sub_val = std::move(*base.task->result());
+
+            base.task.reset();
+            checkpoint->free_buffer();
+            recoverypoint->free_buffer();
+        }
+        catch (const TaskAbortException&)
+        {
+            if (_task_break == -1)
+                throw;
+            logging.report_param("base_" + base.str, base.task->points()[_task_break].pos);
+            logging.progress_save();
+            checkpoint->clear();
+            recoverypoint->clear();
+            
+            create_task(logging, base);
+            logging.progress().costs()[logging.progress().cur_stage()] *= logging.progress().progress_stage();
+            if (base.task)
+                std::swap(logging.progress().costs()[logging.progress().cur_stage() + 1], logging.progress().costs().back());
+        }
+        logging.progress().next_stage();
+    }
+}
+
+void FermatDivisor::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging)
+{
+    int limit = _options.Divides == "F" ? 2 : _options.DividesLimit ? _options.DividesLimit.value() : 12;
+    if (limit > 2)
+        logging.info("Searching for %s numbers with base up to %d and prime factor %s.\n", _options.Divides.data(), limit, input.display_text().data());
+    else
+        logging.info("Searching for %s numbers with prime factor %s.\n", _options.Divides.data(), input.display_text().data());
+    if (gwstate.information_only)
+        throw TaskAbortException();
+    logging.set_prefix("(" + _options.Divides + " div " + input.display_text() + ") ");
+
+    _result.clear();
+    Giant Nm1 = *gwstate.N;
+    Nm1 -= 1;
+    Product Pr(&input, &gwstate, &logging);
+    for (int b = 2; b <= limit; b++)
+    {
+        Base& base = _bases[b - 2];
+
+        auto it = PrimeIterator::get();
+        for (; *it < b && b%(*it) != 0; it++);
+        if (*it < b)
+        {
+            Base& base_a = (_bases[*it - 2].power <= _bases[b/(*it) - 2].power ? _bases[*it - 2] : _bases[b/(*it) - 2]);
+            Base& base_b = (_bases[*it - 2].power <= _bases[b/(*it) - 2].power ? _bases[b/(*it) - 2] : _bases[*it - 2]);
+            base.val = Pr.mul(base_a.val, base_b.val);
+
+            base.sub_val = base_a.sub_val;
+            if (base_a.power + _sub <= base_b.power)
+                base.sub_val = 1;
+            else if (base_a.power < base_b.power)
+            {
+                for (base.power = base_a.power; base.power < base_b.power; base.power++)
+                    base.sub_val = Pr.mul(base.sub_val, base.sub_val);
+            }
+            base.sub_val = Pr.mul(base.sub_val, base_b.sub_val);
+            base.power = base_b.power;
+            if (base.sub_val == 1)
+            {
+                logging.report_param("base_" + base.str, base.power);
+                create_task(logging, base);
+                if (base.task)
+                    std::swap(logging.progress().costs()[logging.progress().cur_stage()], logging.progress().costs().back());
+            }
+        }
+        if (base.sub_val.empty() || base.sub_val == 1)
+        {
+            run_task(gwstate, file_checkpoint, file_recoverypoint, logging, base);
+
+            _task_check.reset(new CarefulExp(base.exp));
+            _task_check->set_error_check(false, true);
+            _task_check->init_giant(&input, &gwstate, &logging, std::move(base.sub_val));
+            _task_check->run();
+            base.sub_val = std::move(_task_check->X0());
+            base.val = std::move(*_task_check->result());
+        }
+
+        if (base.val == 1 && perfect_power(b) == 1)
+        {
+            Giant cur_val = base.sub_val;
+            int ord = base.power;
+            for (; ord < input.factors()[0].second && cur_val != Nm1; ord++)
+                cur_val = Pr.mul(cur_val, cur_val);
+
+            if (cur_val != Nm1)
+            {
+                logging.error("Computation error.\n");
+                logging.set_prefix("");
+                throw TaskAbortException();
+            }
+
+            if (!_result.empty())
+                _result += ", ";
+            if (b == 2)
+                _result += "F(" + std::to_string(ord) + ")";
+            else
+                _result += "GF(" + std::to_string(ord) + "," + std::to_string(b) + ")";
+            if (ord < input.factors()[0].second - 15)
+                logging.warning("GF(%d,%d)\n", ord, b);
+        }
+    }
+
+    if (_options.Divides == "xGF")
+    {
+        for (int a = 3; a <= limit; a++)
+            for (int b = 2; b < a; b++)
+                if (gcd(a, b) == 1 && !(perfect_power(a)%2 == 0 && perfect_power(b)%2 == 0) && (_bases[a - 2].val == _bases[b - 2].val || _bases[a - 2].val + _bases[b - 2].val == *gwstate.N))
+                {
+                    Base& base_a = (_bases[a - 2].power <= _bases[b - 2].power ? _bases[a - 2] : _bases[b - 2]);
+                    Base& base_b = (_bases[a - 2].power <= _bases[b - 2].power ? _bases[b - 2] : _bases[a - 2]);
+
+                    Giant a_val = base_a.sub_val;
+                    if (base_a.power + _sub <= base_b.power)
+                        a_val = 1;
+                    else if (base_a.power < base_b.power)
+                    {
+                        for (int power = base_a.power; power < base_b.power; power++)
+                            a_val = Pr.mul(a_val, a_val);
+                    }
+                    Giant b_val = base_b.sub_val;
+
+                    int ord = base_b.power;
+                    for (; ord < input.factors()[0].second && a_val + b_val != *gwstate.N; ord++)
+                    {
+                        a_val = Pr.mul(a_val, a_val);
+                        b_val = Pr.mul(b_val, b_val);
+                    }
+
+                    if (a_val + b_val != *gwstate.N)
+                    {
+                        Base base(b);
+                        base.base.inv(*gwstate.N);
+                        base.base *= a;
+                        base.base %= (*gwstate.N);
+                        base.str = std::to_string(a) + "/" + std::to_string(b);
+
+                        logging.report_param("base_" + base.str, base_b.power);
+                        create_task(logging, base);
+                        run_task(gwstate, file_checkpoint, file_recoverypoint, logging, base);
+                        ord = base.power;
+                        b_val = std::move(base.sub_val);
+
+                        for (; ord < input.factors()[0].second && b_val != Nm1; ord++)
+                            b_val = Pr.mul(b_val, b_val);
+
+                        if (b_val != Nm1)
+                        {
+                            logging.error("Computation error.\n");
+                            logging.set_prefix("");
+                            throw TaskAbortException();
+                        }
+                    }
+
+                    if (!_result.empty())
+                        _result += ", ";
+                    _result += "xGF(" + std::to_string(ord) + "," + std::to_string(a) + "," + std::to_string(b) + ")";
+                    if (ord < input.factors()[0].second - 15)
+                        logging.warning("xGF(%d,%d,%d)\n", ord, a, b);
+                }
+    }
+
+
+    logging.set_prefix("");
+    if (_result.empty())
+    {
+        logging.result(false, "%s no divisible numbers found.\n", input.display_text().data());
+        logging.result_save(input.input_text() + " no divisible numbers found.\n");
+    }
+    else
+    {
+        logging.result(true, "%s divides %s.\n", input.display_text().data(), _result.data());
+        logging.result_save(input.input_text() + " divides " + _result + ".\n");
+    }
 
     file_checkpoint.clear(true);
     file_recoverypoint.clear(true);

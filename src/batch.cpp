@@ -75,6 +75,23 @@ int batch_main(int argc, char *argv[])
             .end()
             .on_check(options.ForceFermat, true)
         .value_code("-order", ' ', [&](const char* param) { options.OrderA.reset(new InputNum()); return options.OrderA->parse(param, false) && options.OrderA->value() > 1; })
+        .group("-divides")
+            .exclusive()
+                .ex_case()
+                    .check("f", options.Divides, "F")
+                    .end()
+                .ex_case()
+                    .check("gf", options.Divides, "GF")
+                .optional()
+                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .end()
+                .ex_case()
+                    .check("xgf", options.Divides, "xGF")
+                .optional()
+                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .end()
+                .end()
+            .end()
         .group("-factors")
             .check("all", options.AllFactors, true)
             .end()
@@ -136,6 +153,7 @@ int batch_main(int argc, char *argv[])
         printf("\t-trial\n");
         printf("\t-fermat [a <a>]\n");
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
+        printf("\t-divides {f | gf | xgf} [limit 12]\n");
         printf("\t-factors all\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>]]\n");
         printf("\t-stop [on error] [on prime] [on primek] [on composites <count>]\n");
@@ -168,7 +186,9 @@ int batch_main(int argc, char *argv[])
 
     std::string filename_suffix;
     if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
-        filename_suffix = "." + std::to_string(options.OrderA->fingerprint());
+        filename_suffix = ".ord" + std::to_string(options.OrderA->fingerprint());
+    else if (!options.Divides.empty())
+        filename_suffix = ".div";
     else if (options.FermatBase)
         filename_suffix = "." + std::to_string(options.FermatBase.value());
     File batch_progress(batch_name + filename_suffix + ".param", 0);

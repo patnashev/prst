@@ -15,6 +15,8 @@ public:
 
     bool ForceFermat = false;
     std::unique_ptr<InputNum> OrderA;
+    std::string Divides;
+    std::optional<int> DividesLimit;
 
     // Options
 

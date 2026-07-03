@@ -144,6 +144,23 @@ int main(int argc, char *argv[])
             .end()
             .on_check(options.ForceFermat, true)
         .value_code("-order", ' ', [&](const char* param) { options.OrderA.reset(new InputNum()); return options.OrderA->parse(param, false) && options.OrderA->value() > 1; })
+        .group("-divides")
+            .exclusive()
+                .ex_case()
+                    .check("f", options.Divides, "F")
+                    .end()
+                .ex_case()
+                    .check("gf", options.Divides, "GF")
+                .optional()
+                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .end()
+                .ex_case()
+                    .check("xgf", options.Divides, "xGF")
+                .optional()
+                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .end()
+                .end()
+            .end()
         .group("-factors")
             .list("list", ' ', ',', false)
                 .value_code([&](const char* param) {
@@ -256,6 +273,7 @@ int main(int argc, char *argv[])
         printf("\t-test\n");
         printf("\t-batch\n");
         printf("\t-order {<a> | \"<number>\"}\n");
+        printf("\t-divides {f | gf | xgf} [limit 12]\n");
         printf("Options:\n");
         printf("\t-ini <filename>\n");
         printf("\t-log [{debug | info | warning | error}] [file <filename>]\n");
@@ -321,7 +339,9 @@ int main(int argc, char *argv[])
     uint32_t fingerprint = input.fingerprint();
     std::string filename_suffix;
     if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)
-        filename_suffix = "." + std::to_string(options.OrderA->fingerprint());
+        filename_suffix = ".ord" + std::to_string(options.OrderA->fingerprint());
+    else if (!options.Divides.empty())
+        filename_suffix = ".div";
     else if (options.FermatBase)
         filename_suffix = "." + std::to_string(options.FermatBase.value());
     else if (proof_op == Proof::CERT)
@@ -453,6 +473,17 @@ Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* pro
             return nullptr;
         }
         return new Order(input, options, logging);
+    }
+
+    // -divides
+    if (!options.Divides.empty())
+    {
+        if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
+        {
+            logging.error("Fermat divisibility can be tested only for fully factored K*B^N+1 primes.\n");
+            return nullptr;
+        }
+        return new FermatDivisor(input, options, logging);
     }
 
     // -proof cert
