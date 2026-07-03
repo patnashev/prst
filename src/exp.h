@@ -541,20 +541,36 @@ private:
     using LiCheckExp::init_small;
 };
 
-template<class IT>
 class Product : public InputTask
 {
 public:
-    Product(IT first, IT last) : InputTask(), _first(first), _last(last)
+    Product(InputNum* input, arithmetic::GWState* gwstate, Logging* logging)
     {
+        set_error_check(false, true);
+        InputTask::init(input, gwstate, nullptr, nullptr, logging, 0);
     }
 
-    void init(InputNum* input, arithmetic::GWState* gwstate, Logging* logging)
+    arithmetic::Giant mul(std::vector<arithmetic::Giant>::iterator first, std::vector<arithmetic::Giant>::iterator last)
     {
-        InputTask::init(input, gwstate, nullptr, nullptr, logging, (int)(_last - _first));
+        _values.clear();
+        for (auto it = first; it != last; it++)
+            _values.push_back(&(*it));
+        _state.reset();
+        _iterations = (int)_values.size();
+        run();
+        return std::move(result());
     }
 
-    arithmetic::Giant& result() { return static_cast<BaseExp::StateValue*>(state())->value(); }
+    arithmetic::Giant mul(arithmetic::Giant& a, arithmetic::Giant& b)
+    {
+        _values.clear();
+        _values.push_back(&a);
+        _values.push_back(&b);
+        _state.reset();
+        _iterations = (int)_values.size();
+        run();
+        return std::move(result());
+    }
 
 protected:
     void setup() override { }
@@ -566,7 +582,7 @@ protected:
         arithmetic::GWNum X(gw());
         if (state() == nullptr)
         {
-            P = *_first;
+            P = *_values.front();
             i = 1;
         }
         else
@@ -574,18 +590,18 @@ protected:
             i = state()->iteration();
             P = static_cast<BaseExp::StateValue*>(state())->value();
         }
-        for (IT it = _first + i; it != _last; it++, i++, commit_execute<BaseExp::StateValue>(i, P))
+        for (auto it = _values.begin() + i; it != _values.end(); it++, i++, commit_execute<BaseExp::StateValue>(i, P))
         {
-            X = *it;
+            X = *(*it);
             gw().carefully().mul(X, P, P, 0);
         }
 
         if (_gwstate->need_mod())
             _gwstate->mod(result(), result());
-        done();
     }
 
+    arithmetic::Giant& result() { return static_cast<BaseExp::StateValue*>(state())->value(); }
+
 protected:
-    IT _first;
-    IT _last;
+    std::vector<arithmetic::Giant*> _values;
 };

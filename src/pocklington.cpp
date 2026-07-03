@@ -55,6 +55,7 @@ void Pocklington::run(arithmetic::GWState& gwstate, File& file_checkpoint, File&
     std::string sa = std::to_string(_a);
     File* checkpoint = file_checkpoint.add_child(sa, File::unique_fingerprint(file_checkpoint.fingerprint(), sa));
     File* recoverypoint = file_recoverypoint.add_child(sa, File::unique_fingerprint(file_recoverypoint.fingerprint(), sa));
+    Product Pr(&input, &gwstate, &logging);
 
     logging.info("Pocklington test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
     Fermat::run(gwstate, *checkpoint, *recoverypoint, logging, proof);
@@ -105,12 +106,7 @@ void Pocklington::run(arithmetic::GWState& gwstate, File& file_checkpoint, File&
         if (G.size() > 0)
         {
             if (G.size() > 1)
-            {
-                Product taskP(G.begin(), G.end());
-                taskP.init(&input, &gwstate, &logging);
-                taskP.run();
-                tmp = std::move(taskP.result());
-            }
+                tmp = Pr.mul(G.begin(), G.end());
             else
                 tmp = std::move(G[0]);
 
@@ -331,6 +327,7 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
     logging.info("Pocklington test of %s, a = %d.\n", input.display_text().data(), _a);
     if (gwstate.information_only)
         throw TaskAbortException();
+    Product Pr(&input, &gwstate, &logging);
 
     bool CheckStrong = _options.CheckStrong ? _options.CheckStrong.value() : true;
     if (CheckStrong)
@@ -374,10 +371,11 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
         auto test_G = [&]() {
             if (G.size() > 1)
             {
-                Product taskP(G.begin(), G.end());
-                taskP.init(&input, &gwstate, _logging.get());
-                taskP.run();
-                tmp = std::move(taskP.result());
+                bool a = Task::abort_flag();
+                Task::abort_reset();
+                tmp = Pr.mul(G.begin(), G.end());
+                if (a)
+                    Task::abort();
             }
             else
                 tmp = std::move(G[0]);

@@ -172,6 +172,7 @@ void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& fi
 {
     if (!_task)
         return;
+    Product Pr(&input, &gwstate, &logging);
 
     if (logging.progress().param_int("P") != 0)
         _P = logging.progress().param_int("P");
@@ -314,12 +315,7 @@ void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& fi
                 }
 
                 if (Gs.size() > 1)
-                {
-                    Product taskP(Gs.begin(), Gs.end());
-                    taskP.init(&input, &gwstate, &logging);
-                    taskP.run();
-                    G = std::move(taskP.result());
-                }
+                    G = Pr.mul(Gs.begin(), Gs.end());
                 else
                     G = std::move(Gs[0]);
             }
@@ -467,6 +463,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
     logging.info("Morrison test of %s, P = %d, Q = %d.\n", input.display_text().data(), _P, _negQ ? -1 : 1);
     if (gwstate.information_only)
         throw TaskAbortException();
+    Product Pr(&input, &gwstate, &logging);
 
     bool CheckStrong = _options.CheckStrong ? _options.CheckStrong.value() : true;
     CheckStrong = true;
@@ -528,10 +525,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
                 {
                     bool a = Task::abort_flag();
                     Task::abort_reset();
-                    Product taskP(G.begin(), G.end());
-                    taskP.init(&input, &gwstate, _logging.get());
-                    taskP.run();
-                    tmp = std::move(taskP.result());
+                    tmp = Pr.mul(G.begin(), G.end());
                     if (a)
                         Task::abort();
                 }
