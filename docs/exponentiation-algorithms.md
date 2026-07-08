@@ -11,7 +11,7 @@ This doc covers the *task orchestration* — point scheduling, the sliding-windo
 
 Source files: `src/exp.h`, `src/exp.cpp`, `src/lucasmul.h`, `src/lucasmul.cpp`.
 
-Prereqs / companions: `task-lifecycle.md` (these are `InputTask`s; `execute()` runs inside the restart loop, `commit_execute` writes checkpoints), `arithmetic-foundation.md` (every squaring is a `GWArithmetic::square`/`mul`; intermediate state is a `SerializedGWNum`, final is a `Giant`; `ReliableGWArithmetic` is the round-off layer), `run-hierarchy.md` (which test constructs which task — the `Fermat` ctor's `FastExp`/`GerbiczCheckExp`/`StrongCheck…` selection), `proof-system.md` (the `on_point` callback writes proof points; `MultipointExp::Point` is the proof schedule), `state-serialization.md` (the `State` TYPEs 1/2/8 here, 9/10/11 in lucasmul).
+Prereqs / companions: `task-lifecycle.md` (these are `InputTask`s; `execute()` runs inside the restart loop, `commit_execute` writes checkpoints), `arithmetic-foundation.md` (every squaring is a `GWArithmetic::square`/`mul`; intermediate state is a `SerializedGWNum`, final is a `Giant`; `ReliableGWArithmetic` is the round-off layer), `run-hierarchy.md` (which test constructs which task — the `Fermat` ctor's `FastExp`/`GerbiczCheckExp`/`StrongCheck…` selection), `proof-system.md` (the `on_point` callback writes proof points; `MultipointExp::Point` is the proof schedule), `checkpoints.md` (the TYPE registry — 1/2/5/8 here, 9/10/11 in lucasmul — and the `.ckpt`/`.rcpt` file handshake; the wire format is the framework's `state-serialization.md`).
 
 ## 1. Class model
 
