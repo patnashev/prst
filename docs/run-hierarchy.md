@@ -5,12 +5,12 @@ Every primality test PRST can run is a subclass of `Run`. `main()` parses the ca
 The hierarchy was introduced by upstream commits `4764aa9 Refactoring, base class for all tests.` and `fe25a5a Refactoring of run().` — it is the freshest part of `src/` and the least documented. The dispatch logic in `Run::create` is denser than it looks; any new test mode or any change to which class handles which input form plugs in here.
 
 Source files:
-- `src/prst.h:52-77` (the `Run` base class), `prst.h:10-48` (`Options`)
-- `src/prst.cpp:444-497` (the `Run::create` dispatcher)
+- `src/prst.h:75-100` (the `Run` base class), `prst.h:10-71` (`Options`)
+- `src/prst.cpp:463-529` (the `Run::create` dispatcher)
 - `src/fermat.{h,cpp}` (`Fermat`: FERMAT / PROTH / AUTO / POCKLINGTON-base)
 - `src/pocklington.{h,cpp}` (`Pocklington`, `PocklingtonGeneric`, and `FactorTree`)
 - `src/morrison.{h,cpp}` (`Morrison`, `MorrisonGeneric`)
-- `src/order.{h,cpp}` (`Order`)
+- `src/order.{h,cpp}` (`Order` and `FermatDivisor`)
 
 Prereqs: `task-lifecycle.md` (every `run()` here constructs `InputTask`s and calls `task->run()` — the restart/checkpoint loop lives there), `logging-and-progress.md` (the `*Generic` tests run their inner tasks under a `SubLogging`, and `add_stage`/`next_stage`/`update` are the progress contract), `proof-system.md` (the `Proof` wrapper that sits *above* `Fermat` for `-proof save|build`).
 
@@ -24,14 +24,15 @@ Run                         (abstract base — name, fingerprint, success/prime 
 ├── Morrison                (small-factor Morrison; uses LucasVMul)
 ├── MorrisonGeneric         (FactorTree-driven; runs sub-tasks under a SubLogging)
 ├── Order                   (multiplicative order; MultipointExp + CarefulExp)
+│   └── FermatDivisor       (-divides: F/GF/xGF divisibility search; reuses Order's smooth tasks)
 └── Proof                   (orchestrates a wrapped Fermat for -proof save/build/cert)
 ```
 
-`Proof` is covered in `proof-system.md`; it is the one subclass that *contains* a `Run` rather than being a leaf. Everything else here is a leaf.
+`Proof` is covered in `proof-system.md`; it is the one subclass that *contains* a `Run` rather than being a leaf. Everything else here is a leaf except `Order`, which `FermatDivisor` derives from.
 
 Two structural facts that are easy to misread:
 
-- **Only `Pocklington` derives from another test.** `Pocklington : public Fermat` (`pocklington.h:6`) — it reuses Fermat's exponentiation machinery and `Fermat::run` for the initial probable-prime stage. Every other class (`PocklingtonGeneric`, `Morrison`, `MorrisonGeneric`, `Order`) derives directly from `Run` and builds its own tasks from scratch.
+- **Two tests derive from another test.** `Pocklington : public Fermat` (`pocklington.h:6`) reuses Fermat's exponentiation machinery and `Fermat::run` for the initial probable-prime stage; `FermatDivisor : public Order` (`order.h:49`) reuses Order's smooth-task machinery via the protected `Order(const char*, InputNum&, Options&)` constructor and `create_smooth_task`. The rest (`PocklingtonGeneric`, `Morrison`, `MorrisonGeneric`, `Order`) derive directly from `Run` and build their own tasks from scratch.
 - **`Fermat` declares two `run` overloads.** The `Run::run` override (`fermat.h:23`) just forwards to a second overload that takes an extra `Proof*` (`fermat.h:24`). `Pocklington` overrides *that* second overload (`pocklington.h:11`). This is the proof-callback protocol described in `proof-system.md` §intro — don't "simplify" it away.
 
 Constructor signatures (note which take a `Proof*`):
@@ -44,6 +45,7 @@ Constructor signatures (note which take a `Proof*`):
 | `Morrison` | `Morrison(InputNum&, Options&, Logging&)` | no |
 | `MorrisonGeneric` | `MorrisonGeneric(InputNum&, Options&, Logging&)` | no |
 | `Order` | `Order(InputNum&, Options&, Logging&)` | no |
+| `FermatDivisor` | `FermatDivisor(InputNum&, Options&, Logging&)` | no |
 
 Proofs are only supported on the Fermat-family path; the `*Generic` and `Morrison`/`Order` paths take no `Proof*` (and `PocklingtonGeneric::run` aborts if it ever needs to restart while a proof is active — see §4.5/§7).
 
@@ -99,7 +101,7 @@ Field/method reference — every member:
 
 ## 3. Annotated `Run::create` — the dispatcher
 
-`prst.cpp:444-497`, verbatim with inline notes. This is the single source of truth for "which class handles which form." It reads in code order; the first matching branch wins.
+`prst.cpp:463-529`, verbatim with inline notes. This is the single source of truth for "which class handles which form." It reads in code order; the first matching branch wins.
 
 ```cpp
 Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* proof)
@@ -113,6 +115,17 @@ Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* pro
             return nullptr;
         }
         return new Order(input, options, logging);
+    }
+
+    // -divides: same gate as -order (see §4.7)
+    if (!options.Divides.empty())
+    {
+        if (input.type() != InputNum::KBNC || input.c() != 1 || !input.cofactor().empty())
+        {
+            logging.error("Fermat divisibility can be tested only for fully factored K*B^N+1 primes.\n");
+            return nullptr;
+        }
+        return new FermatDivisor(input, options, logging);
     }
 
     // -proof cert: reuse the pre-built Proof instance (see proof-system.md)
@@ -158,13 +171,13 @@ Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* pro
 }
 ```
 
-The branch order matters: `-order` and `-proof cert` short-circuit before any form analysis; `ForceFermat`/`GENERIC`/`|c|≠1` route to plain Fermat before the Proth check; only after `expand_factors()` + `is_half_factored()` does the dispatcher commit to a deterministic Pocklington/Morrison test. **The small-factor predicate is identical on both deterministic branches** (`prst.cpp:480` and `:490`):
+The branch order matters: `-order`, `-divides`, and `-proof cert` short-circuit before any form analysis; `ForceFermat`/`GENERIC`/`|c|≠1` route to plain Fermat before the Proth check; only after `expand_factors()` + `is_half_factored()` does the dispatcher commit to a deterministic Pocklington/Morrison test. **The small-factor predicate is identical on both deterministic branches** (`prst.cpp:512` and `:522`):
 
 ```cpp
 input.type() == InputNum::KBNC && input.n() > 10 && input.factors().size() < 10
 ```
 
-True → the lean `Pocklington` / `Morrison`; false → the `FactorTree`-driven `PocklingtonGeneric` / `MorrisonGeneric`. The final `return nullptr` is effectively unreachable: the `|c| ≠ 1` guard at `:462` already routed everything except `c == ±1` to Fermat, so on the deterministic path either the `c==1` (Pocklington) or `c==-1` (Morrison) branch always fires. It's a defensive backstop — a `nullptr` from `create` is a hard failure in `main()`.
+True → the lean `Pocklington` / `Morrison`; false → the `FactorTree`-driven `PocklingtonGeneric` / `MorrisonGeneric`. The final `return nullptr` is effectively unreachable: the `|c| ≠ 1` guard at `:494` already routed everything except `c == ±1` to Fermat, so on the deterministic path either the `c==1` (Pocklington) or `c==-1` (Morrison) branch always fires. It's a defensive backstop — a `nullptr` from `create` is a hard failure in `main()` (the `-order`/`-divides` gates return it deliberately, after logging an error).
 
 ## 4. The leaf tests, one by one
 
@@ -252,17 +265,27 @@ Each subsection: what the constructor builds, what `run()` does, and the result 
 
 ### 4.6 `Order` — multiplicative order
 
-**Header** (`order.h:10-43`): `Run` subclass invoked by `-order` for fully-factored `K·B^N+1` primes. Computes `ord(a) mod N`. Holds `_factors` (remaining factors of `N-1`), `_order` (computed prime-power orders), a main `_task` (`MultipointExp`), `_tasks_smooth` (per-prime smooth exponentiations), `_task_check` (a `CarefulExp` verifying `a^(N-1) == 1`), per-factor `_tasks` (`FactorTask{Giant b; int ord, n; CarefulExp task_sub, task_factor;}`), and `int _sub = 30` (the small-power cutoff).
+**Header** (`order.h:10-47`): `Run` subclass invoked by `-order` for fully-factored `K·B^N+1` primes. Computes `ord(a) mod N`. Holds `_factors` (remaining factors of `N-1`), `_order` (computed prime-power orders), a main `_task` (`MultipointExp`), `_tasks_smooth` (per-prime smooth exponentiations), `_task_check` (a `CarefulExp` verifying `a^(N-1) == 1`), per-factor `_tasks` (`FactorTask{Giant b; int ord, n; CarefulExp task_sub, task_factor;}`), and `int _sub = 30` (the small-power cutoff). A protected named constructor and the extracted `create_smooth_task` (`order.cpp:25-50`) plus a `result()` accessor exist for the `FermatDivisor` subclass (§4.7).
 
-**Constructor / `create_tasks`** (`order.cpp:13-110`): `create_tasks` splits the factorization into a "smooth" part (prime powers with exponent `> _sub`, or factor 2, get their own `GerbiczCheckExp`/`MultipointExp` with an `on_point` callback) and a combined "non-smooth" part that goes into the single main `_task` (`FastLiCheckExp`/`LiCheckExp`/`FastExp`/`SlidingWindowExp` by check level and base size) (`order.cpp:34-94`). It then builds the per-factor `task_sub`/`task_factor` `CarefulExp`s that peel one prime at a time (`:96-110`). `on_point` (`:112-120`) throws `TaskAbortException` the moment a smooth exponentiation hits `1`, recording the breakpoint index.
+**Constructor / `create_tasks`** (`order.cpp:13-119`): `create_tasks` splits the factorization into a "smooth" part (prime powers with exponent `> _sub`, or factor 2, get their own `GerbiczCheckExp`/`MultipointExp` via `create_smooth_task`, with an `on_point` callback) and a combined "non-smooth" part that goes into the single main `_task` (`FastLiCheckExp`/`LiCheckExp`/`FastExp`/`SlidingWindowExp` by check level and base size) (`order.cpp:52-103`). It then builds the per-factor `task_sub`/`task_factor` `CarefulExp`s that peel one prime at a time (`:105-119`). `on_point` (`:121-129`) throws `TaskAbortException` the moment a smooth exponentiation hits `1`, recording the breakpoint index.
 
-**`run()`** (`order.cpp:122-293`): loop while `_factors` non-empty (`:130`):
-1. Run the main `_task` to raise `a` to the non-smooth exponent (`:135-150`).
-2. Run each smooth task; reaching `1` removes that factor, else the `on_point` abort captures the exact power where it became `1` (`:156-190`).
-3. If everything collapsed to `1`, halve the remaining powers by `_sub` and rebuild (`:192-199`).
-4. Verify `a^(N-1) == 1` via `_task_check`; failure → `"%s is not prime."` + abort (the candidate wasn't actually prime) (`:203-211`).
-5. For each factor, peel primes via `task_sub`/`task_factor` until the value stops being `1`, recording the order `ord` (`:213-249`).
-6. After the loop, assemble the order as a factor product, optionally collapsing to `(N-1)/divisor`, and emit the result: **`"ord(%s) mod %s = %s.\n"`** (`order.cpp:288`). This is the only test whose normal result line isn't a primality verdict.
+**`run()`** (`order.cpp:131-302`): loop while `_factors` non-empty (`:139`):
+1. Run the main `_task` to raise `a` to the non-smooth exponent (`:144-159`).
+2. Run each smooth task; reaching `1` removes that factor, else the `on_point` abort captures the exact power where it became `1` (`:165-199`).
+3. If everything collapsed to `1`, halve the remaining powers by `_sub` and rebuild (`:201-208`).
+4. Verify `a^(N-1) == 1` via `_task_check`; failure → `"%s is not prime."` + abort (the candidate wasn't actually prime) (`:212-220`).
+5. For each factor, peel primes via `task_sub`/`task_factor` until the value stops being `1`, recording the order `ord` (`:222-258`).
+6. After the loop, assemble the order as a factor product, optionally collapsing to `(N-1)/divisor`, and emit the result: **`"ord(%s) mod %s = %s.\n"`** (`order.cpp:297`). Checkpoints use the `.ord<fingerprint>` filename suffix (`prst.cpp:341-342`).
+
+### 4.7 `FermatDivisor` — Fermat/GF/xGF divisibility search (`-divides`)
+
+**Header** (`order.h:49-80`): `FermatDivisor : public Order` — reuses Order's smooth-task machinery. A nested `Base {base, str, power, task, sub_val, exp, val}` holds per-base state.
+
+**CLI**: `-divides {f | gf | xgf} [limit]` (`prst.cpp:147-163`; also available under `-batch`, `batch.cpp:78-94`). `f` searches Fermat numbers only (base 2); `gf`/`xgf` search bases 2..`limit` (default 12). The dispatcher gate is the same as `-order`'s (`prst.cpp:478-486`); the constructor additionally asserts the input's first factor is 2 (`order.cpp:306`). Checkpoints use the `.div` filename suffix (`prst.cpp:343-344`) with per-base/per-power child files (`order.cpp:346-347`); resume goes through `base_<b>` progress params. `base.task->write_state()` is called right after `run()` (`order.cpp:361`) — a live caller of the public `Task::write_state()`.
+
+**`run()`** (`order.cpp:386-542`): for each prime base `b`, raise `b` to `2^(n−30)` with a checkpointed smooth task (`create_smooth_task`) and finish the last 30 squarings with a `CarefulExp`; composite bases are assembled from their prime factors' values with `Product::mul` instead of running their own exponentiation. If `b^(2^m) ≡ −1 (mod P)` for some `m` (found by squaring toward `N−1`), P divides `F(m)` (base 2) or `GF(m,b)` — reported only when `perfect_power(b) == 1`, since perfect-power bases are redundant. In `xgf` mode, pairs `(a,b)` with `gcd(a,b) = 1` (and not both `perfect_power` even) are checked for `a^(2^m) + b^(2^m) ≡ 0 (mod P)`; misaligned powers trigger a fix-up exponentiation on the base `a/b (mod P)` (`order.cpp:495-502`).
+
+**Result lines** (`order.cpp:528-538`): **`"%s divides %s.\n"`** with a list like `F(2543548), GF(2543549,3), xGF(2543549,3,2)`, or **`"%s no divisible numbers found.\n"`**. Not a primality verdict — like `Order`, this mode assumes the input is already known prime.
 
 ## 5. `FactorTree` — construction and walk
 
@@ -336,7 +359,7 @@ while (!stack.empty())
 
 ## 6. Common patterns
 
-- **Small-factor vs. `*Generic` is one predicate.** `KBNC && n>10 && factors.size()<10` (`prst.cpp:480, 490`). The lean classes work directly on the parent `Logging`; the `*Generic` classes detach a `SubLogging` and walk a `FactorTree`. When debugging "which code runs for this input," evaluate that predicate first.
+- **Small-factor vs. `*Generic` is one predicate.** `KBNC && n>10 && factors.size()<10` (`prst.cpp:512, 522`). The lean classes work directly on the parent `Logging`; the `*Generic` classes detach a `SubLogging` and walk a `FactorTree`. When debugging "which code runs for this input," evaluate that predicate first.
 - **Pocklington reuses Fermat by inheritance.** `Pocklington : Fermat` calls `Fermat::run` for the probable-prime stage, then layers per-factor Pocklington checks on top. None of the others inherit a sibling test.
 - **GCD-batch + restart-with-new-base.** Pocklington (small and generic) and both Morrison variants share the shape: accumulate `result-1` (or the Lucas difference) into a vector `G`, `Product` them, GCD against `N`, and if the candidate isn't yet "more than half proved," advance the base/`_P` to the next prime and re-run. The halting condition is always a variant of `square(_done) > N`.
 - **Resume via the progress file.** The `*Generic` classes serialize completed factor indices into the `"factors"` progress param and skip them on construction; small Pocklington uses per-factor `"factor<i>" = "done"` params. `_a`/`_P` are likewise stashed as params for resume.
@@ -362,10 +385,11 @@ while (!stack.empty())
 | `Morrison` | `Run` | `c=-1`, half-factored, `KBNC, n>10, factors<10` | `LucasVMulFast` / `LucasUVMulFast` | `is prime! Time:` | `is not prime. Factor RES64: …, time:` / `is not a probable prime. …` |
 | `MorrisonGeneric` | `Run` | `c=-1`, half-factored, else | tree of `LucasVMulFast`/`LucasUVMul(Fast)` | `is prime! Time:` | `is not prime. Factor RES64:` / `is not a probable prime. …` |
 | `Order` | `Run` | `-order` on fully-factored `KBNC, c=1` | `MultipointExp` + `CarefulExp` | `ord(a) mod N = …` | `is not prime.` (error) |
+| `FermatDivisor` | `Order` | `-divides` on fully-factored `K*2^N+1` | smooth `MultipointExp`/`GerbiczCheckExp` + `CarefulExp` + `Product` | `divides F(…), GF(…), xGF(…).` | `no divisible numbers found.` |
 
 ## 9. Open questions / non-coverage
 
-- **The `_smooth` exponentiation path.** `Fermat`'s ctor toggles a `smooth` mode for small-`k` `k*2^n+1`, changing the exponent representation and which `init_*` is called. The mechanics belong in a future "exponentiation algorithms" doc alongside `BaseExp::_smooth`; this doc only notes where the flag is read. (Parked in lay-of-the-land's open questions.)
+- **The `_smooth` exponentiation path.** `Fermat`'s ctor toggles a `smooth` mode for small-`k` `k*2^n+1`, changing the exponent representation and which `init_*` is called. The mechanics are in `exponentiation-algorithms.md`; this doc only notes where the flag is read.
 - **The math.** BLS Theorem 14 (Morrison), the Pocklington half-factored condition, Gerbicz-Li strong checks, and the Lucas-chain / DAC addition-chain construction are described operationally here but not derived. See `framework/docs/mult_*.pdf` and eprint 2023/195; deferred indefinitely (Tier 3 in lay-of-the-land) unless modifying the algorithms.
 - **Multi-`Task` parallelism.** Every `run()` here is single-threaded above GWnum's FFT layer. Parallelizing the `*Generic` factor walk would require locking the entire `Logging`/`Progress` subsystem — see `logging-and-progress.md` §12 and `task-lifecycle.md` Pitfall E.
 - **Task internals.** `init_*`, `commit_*`, the restart/checkpoint loop, and `on_state` cadence are `task-lifecycle.md`'s domain; this doc treats `task->run()` as a black box.
