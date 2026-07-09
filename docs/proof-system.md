@@ -63,7 +63,7 @@ ProofBuild : public InputTask                             (proof.h:159)
 - `_taskRoot` — a `CarefulExp` for the roots-of-unity check, constructed in BUILD mode (and ROOT mode) when `-RootOfUnityCheck` is on (default true).
 - `_fermat` — the wrapped `Fermat` instance for SAVE and BUILD; null in CERT.
 
-The three nested `TaskState` classes are the on-disk schema for proof artifacts. **Their `TYPE` constants (3, 4, 6) are file-format identifiers — do not reuse or renumber.** The full `TYPE` registry is in `prst.cpp:54-65` and `task-lifecycle.md` §1.
+The three nested `TaskState` classes are the on-disk schema for proof artifacts. **Their `TYPE` constants (3, 4, 6) are file-format identifiers — do not reuse or renumber.** The full `TYPE` registry is in `prst.cpp:54-65` and `checkpoints.md` §1.
 
 ### `Proof::State` — checkpoint shared by `ProofSave` and `ProofBuild`
 
@@ -365,7 +365,7 @@ The `.pack` form trades random-access ergonomics for one tidy file. For long SAV
 
 `Proof::Product::TYPE = 3`, `Proof::Certificate::TYPE = 4`, `Proof::State::TYPE = 6`. A user with a half-completed SAVE run holds `.proof.{i}` files identified by these bytes. Bumping any of them is a contract break — tests in flight stop resuming.
 
-If you genuinely need a schema change, add a new TYPE constant and keep the old read path. See `task-lifecycle.md` §1 for the cross-subsystem registry.
+If you genuinely need a schema change, add a new TYPE constant and keep the old read path. See `checkpoints.md` §1 for the registry.
 
 ### B. CERT mode bypasses `Run::create`'s normal dispatch
 
@@ -416,6 +416,6 @@ Use both for production-grade attestations. Use neither only for local developme
 
 - **The product-tree math.** This doc describes the file flow and the class shapes; the actual `hash_giants → make_prime` Fiat–Shamir construction in `ProofSave::execute` and `ProofBuild::execute` is the cryptographic core. The framework's `framework/docs/mult_*.pdf` covers the multiplication theory; the proof-system theorems themselves trace back to LiCheck (eprint 2023/195) and the Pietrzak-style sumcheck literature. Read those before modifying the math.
 - **Li-mode high-bits split.** `_taskA` is constructed in CERT mode only when the Li exponent's bitlen exceeds `_M`. The choice of `SlidingWindowExp` vs. `LiCheckExp` for the high bits mirrors the main task's strong-check vs. plain mode. Worth a paragraph in a future "exponentiation algorithms" doc — `inputnum-parsing.md` and `run-hierarchy.md` are higher priority first.
-- **Container internals.** `framework/container.cpp` is ~1800 lines of streaming-JSON-framed binary IO with MD5 verification, codec fields, and corruption recovery. The on-disk schema in §6 above is the contract; the implementation is a future `state-serialization.md` topic.
+- **Container internals.** `framework/container.cpp` is ~1800 lines of streaming-JSON-framed binary IO with MD5 verification, codec fields, and corruption recovery. The on-disk schema in §6 above is the contract; the implementation is documented in the framework's `container-format.md`.
 - **`-proof root` would expose `Proof::ROOT`.** There's no *user* CLI surface for it; the constant exists for symmetry with the four-mode design. The constructor branch in `proof.cpp:82` (`op == BUILD || op == ROOT`) builds `_taskRoot` for it, and `testing.cpp` is a live consumer — the `-test` harness constructs `Proof(Proof::ROOT, …)` (`testing.cpp:557`) and runs it through the post-Fermat overload (`testing.cpp:560`) to verify the roots-of-unity check rejects an attacking residue. (The same harness exercises `Proof::CERT` and the post-Fermat `run()` overload too — `testing.cpp:385, 525, 549` and `testing.cpp:522, 541, 560`.) So ROOT/CERT are not unreachable; they're just not wired into a normal user invocation. To run roots-of-unity in isolation from the public CLI, both the option parser in `prst.cpp` and `Run::create`'s dispatch table would need entries.
 - **`MultipointExp::Point` vs. `_points` invariants.** The `value` flag is set based on `input.type() == KBNC && k != 0 && b == 2`. The semantic is "is it cheap to materialize the full Giant at this point?", but the exact set of inputs where `value=false` is most-cost-effective is a tuning parameter not audited here. Worth a footnote in `inputnum-parsing.md`.
