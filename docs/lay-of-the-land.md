@@ -17,7 +17,7 @@ It implements:
 - **Morrison** test of `k*b^n-1`, `n!-1`, `n#-1`
 - **LLR** as a special case of Morrison
 
-Plus a verification-grade proof system (`-proof save/build/cert`) that lets a tester emit a certificate which any third party can verify cheaply, an order-finding mode (`-order`), and a batch driver (`-batch`).
+Plus a verification-grade proof system (`-proof save/build/cert`) that lets a tester emit a certificate which any third party can verify cheaply, an order-finding mode (`-order`), a Fermat/GF/xGF divisibility search (`-divides`), and a batch driver (`-batch`).
 
 Two optional build flavors are gated by `#define`s in `src/version.h`:
 - `BOINC` — distributed-computing wrapper
@@ -67,10 +67,11 @@ A typical invocation `prst "30006!4-1" -d` flows:
 1. **`main()` in `src/prst.cpp:43`** — install signal handlers, declare `Options`.
 2. **Option parsing** — uses the framework `Config` DSL to parse argv into `Options`, `proof_op`, log level, etc. (`prst.cpp:82` onward.)
 3. **Input parsing** — `InputNum::parse` (framework) classifies the candidate as one of `KBNC` / `FACTORIAL` / `PRIMORIAL` / `GENERIC` and stores k, b, n, c, factors.
-4. **Trial-division shortcut** — small inputs (`bitlen <= 40`) or `-trial` are handled inline at `prst.cpp:292`.
-5. **Progress file wiring** — a framework `File` for `prst_<fingerprint>*.param` is opened so progress survives restarts (`logging.file_progress(...)` at `prst.cpp:334`).
-6. **`Run::create()` (`prst.cpp:444`)** — the dispatcher, in code order:
+4. **Trial-division shortcut** — small inputs (`bitlen <= 40`) or `-trial` are handled inline at `prst.cpp:309`.
+5. **Progress file wiring** — a framework `File` for `prst_<fingerprint>*.param` is opened so progress survives restarts (`logging.file_progress(...)` at `prst.cpp:352`).
+6. **`Run::create()` (`prst.cpp:463`)** — the dispatcher, in code order:
    - `-order` → `Order`
+   - `-divides` → `FermatDivisor`
    - `-proof cert` → reuse the `Proof` instance directly
    - forced `-fermat`, generic numbers, or `|c| ≠ 1` → `Fermat::FERMAT`
    - Proth-form `k*2^n+1` with `k < 2^n` → `Fermat::PROTH`
@@ -79,12 +80,12 @@ A typical invocation `prst "30006!4-1" -d` flows:
    - `c == -1` and half-factored → `Morrison` (when the number of factors is small) else `MorrisonGeneric`
 7. **Optional proof wrapping** — if `-proof save|build` is requested, the `Run` is wrapped in a `Proof` that delegates the inner Fermat test (`prst.cpp:358-381`).
 8. **GWState setup** — initialize GWnum library, handle all kinds of exceptions (like header/lib version mismatch).
-9. **`run->run(gwstate, file_checkpoint, file_recoverypoint, logging)`** — the polymorphic test entrypoint at `prst.cpp:419`. The selected test class drives one or more `Task` instances, writes checkpoints to `prst_<fingerprint>.ckpt`/`.rcpt`, and emits result lines via `logging.result(...)`.
+9. **`run->run(gwstate, file_checkpoint, file_recoverypoint, logging)`** — the polymorphic test entrypoint at `prst.cpp:438`. The selected test class drives one or more `Task` instances, writes checkpoints to `prst_<fingerprint>.ckpt`/`.rcpt`, and emits result lines via `logging.result(...)`.
 10. **Exit code** — `PRST_EXIT_PRIMEFOUND` (2) / `PRST_EXIT_NORMAL` (0) / `PRST_EXIT_FAILURE` (1), defined in `src/prst.h`.
 
 ## The Run hierarchy
 
-Introduced in upstream commit `4764aa9 Refactoring, base class for all tests.` All tests now derive from a common `Run` (`src/prst.h:52`):
+Introduced in upstream commit `4764aa9 Refactoring, base class for all tests.` All tests now derive from a common `Run` (`src/prst.h:75`):
 
 ```
 Run                         (abstract base — name, fingerprint, success/prime flags, run())
@@ -94,15 +95,16 @@ Run                         (abstract base — name, fingerprint, success/prime 
 ├── Morrison                (small-factor Morrison; uses LucasMul)
 ├── MorrisonGeneric         (FactorTree-driven; runs LucasMul sub-tasks under a SubLogging)
 ├── Order                   (multiplicative order; uses Exp)
+│   └── FermatDivisor       (-divides: searches F/GF/xGF numbers divisible by the input)
 └── Proof                   (runs the verification for -proof cert; uses Exp)
     └── Proof+Fermat        (orchestrates a wrapped Fermat for -proof save/build)
 ```
 
 Two patterns repeat:
-- **Small-factor variants** (`Morrison`, `Pocklington`) work directly on the parent `Logging`. They are picked for smooth inputs with small number of factors, defined as `n > 10` and `factors.size() < 10` (`prst.cpp:480, 490`). The conditions are subject to change.
+- **Small-factor variants** (`Morrison`, `Pocklington`) work directly on the parent `Logging`. They are picked for smooth inputs with small number of factors, defined as `n > 10` and `factors.size() < 10` (`prst.cpp:512, 522`). The conditions are subject to change.
 - **`*Generic` variants** (`MorrisonGeneric`, `PocklingtonGeneric`) build a `FactorTree`, walk it, and run dynamically-created sub-tasks under their own `SubLogging _logging`. This is where sub-task time accounting happens, and it is a subtle area (the inner `SubLogging` progress must be propagated to the parent — see the framework's `logging-and-progress.md`).
 
-`Run::create` (a static factory in `prst.cpp:444`) is the single source of truth for which class handles which form.
+`Run::create` (a static factory in `prst.cpp:463`) is the single source of truth for which class handles which form.
 
 ## The Task layer
 
@@ -111,7 +113,7 @@ Tests don't do the heavy math themselves — they construct one or more `Task` s
 Concrete tasks of interest (all defined in `src/`):
 - `CarefulExp`, `MultipointExp`, `BaseExp` — exponentiation variants with strong-error-check (Gerbicz/Gerbicz-Li) options. Defined in `src/exp.h`.
 - `LucasVMul`, `LucasVMulFast`, `LucasUVMul` — Lucas-sequence multipliers. Defined in `src/lucasmul.h`.
-- `Product` — accumulates a product of giants. Used in MorrisonGeneric/PocklingtonGeneric.
+- `Product` — multiplies giants under error-checked arithmetic; constructed once, then `mul(a, b)` (two giants in one call) or `mul(first, last)` per multiplication. Used in MorrisonGeneric/PocklingtonGeneric and FermatDivisor. Defined in `src/exp.h`.
 
 A test class typically:
 1. Constructs its tasks in its constructor (using `add_stage` to register expected work for progress reporting).

@@ -37,6 +37,8 @@ Prereqs / companions: `task-lifecycle.md` (these are `InputTask`s; `execute()` r
 
 **The Lucas task tree** (`lucasmul.h`) mirrors it: `LucasVMulFast` (plain V-chain, `State` TYPE 9) is the analogue of `MultipointExp`; `LucasUVMul`/`LucasUVMulFast` (`State` TYPE 10, `StrongCheckState` TYPE 11) is the Gerbicz-checked analogue of `StrongCheckMultipointExp`, working over `LucasUV` arithmetic instead of `GWNum` squaring.
 
+Two more `InputTask`s live in these headers outside the exponentiation trees: `Product` (§6) and the proof tasks `ProofSave`/`ProofBuild` (`proof-system.md`).
+
 ## 2. `MultipointExp::execute` — the central method
 
 `exp.cpp:182-272`. The point loop: resume from the checkpoint (or seed `X0`/`x0`), then for each scheduled `Point` advance `X` to `pos` by one of three strategies, fire the callback, checkpoint. Annotated:
@@ -125,7 +127,18 @@ At the block boundary (`exp.cpp:669-674`) the accumulated `D` is combined with t
 
 **The first/last-30 careful ops.** Both `execute`s force `gw().carefully()` for the first 30 iterations (FFT warm-up) and the last 30 (so the final residue is exact) — a reliability detail independent of the Gerbicz check.
 
-## 6. Pitfalls
+## 6. `Product` — error-checked giant multiplication
+
+`class Product : public InputTask` (`exp.h:544`). Not an exponentiation: it multiplies giants under the same restartable, error-checked `Task` machinery as everything else here. Constructed once per run scope — `Product Pr(&input, &gwstate, &logging);` — with error checking forced on (`set_error_check(false, true)`) and no checkpoint file (snapshots are in-memory `StateValue`s, enough for the reliable-arithmetic restart path; an aborted product recomputes). Two entry points:
+
+- `Giant mul(iterator first, iterator last)` — folds a range of giants into one product, one operand per iteration, committing via `commit_execute<BaseExp::StateValue>`;
+- `Giant mul(Giant& a, Giant& b)` — two giants in one call.
+
+Each `mul()` clears `_values`, resets `_state`, sets `_iterations` to the operand count, calls `run()`, and returns `std::move(result())` — one instance serves many independent products. `execute()` resumes at `state()->iteration()` and multiplies with `gw().carefully().mul`.
+
+Callers: the `*Generic` GCD-batch products (`morrison.cpp:318`, `:528`; `pocklington.cpp:109`, `:376`) and `FermatDivisor`, which uses `mul(a, b)` to assemble composite bases from prime-base values (`run-hierarchy.md` §4.7).
+
+## 7. Pitfalls
 
 - **Smooth vs. non-smooth changes the meaning of `_exp`.** In smooth mode `_exp` is the *base* `b` (and `b()` aliases it); in non-smooth mode `_exp` is the full exponent and `b()` returns a null reference. The `init_*` family and the `GWASSERT(smooth()…)` guards exist to keep these from being mixed; calling `init_giant` on a smooth task (or `b()` on a non-smooth one) is a bug, not a no-op.
 - **`commit_execute` chooses the State type by iteration.** Intermediate checkpoints are `StateSerialized` (FFT-domain, cheap); only the final one is a `StateValue` (exact `Giant`). Code reading `result()` mid-run gets `nullptr` until `iteration == iterations()` — that's the signal "not done," not an error.
@@ -134,11 +147,12 @@ At the block boundary (`exp.cpp:669-674`) the accumulated `D` is combined with t
 - **`L`/`L2` adapt downward near the end.** Don't assume every block is exactly `L2` iterations — the tail block shrinks (`exp.cpp:557-566`) so the last check still happens. A "check never fired" bug usually traces to this adaptation.
 - **`GWMUL_MULBYCONST` is how the base enters a non-smooth squaring.** In strategy (A), the exponent bits aren't applied by separate multiplies — each set bit toggles `GWMUL_MULBYCONST` on that square (`setmulbyconst(_x0)` was set once up front). Miss this and the exponentiation looks like it ignores `_exp`.
 
-## 7. Quick reference
+## 8. Quick reference
 
 | Want | Class |
 |---|---|
 | Exact short exponentiation | `CarefulExp` |
+| Error-checked product of giants | `Product` (`mul(a, b)` or `mul(first, last)`) |
 | Plain `a^(b^n)` (smooth) | `SmoothExp` / `MultipointExp(smooth)` |
 | Plain `a^exp` (non-smooth), small base | `FastExp` |
 | Plain `a^exp`, giant start | `SlidingWindowExp` |
@@ -150,7 +164,7 @@ At the block boundary (`exp.cpp:669-674`) the accumulated `D` is combined with t
 
 Gerbicz block (per proof-point segment, `iters = n/count`): `L ≈ √iters`, `L2 ≈ iters ≈ L²`, `D *= X` every `L` steps, verify `D` against a recomputation at the block end, restart from the recovery point on mismatch. State TYPEs: `1` final Giant, `8` intermediate serialized, `2` exp strong-check, `9`/`10`/`11` the Lucas trio.
 
-## 8. Open questions / non-coverage
+## 9. Open questions / non-coverage
 
 - **Why the Gerbicz / Gerbicz-Li identity is sound.** This doc documents the *block machinery* (L, L2, D-accumulator, rollback); the proof that the identity detects errors with overwhelming probability — and the Li generalization to non-smooth exponents — is `math-and-theorems.md` (LiCheck → eprint 2023/195).
 - **The `LucasUV` recurrence arithmetic.** `lucasmul.cpp` orchestrates the chain; the `LucasUVArithmetic`/`LucasV` operations it calls (`dbl`/`add`/`mul`, the `V`/`U` recurrences) live in `framework/arithmetic/lucas.cpp` → `curves-and-polynomials.md`.
