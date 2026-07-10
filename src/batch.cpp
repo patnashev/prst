@@ -113,6 +113,7 @@ int batch_main(int argc, char *argv[])
         .check("-d", log_level, Logging::LEVEL_INFO)
         .check("-info", show_info, true)
         .check("-trial", trial_division, true)
+        .check("-primes", Run::OutputPrimes, true)
         .group("-stop")
             .group("on")
                 .check("error", stop_error, true)
@@ -287,14 +288,12 @@ int batch_main(int argc, char *argv[])
             GWASSERT(!factors.empty());
             if (factors[0] == input.value() || (factors[0] == 0 && factors.size() == 1))
             {
-                logging.result(true, "%s is prime!\n", input.display_text().data());
-                logging.result_save(input.input_text() + " is prime!\n");
+                Run::on_result(input, logging, true, false);
                 continue;
             }
             else
             {
-                logging.result(false, "%s is not prime.\n", input.display_text().data());
-                logging.result_save(input.input_text() + " is not prime.\n");
+                Run::on_result(input, logging, false, false);
                 continue;
             }
         }
@@ -307,8 +306,7 @@ int batch_main(int argc, char *argv[])
                     logging_batch.info("%s, trial division found factor %d.\n", run_name.data(), factors[0]);
                 else
                     logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
-                logging.result(false, "%s is not prime.\n", input.display_text().data());
-                logging.result_save(input.input_text() + " is not prime.\n");
+                Run::on_result(input, logging, false, false);
                 continue;
             }
         }

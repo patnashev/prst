@@ -118,7 +118,12 @@ A test class typically:
 2. Resumes from `progress().param()` if a test state file exists.
 3. Sets up unique state files for individual tasks.
 4. Loops: call `task->run()`, inspect `task->result()`, advance the algorithm.
-5. Writes the result line via `logging.result(...)` and `logging.result_save(...)`.
+5. Reports the final verdict through the static `Run::on_result(input, logging, prime,
+   probable, res64)` (`src/prst.cpp`), which writes the result line, the `result.txt` entry,
+   and — with the `-primes` option — appends every confirmed prime or probable prime's
+   expression (one per line) to `prime.txt`, a clean primes-only list alongside `result.txt`
+   (all result lines) and `factors.txt` (found factors). The trial-division paths of `main()`
+   and `-batch` report through the same static method.
 
 ## The framework (shared library)
 

@@ -40,6 +40,54 @@ void sigterm_handler(int signo)
     signal(signo, sigterm_handler);
 }
 
+// Appends a found prime/PRP expression as one line to prime.txt.
+static void output_prime(const std::string& text)
+{
+    FILE *fp = fopen("prime.txt", "a");
+    if (!fp)
+        return;
+    fprintf(fp, "%s\n", text.data());
+    fclose(fp);
+}
+
+bool Run::OutputPrimes = false;
+
+void Run::on_result(InputNum& input, Logging& logging, bool prime, bool probable, const std::string& res64)
+{
+    double time = logging.progress().time_total();
+    if (prime)
+    {
+        if (time > 0)
+        {
+            logging.result(true, "%s is prime! Time: %.1f s.\n", input.display_text().data(), time);
+            logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)time) + " s.\n");
+        }
+        else
+        {
+            logging.result(true, "%s is prime!\n", input.display_text().data());
+            logging.result_save(input.input_text() + " is prime!\n");
+        }
+    }
+    else if (probable)
+    {
+        logging.result(true, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), time);
+        logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)time) + " s.\n");
+    }
+    else if (!res64.empty())
+    {
+        logging.result(false, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), res64.data(), time);
+        logging.result_save(input.input_text() + " is not prime. RES64: " + res64 + ", time: " + std::to_string((int)time) + " s.\n");
+    }
+    else
+    {
+        logging.result(false, "%s is not prime.\n", input.display_text().data());
+        logging.result_save(input.input_text() + " is not prime.\n");
+    }
+
+    if ((prime || probable) && OutputPrimes)
+        output_prime(input.input_text());
+}
+
 int main(int argc, char *argv[])
 {
     signal(SIGTERM, sigterm_handler);
@@ -234,6 +282,7 @@ int main(int argc, char *argv[])
         .check("-i", show_info, true)
         .check("-info", show_info, true)
         .check("-trial", trial_division, true)
+        .check("-primes", Run::OutputPrimes, true)
         .value_code("-q", 0, [&](const char* param) {
                 if (param[0] != '\"' && !isdigit(param[0]))
                     return false;
@@ -284,6 +333,7 @@ int main(int argc, char *argv[])
         printf("\t-fft [+<inc>] [safety <margin>] [generic] [info]\n");
         printf("\t-cpu {SSE2 | AVX | FMA3 | AVX512F}\n");
         printf("\t-trial\n");
+        printf("\t-primes\n");
         printf("\t-fermat [a <a>]\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>] [L <L>]]\n");
@@ -313,14 +363,12 @@ int main(int argc, char *argv[])
         GWASSERT(!factors.empty());
         if (factors[0] == input.value() || (factors[0] == 0 && factors.size() == 1))
         {
-            logging.result(true, "%s is prime!\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is prime!\n");
+            Run::on_result(input, logging, true, false);
             return PRST_EXIT_PRIMEFOUND;
         }
         else
         {
-            logging.result(false, "%s is not prime.\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is not prime.\n");
+            Run::on_result(input, logging, false, false);
             return PRST_EXIT_NORMAL;
         }
     }
@@ -330,8 +378,7 @@ int main(int argc, char *argv[])
         if (!factors.empty())
         {
             logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
-            logging.result(false, "%s is not prime.\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is not prime.\n");
+            Run::on_result(input, logging, false, false);
             return PRST_EXIT_NORMAL;
         }
     }

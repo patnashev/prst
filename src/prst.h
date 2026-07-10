@@ -89,6 +89,12 @@ public:
 
     static Run* create(InputNum& input, Options& options, Logging& logging, Proof* proof = nullptr);
 
+    // Reports the final verdict of a test through logging.result()/result_save(),
+    // and appends the number to prime.txt when -primes is set. Static so the
+    // trial division paths can report through it too.
+    static void on_result(InputNum& input, Logging& logging, bool prime, bool probable, const std::string& res64 = std::string());
+    static bool OutputPrimes;   // -primes: append found primes/PRPs to prime.txt
+
 protected:
     InputNum& input;
     Options& _options;

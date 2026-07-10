@@ -418,8 +418,7 @@ void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file
     if (type() == PROTH && (*_task->result() == 0 || *_task->result() == *gwstate.N))
     {
         _prime = true;
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        on_result(input, logging, true, false);
     }
     else if (type() == PROTH || !_success)
     {
@@ -427,13 +426,19 @@ void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file
             _res64 = _task->result()->to_res64();
         else
             _res64 = _task_fermat_simple->result()->to_res64();
-        logging.result(_prime, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        on_result(input, logging, false, false, _res64);
     }
     if (!_prime && _success)
     {
-        logging.result(type() != PROTH && type() != POCKLINGTON, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        if (type() != PROTH && type() != POCKLINGTON)
+            on_result(input, logging, false, true);
+        else
+        {
+            // Not a final verdict: Pocklington continues after this, and a Proth
+            // failure was already reported above. Keep it quiet and out of prime.txt.
+            logging.result(false, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
+            logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        }
     }
 
     if (type() == PROTH)

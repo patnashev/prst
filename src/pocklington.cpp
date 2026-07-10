@@ -167,10 +167,7 @@ void Pocklington::run(arithmetic::GWState& gwstate, File& file_checkpoint, File&
     }
 
     if (_prime)
-    {
-        logging.result(_prime, "%s is prime!\n", input.display_text().data());
-        logging.result_save(input.input_text() + " is prime!\n");
-    }
+        on_result(input, logging, true, false);
 
     file_checkpoint.clear(true);
     file_recoverypoint.clear(true);
@@ -507,8 +504,7 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
                     {
                         logging.set_prefix("");
                         _res64 = stack_value.back().to_res64();
-                        logging.result(_prime, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-                        logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+                        on_result(input, logging, false, false, _res64);
                         break;
                     }
                     if (stack_value.back() != 1)
@@ -601,8 +597,7 @@ void PocklingtonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint
     if (_prime)
     {
         logging.info("%s %.1f%% of factors tested.\n", input.display_text().data(), std::floor(_done.bitlen()/pct_bitlen)/10.0);
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        on_result(input, logging, true, false);
     }
 
     file_checkpoint.clear(true);

@@ -340,8 +340,7 @@ void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& fi
     if (_prime)
     {
         logging.set_prefix("");
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        on_result(input, logging, true, false);
     }
 
     if (checkpoint)
@@ -842,8 +841,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
     if (_prime)
     {
         logging.info("%s %.1f%% of factors tested.\n", input.display_text().data(), std::floor(_done.bitlen()/pct_bitlen)/10.0);
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+        on_result(input, logging, true, false);
     }
 
     file_checkpoint.clear(true);
