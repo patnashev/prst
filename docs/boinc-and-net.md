@@ -5,14 +5,14 @@ PRST has two optional "distributed-computing" front-ends that wrap the same test
 - **BOINC** (`boinc.{h,cpp}`) — runs PRST as a BOINC science app: progress and checkpoints go through the BOINC client (via a thin `bow/` wrapper — the `bow_*` calls are all BOINC client-integration hooks: init, event-poll, progress, trickle, finish), and the client can suspend/abort/quit the task at any checkpoint boundary.
 - **NETPRST** (`net.{h,cpp}`) — runs PRST as a thin HTTP worker: it polls a coordinator server for a task, ships checkpoints to/from the server instead of local disk, and POSTs the result back.
 
-Both are **compile-time flavors**, gated by `#define`s in `version.h` (both **commented out by default**, `version.h:3-4`). When enabled, each adds a runtime subcommand to `main()`'s parser that `exit()`s into a sibling `main`: `-boinc` → `boinc_main` (`prst.cpp:200`), `-net` → `net_main` (`prst.cpp:203`). Neither replaces `main()`; both re-use `Fermat`/`Pocklington`/`Proof` and the `Task` layer underneath.
+Both are **compile-time flavors**, gated by `#define`s in `version.h` (both **commented out by default**, `version.h:3-4`). When enabled, each adds a runtime subcommand to `main()`'s parser that `exit()`s into a sibling `main`: `-boinc` → `boinc_main` (`prst.cpp:216`), `-net` → `net_main` (`prst.cpp:219`). Neither replaces `main()`; both re-use `Fermat`/`Pocklington`/`Proof` and the `Task` layer underneath.
 
-> **Read this first.** `boinc.cpp` tracks the current `Run`/`Proof` interface (`run->run(gwstate, file_checkpoint, file_recoverypoint, logging)`, `boinc.cpp:340`). **`net.cpp` does not** — it calls `proof->run(input, gwstate, …)` (`net.cpp:574`), `fermat->run(input, gwstate, …)` (`net.cpp:585`), and `fermat->run(input, gwstate, …, nullptr)` (`net.cpp:591`), each prepending an `input` argument that no current `Fermat::run`/`Proof::run` overload accepts (`fermat.h:23-24`, `proof.h:85,94`). NETPRST predates the run() refactor (`4764aa9` base class + `fe25a5a` run refactor, which moved `input` to a `Run` member and dropped it from the signature) and **will not compile against the present headers**; because `NETPRST` is off, no build ever catches it. Treat `net.cpp` as a design reference, not working code, until it's reconciled (§7, §8).
+> **Interface status.** Both flavors track the current `Run`/`Proof` interface: `boinc.cpp:340` and `net.cpp:576-579` call the 4/5-arg `run->run(gwstate, file_checkpoint, file_recoverypoint, logging[, proof])`. `net.cpp` lagged for a while after the run() refactor (`4764aa9` base class + `fe25a5a`, which moved `input` to a `Run` member and dropped it from the signature) but was reconciled in `64e04f4` ("Configure GWState by Options"): the old `input`-prefixed `fermat->run(input, gwstate, …)` call sites were replaced by a unified `std::unique_ptr<Run>` dispatch (`net.cpp:542-548`) plus `options.configure(gwstate)` (`net.cpp:562-563`). The caveat that still matters: both flags are off by default, so neither flavor is built by CI — re-check compile status whenever the core interfaces move (§6).
 
 Source files:
 - `src/boinc.h`, `src/boinc.cpp` (build flag `BOINC`; depends on `bow/bow.h`)
 - `src/net.h`, `src/net.cpp` (build flag `NETPRST`; depends on `restc-cpp` + Boost)
-- `src/version.h:3-4` (the flags), `src/prst.cpp:200,203` (the dispatch)
+- `src/version.h:3-4` (the flags), `src/prst.cpp:216,219` (the dispatch)
 
 Prereqs / companions: `logging-and-progress.md` (`BoincLogging`/`NetLogging` are `Logging` subclasses overriding `report`/`report_progress`/`progress_save`/`state_save_flag`/`heartbeat`), `task-lifecycle.md` (`state_save_flag` and `heartbeat` are the `Task`→`Logging` callbacks polled on the checkpoint cadence; `DISK_WRITE_TIME`/`PROGRESS_TIME` govern frequency), `run-hierarchy.md` (both entry points construct `Run` subclasses, but **inline a subset of `Run::create`'s dispatch** — see §3), `proof-system.md` (both wire `-proof save/build/cert`).
 
@@ -41,7 +41,7 @@ Networked-file data model (NETPRST only):
 
 ## 2. `boinc_main` — the central function
 
-`boinc.cpp:175-355`. The skeleton, annotated (the up-to-date flavor):
+`boinc.cpp:175-355`. The skeleton, annotated:
 
 ```cpp
 int boinc_main(int argc, char *argv[])
@@ -116,11 +116,11 @@ The three-way exit at the end is the BOINC contract: a clean finish reports the 
 
 **BOINC** (one task per process): `bow_init` → parse → build `Run` (+ optional `Proof` wrap) → `input.setup` → `time_init(bow_get_starting_elapsed_time())` → `run->run(...)` (the `Task` loop polls `state_save_flag`/`heartbeat` on the `DISK_WRITE_TIME`/`PROGRESS_TIME` cadence) → `bow_finish` or return. Checkpoints are ordinary local `File`s (`prst_<fp>.ckpt`/`.rcpt`); BOINC just controls *when* they're written and whether to keep running.
 
-**NETPRST** (`net_main`, `net.cpp:379-644`) — an unbounded work loop:
+**NETPRST** (`net_main`, `net.cpp:379-630`) — an unbounded work loop:
 1. `POST prst/new` (workerID, uptime, version) → deserialize a `PRSTTask` from JSON. On failure: sleep 1 min, retry.
 2. Build the `InputNum` from the task: `Hex(…)` / `Phi(c,…)` / `k*n!±c` / `k*n#±c` expressions, or `init(sk, sb, n, c)` for plain `k·b^n+c`, or `read` from a `"number"` `NetFile` when `n == 0` (`:481-497`).
-3. Configure `Options` from the task `options` map (`write_time`, `FFT_Increment`, `FFT_Safety`, `support=LLR2`, `strong`, `a`) and `proof_op` from the task `proof` string.
-4. Build `Pocklington` or `Fermat::AUTO` (+ optional `Proof`), open checkpoint/recovery `NetFile`s (or `LLR2NetFile`s when `support=LLR2`), and run.
+3. Configure the run from the task `options` map: `write_time` → `Task::DISK_WRITE_TIME` (`:501-504`); `support=LLR2`, `strong`, `a` (`:505-524`) and `proof_op` from the task `proof` string. The `Options` object itself is declared once at the top of `net_main` (`:381`, bound to the CLI `-t`/`-spin`/`-cpu` knobs); the per-task `FFT_Increment`/`FFT_Safety` are applied directly to the `GWState` *after* `options.configure(gwstate)` (`:562-567`).
+4. Build the `Run` — CERT → the `Proof` itself, `type == "Pocklington"` → `Pocklington`, else `Fermat::AUTO` (`:542-548`) — open checkpoint/recovery `NetFile`s (or `LLR2NetFile`s when `support=LLR2`), configure a fresh `GWState` from `Options` (`:562-563`), and run (`:576-579`).
 5. `net.upload_wait()` for pending checkpoint PUTs; if the task was aborted (server said timed-out/not-found) `Task::abort_reset()` and loop; else `POST prst/res/<taskid>` with the result (`prime` / `prp` / `prp/<res64>` / cert res64), `time`, `version` — retried up to 10×.
 
 **The async upload path** (`NetContext::upload`, `net.cpp:296-371`): `commit_writer` pushes the file onto `_upload_queue`; a single coroutine drains it, `PUT`ting `…/prst/<taskid>/<filename>` with arguments `md5`, `workerID`, `version`, `uptime`, `progress`, `time`, `time_op` plus all progress `params[...]` (via `NetLogging::Params`) and the file bytes as the body. `HttpAuthenticationException` ("task timed out") and `HttpForbiddenException` ("task not found") set `_task->aborted` and `Task::abort()`; other errors sleep 15 s and retry. So a dropped checkpoint upload silently looks like a slow worker (see Pitfalls).
@@ -142,7 +142,7 @@ The clever part of NETPRST is that `File` is an interface, so the entire test st
 
 ## 6. Pitfalls
 
-- **`net.cpp` is stale and won't compile.** It calls `proof->run(input, gwstate, …)` (`:574`), `fermat->run(input, gwstate, …)` (`:585`), and `fermat->run(input, gwstate, …, nullptr)` (`:591`) — an interface that predates the run() refactor (`4764aa9`/`fe25a5a`); current signatures take no `input` (`fermat.h:23-24`, `proof.h:85,94`). Because `NETPRST` is `#define`d off, CI never builds it, so the rot is invisible. Anyone enabling NETPRST must first reconcile these call sites (drop the `input` arg; `Pocklington::run`'s `Proof*` overload and the proof-owns-fermat wiring in `boinc.cpp:312-323` are the model).
+- **Neither flavor is built by CI** (both flags `#define`d off, `version.h:3-4`), so interface drift is invisible until someone flips a flag. `net.cpp` bit-rotted exactly this way after the run() refactor — it carried `input`-prefixed `run()` calls that wouldn't compile — until `64e04f4` reconciled it. Whenever `Run`/`Proof`/`File` signatures change, compile-check both flavors rather than trusting green CI.
 - **Neither flavor uses `Run::create`.** Both inline a reduced dispatcher covering only Fermat / Proth / Pocklington. A `c == -1` (Morrison), `Order`, or `*Generic` candidate silently runs as a probabilistic `Fermat::AUTO` instead of its deterministic test. If a distributed campaign needs Morrison, the dispatch in `boinc_main`/`net_main` has to be extended (or pointed at `Run::create`).
 - **Build flags are off by default** (`version.h:3-4`). The default Windows/Linux/Mac builds are plain PRST; enabling `BOINC`/`NETPRST` also pulls in heavy deps (`bow/`, or `restc-cpp` + Boost) and their build configs.
 - **Silent failure is the BOINC/NET failure mode.** A missed BOINC heartbeat just looks like a slow client (the server may reissue the job); a dropped NETPRST checkpoint upload retries every 15 s and otherwise looks like a slow worker. There's no loud error path — diagnose from server-side job state, not a crash.
@@ -154,25 +154,24 @@ The clever part of NETPRST is that `File` is an interface, so the entire test st
 | | BOINC | NETPRST |
 |---|---|---|
 | Build flag | `#define BOINC` (`version.h:3`) | `#define NETPRST` (`version.h:4`) |
-| Entry | `boinc_main` (`-boinc`, `prst.cpp:200`) | `net_main` (`-net`, `prst.cpp:203`) |
+| Entry | `boinc_main` (`-boinc`, `prst.cpp:216`) | `net_main` (`-net`, `prst.cpp:219`) |
 | Deps | `bow/bow.h` | `restc-cpp`, Boost |
 | Logging subclass | `BoincLogging` (control hooks) | `NetLogging` (data hooks) |
 | Checkpoint storage | local `File` (client controls cadence) | `NetFile` over HTTP PUT/GET |
 | Task source | one task = the CLI input | `POST prst/new` loop |
 | Tests supported | Fermat / Proth / Pocklington (+ Proof) | same |
-| Current with `run()` refactor? | **yes** | **no — won't compile** |
+| Current with `run()` refactor? | **yes** | **yes** (reconciled in `64e04f4`) |
 
 | You want to… | Where |
 |---|---|
-| Change checkpoint cadence under BOINC | it's `bow_get_checkpoint_seconds` → `Task::DISK_WRITE_TIME` (`boinc.cpp:186`) |
-| Disable trickles | `-notrickle` (`boinc.cpp:261`) |
-| Add a server-controlled option | the `net.task()->options` map reads in `net_main` (`net.cpp:502-529`) |
-| Change the HTTP endpoints | the `RequestBuilder` URLs in `net.cpp` (`:130,324,456,621`) |
+| Change checkpoint cadence under BOINC | it's `bow_get_checkpoint_seconds` → `Task::DISK_WRITE_TIME` (`boinc.cpp:185`) |
+| Disable trickles | `-notrickle` (`boinc.cpp:260`) |
+| Add a server-controlled option | the `net.task()->options` map reads in `net_main` (`net.cpp:501-524`; the FFT knobs at `:564-567`) |
+| Change the HTTP endpoints | the `RequestBuilder` URLs in `net.cpp` (`:129,334,456,607`) |
 | Support a new checkpoint wire format | subclass `NetFile` like `LLR2NetFile` (`net.cpp:224-265`) |
 
 ## 8. Open questions / non-coverage
 
-- **Reconciling `net.cpp` with the current interface.** The exact set of edits to make NETPRST compile (and whether the proof-owns-fermat ownership transfer from `boinc.cpp:312-323` should be mirrored) is unverified — nobody has built it post-refactor. A focused task, not a doc.
 - **The `bow/` library.** `bow_init`/`bow_poll_events`/`bow_finish`/… are treated here as the BOINC-integration contract; their implementation lives in the `bow/` submodule and is out of scope.
 - **restc-cpp coroutine model.** The `ProcessWithPromiseT` lambdas, `Context::Sleep`, and the single-worker upload future are reproduced from the code; the restc-cpp threading/coroutine semantics themselves are a library concern, not covered.
 - **The coordinator server protocol.** This doc describes the client side of `prst/new` / `prst/<id>/<file>` / `prst/res/<id>`; the server's job scheduling, the JSON task schema beyond `PRSTTask`'s fields, and the result semantics are defined server-side and not in this repo.
