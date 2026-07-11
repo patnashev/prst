@@ -35,15 +35,23 @@ Proof::ROOT  = 4     internal-only        force the roots-of-unity check without
 
 Constants live at `proof.h:16-20`. `NO_OP` is the absence-marker; the other four reach `Proof::run` through different code paths. `ROOT` is not reachable via a normal user CLI invocation (there's no `-proof root` subcommand) but it is *not* dead: the `-test` harness exercises it directly. `testing.cpp:557` constructs a `Proof(Proof::ROOT, …)` and drives it through the post-Fermat overload at `testing.cpp:560`, then checks `taskRoot()->result()`: `== 1` means the residue was a non-trivial root of unity — the roots-of-unity defense caught the forged residue and the cert is rejected — so the harness flags failure only on `result() != 1` (the `Roots of unity check failed to detect the attack` path; cf. Pitfall D in §7). It's preserved as an internal trigger for the same defense `BUILD` runs by default — see §5.
 
-A typical multi-machine workflow:
+The distributed workflow — and who trusts whom:
 
-```
-machine A: prst <N> -proof save 16          → produces N.proof.{0..16}
-machine A: prst <N> -proof build 16         → consumes the points, produces N.cert
-machine B: prst <N> -proof cert N.cert      → re-verifies the certificate cheaply
-```
+| Who | Op | Files in → out | Reported values |
+|---|---|---|---|
+| **Host** (untrusted) | `-proof save` | → result (the last point) + depth products | res64, raw cert RES64 |
+| **Authority** (trusted, e.g. the PrimeGrid server) | `-proof build` | Save's output → cert | res64 (cross-check), raw cert RES64 (cross-check), secured cert RES64 |
+| **Host** (may be the same machine) | `-proof cert` | cert → | cert RES64, reported back to the authority |
+| **Authority** | compare | | Build's cert RES64 =?= the reported one |
 
-The same machine can do `save` and `build` back-to-back, but the modes are distinct runs because the math each performs is different. `save` is a Fermat test plus periodic disk writes; `build` is a small product-tree reduction that doesn't need to redo the Fermat work; `cert` is a single short exponentiation.
+The trust model is the whole point: **BUILD is performed by an authority**, not by the host that ran SAVE. SAVE produces the *raw* (unsecured) certificate internally (`proof.cpp:453-456`) — a malicious host could forge it trivially — so BUILD *replays* SAVE's compression on trusted hardware in O(depth) product passes (it dispatches through the same `_fermat->run(...)`, `proof.cpp:340`, and re-derives the raw cert RES64 for comparison, `proof.cpp:469-471`), validating `a^k` against point 0 along the way (`proof.cpp:222-231`). SAVE and CERT can both run on the same untrusted host *provided the certificate the authority hands back is secured*: with `-proof … security <seed>` (`ProofBuild`, `proof.cpp:736-750`) the authority's cert has a random exponent folded in, so the host cannot predict CERT's result and must actually compute the O(log n) exponentiation. Without securing, the SAVE host knows the expected CERT result beforehand and the CERT run proves nothing. If the underlying test was wrong — hardware errors slipping past the Gerbicz check, or errors in the proof computation itself — the true CERT run produces a different RES64.
+
+**Failure modes, by which cross-check trips:**
+- **res64 differs between Host and Build** — file-transmission error (the points or result got corrupted in transit).
+- **raw cert RES64 differs between Save and Build** — computation error in `ProofSave` (more likely) or `ProofBuild` (a major issue).
+- **cert RES64 differs between Build and Cert** — computation error in the exponentiation, a point-file storage error, or a `ProofSave` error.
+
+Only when everything is consistent do Build's and Cert's cert RES64 match. False negatives are possible (any error anywhere trips a mismatch); a false positive has probability ~2⁻⁶⁴ (the comparisons are 64-bit residues).
 
 ## 2. Class hierarchy
 
@@ -83,7 +91,7 @@ A `Giant _X` plus the `_iteration` field reused as `depth()` (the level of the p
 ### `Proof::Certificate` — the final artifact written by BUILD and consumed by CERT
 
 ```cpp
-Giant _X;          // certificate value (a residue mod N)
+Giant _X;          // certificate BASE — the value the verification raises (x in x^(2^M)·a^exp, §5)
 Giant _a_power;    // 0 in non-Li mode; the Li-mode exponent otherwise
 Giant _a_base;     // 0 in non-Li mode; the Li-mode base otherwise
 ```
@@ -128,7 +136,7 @@ void Proof::run(GWState& gwstate, File& file_checkpoint, File& file_recoverypoin
         if (!_keep_points) {                        // BUILD output is the .cert; everything else is scratch
             if (_container) remove(_container->filename().data());
             else {
-                if (!Li()) file_points()[0]->clear();   // Li-mode keeps point 0 because it's the base
+                if (!Li()) file_points()[0]->clear();   // Li-mode has no point-0 file — the base is known, so none was ever written
                 file_points()[count()]->clear();
                 for (auto& f : file_products()) f->clear();
             }
@@ -226,7 +234,7 @@ Both branches use `dynamic_cast` to pick the right mode and emit the user-visibl
 | `_file_points`  | `vector<File*>`                            | `init_files`                 | `read_point`, `on_point`, cleanup                          |
 | `_file_products`| `vector<File*>`                            | `init_files`                 | `read_product`, `ProofSave::execute` writes here           |
 | `_file_cert`    | `File*`                                    | `init_files`                 | `ProofBuild::execute` writes; CERT ctor reads              |
-| `_r_0`, `_r_count` | `Giant`                                 | CERT ctor / `init_state`     | the two endpoints of the exponentiation being verified     |
+| `_r_0`, `_r_count` | `Giant`                                 | CERT ctor / `init_state`     | **overloaded by mode** (the naming is a trap): in SAVE/BUILD `init_state` they are the *first and last points* (`proof.cpp:231/235`, `:239-240`); in CERT they are *a and x* from the `x^(2^M)·a^exp` formula (`proof.cpp:42-43` — `_r_count = cert.X()`, `_r_0 = cert.a_base()`) |
 | `_r_exp`        | `Giant*`                                   | `init_state` (Li mode)       | `ProofBuild::execute` for substring decomposition          |
 | `_task`         | `unique_ptr<InputTask>`                    | ctor (varies by mode)        | dispatched via `dynamic_cast` in both `run()` overloads    |
 | `_taskA`        | `unique_ptr<MultipointExp>`                | CERT ctor (Li, exp > _M)     | high-bits pre-pass in `run`                                |
@@ -318,17 +326,19 @@ prst.cpp:419:   run->run(...) → Proof::run override falls into the CERT branch
                    clear checkpoint/recovery files
 ```
 
-The verification math: CERT recomputes `X^M mod N` (non-Li) or a Li-form variant from the certificate's `r_0` to its `r_count`, where `M` is the block size from the cert. If the result matches what the cert claims, the proof is valid; the printed RES64 is the user-visible attestation.
+The verification math: CERT computes `x^(2^M)` (non-Li, `x` = the cert base `_X`, `M` = the block size from the cert) or `x^(2^M) · a^exp` (Li). The Li form hides a trick — it is performed as a **single** left-to-right exponentiation: `x` is injected at bit `M`. The ctor keeps only the low `M` bits of `exp` (`substr`, `proof.cpp:67`) and forces bit `M` on (`exp += 2^M`, `proof.cpp:69-72`); when `log2(exp) < M` there is no high part, and iteration 0 of the exponentiation is seeded with `x` instead of the base `a` — `init_state(new StateValue(0, _r_count))` (`proof.cpp:400-401`), a deliberate hack where normal operation would start from `a` (`exp.cpp:517-518`). When `exp` is wider than `M` bits, the high part runs first as a separate `_taskA` and its result seeds the main run (`proof.cpp:59-67`, `:378-397`). If the result matches what the cert claims, the proof is valid; the printed RES64 is the user-visible attestation.
 
 ### `calc_points` — the binary-tree schedule
 
-`proof.cpp:121-179`. The active branch (the commented block above it is dead code) lays out `_count + 1` points across `iterations`:
+`proof.cpp:121-179`. `_count` is always a power of 2 (enforced at construction, `proof.cpp:16-20`). The active branch (the commented block above it is dead code) lays out `_count + 1` points across `iterations`:
 
 - Point 0 is at iteration 0 (the base).
-- Points 1..count-1 are placed at iterations forming a binary tree: the i-th point is the iteration that, when expressed in binary against `_count`, picks the path matching `i`'s bit-pattern. Concretely, the `for (int j = _count/2; j > 0 && (i & (j*2-1)) != 0; j >>= 1)` loop walks the bits of `i` and increments `pos` by the appropriate halved interval each step. This gives the canonical product-tree layout that `ProofSave::execute` then folds bottom-up.
+- Points 1..count-1 are placed at *almost* regular intervals forming a binary tree: the `for (int j = _count/2; j > 0 && (i & (j*2-1)) != 0; j >>= 1)` loop walks the bits of `i` and increments `pos` by the appropriate halved interval each step. Because `iterations` may not be divisible by `_count`, the interval tree can hit an **odd interval**; the `if ((iterations & (_count/j/2)) != 0) pos++` correction (`proof.cpp:172-173`) distributes the remainder according to a specific placement schema — the one `mult_*.pdf` §2.4's ProofSave folding requires when a block splits unevenly. This gives the canonical product-tree layout that `ProofSave::execute` then folds bottom-up.
 - Point `count` is at iteration `iterations` (the final value).
 
-Each point's `check` flag is true when `i % points_per_check == 0` (only mark a save-checkpoint at every k-th proof point to amortize disk cost); each point's `value` flag is true when it's safe to record a full `Giant` (base-2 KBNC where `k != 0`) vs. a cheaper `SerializedGWNum`.
+Each point's `check` flag is true when `i % points_per_check == 0`. That divisor is the lever that keeps the Gerbicz-Li overhead small when there are lots of points: by default `points_per_check = 1` (`proof.cpp:132`) — *every* proof point demands a check — which forces `L` down (`L² ≈ iterations/_count`) and inflates the check overhead. It shows up in the `complexity` value in the test's info header; watch it when raising `-proof save` counts. `-check strong count N` is the CLI lever (`proof.cpp:125-131`): with `-proof save 1024 -check strong count 16`, `points_per_check = 1024/16 = 64`. Two behaviors hang off the flag: when a Gerbicz check fails, the whole block restarts and **all intermediate points in it are re-written** (`exp.cpp:746-754` + the re-fired `on_point`s); and `Proof::init_state` resumes only from points whose `check` flag is set (`proof.cpp:256`) — unchecked points are proof data, not checkpoints.
+
+Each point's `value` flag is true when it's *fast* to record a full `Giant` — base-2 KBNC with `k != 0` (`proof.cpp:133`), where the GWNum→Giant conversion is simple. The alternative `SerializedGWNum` is cheaper to *produce* but takes 2–3× the disk — and with `count` in the thousands, proof temp files can run to gigabytes, so opting for the smaller `Giant` files when the conversion is cheap is a real saving. (`-proof … write fast|small` overrides the automatic choice, `fermat.cpp:294-296`.)
 
 `_M = iterations` is set on the first iteration of the building loop and then halved repeatedly; the final `_M` is what `MultipointExp` consumes as the strong-check block size.
 
@@ -410,7 +420,7 @@ Use both for production-grade attestations. Use neither only for local developme
 | Construct point/product files inside a .pack              | Set `proof->container()` before `proof->init_files(...)` (prst.cpp:366)    |
 | Preserve intermediate files after BUILD                   | `proof->set_keep_points(true)` (prst.cpp:373; CLI: `-proof … keep`)        |
 | Cache point buffers in memory between writes              | `proof->set_cache_points(true)` (skips `free_buffer` after `on_point`)     |
-| Feed a verifier with a smaller working set                | Use `-proof build … -ProofPointsPerCheck k` to mark fewer `check` points   |
+| Check fewer proof points (bigger `L`, less overhead)      | `-check strong count N` → `points_per_check = _count/N` (`proof.cpp:125-131`); `ProofPointsPerCheck` has no direct CLI flag |
 
 ## 9. Open questions / non-coverage
 
