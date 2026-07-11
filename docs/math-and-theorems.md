@@ -30,6 +30,8 @@ This is a genuine *iff* — a deterministic test, not probabilistic. `Fermat`'s 
 
 then `N` is prime. (The base may differ per prime `q`; PRST tries successive bases and reuses one across factors when it works, restarting with the next prime base when a factor isn't witnessed — `run-hierarchy.md` §4.2.) (BLS sharpen the bound — `F > N^{1/3}` with auxiliary conditions — but PRST uses the "more than half factored" threshold `F > √N`.) The two `Pocklington` classes implement exactly this: the Fermat congruence first, then the per-prime `gcd` checks, accumulating confirmed factors until `F² > N` (`run-hierarchy.md` §4.2–4.3). **`InputNum::is_half_factored` is this threshold** — it returns true iff the factored product `F` exceeds the cofactor `R` (`inputnum-parsing.md` §5), i.e. `F > √N`.
 
+**Fully factored `N−1` — the gcd condition becomes redundant.** The second (gcd) condition earns its keep in the *partially* factored case. When `N−1` is fully factored and every prime factor `q` has a direct witness (`a_q^((N−1)/q) ≢ 1` alongside the first condition), the classic fully-factored Lucas criterion applies and the second condition can be omitted. That is what `-factors all` requests on the `N−1` side (`prst.cpp:193` → `pocklington.cpp:130-135`, `:417-422`): don't accept on `F > √N` — keep testing until *every* factor is witnessed. The payoff is correctness robustness, not speed: the verdict then no longer rests on the gcd implementation and its product-accumulation chain, taking a whole class of potential bugs out of the trust base. (The code still computes the gcds along the way — a `gcd ≠ 1` is a genuine factor find — but the *proof* stops depending on them.)
+
 ## 3. The `N+1` side — Morrison and BLS Theorem 14
 
 The dual criterion, using a partial factorization of `N+1` and **Lucas sequences** instead of plain powers. This is what the Morrison test runs (it's ~2× the work of Pocklington, hence the dispatcher prefers `N−1` when both apply).
@@ -39,6 +41,12 @@ For a Lucas sequence with parameters `(P, Q)`, discriminant `D = P² − 4Q`, ch
 - **`Q = −1`:** factor 2 is tested for free, and `gcd(U_{(N+1)/q}, N) = gcd(V_{(N+1)/2q}, N)` — the Theorem-14 identity that lets the cheaper `V` sequence stand in for `U`.
 
 `Morrison`/`MorrisonGeneric` pick the smallest valid `P` (via the Kronecker symbol), run the `V`-chain to the required indices, and check these conditions plus the per-factor `gcd`s (`run-hierarchy.md` §4.4–4.5). **LLR** (Lucas–Lehmer–Riesel, for `k·2^n − 1`) is the special case PRST labels "Morrison (LLR) test."
+
+**`Q = −1` needs `4 | N+1`, and it's the preferred choice.** `_negQ` is set exactly when the power of 2 in `N+1` is at least 2 (`morrison.cpp:43-49`). When available it wins: the `P` search starts lower (`P = 1` vs `3`, `morrison.cpp:167`) and factor 2 is tested for free (`:48-49`, `:261`). LLR-form inputs (`k·2^m − 1`, `m ≥ 2`) always satisfy it, so every LLR test runs with `Q = −1`.
+
+**Witnesses are per-`P` — the structural asymmetry with the `N−1` side.** When a `P` fails to witness some factor, Morrison discards *all* witnesses accumulated under that `P` and restarts with the next one (`morrison.cpp:824-834` clears `_done_factors`; the classic path restarts its loop at `:270-309`) — whereas `PocklingtonGeneric` keeps its `_done_factors` across base changes (`pocklington.cpp:577-596`). The remarks to BLS Theorem 13 would allow *keeping* witnesses across Lucas sequences that share the discriminant `D`, but that requires `Q` outside `{+1, −1}` — and the framework's Lucas arithmetic encodes `Q` as a sign bit only (`lucas.h:130`, `D = P² ∓ 4`), so it isn't expressible. Finding witnesses for *all* factors on the `N+1` side may therefore be practically impossible.
+
+Accordingly **`-factors all` means something different here**: do not accept on `F > √N`; find as many witnesses as possible *for the current `P`* (`morrison.cpp:564-569`; the classic path forces a full restart when any factor resists, `:283-287`). This asymmetry is why the two `*Generic` tests, otherwise near-twins, differ in their termination predicates and restart bookkeeping.
 
 **Lucas sequences themselves.** `V_m` and `U_m` satisfy `V_0=2, V_1=P` and `U_0=0, U_1=1` with the recurrences `V_{m+n} = V_m V_n − Q^n V_{m−n}` (and companions). PRST never materializes the whole sequence — it climbs a *Lucas ladder* (a differential addition chain) to the needed index, which is what the `LucasV`/`LucasUV` arithmetic in `curves-and-polynomials.md` computes.
 
@@ -81,6 +89,7 @@ Two layers have their own homes; the *why* still lives here in spirit:
 - **The deterministic tests assume `F > √N`.** Pocklington/Morrison correctness *requires* the factored part to exceed `√N`; the dispatcher only commits to them when `is_half_factored` holds, falling back to Fermat PRP otherwise (`run-hierarchy.md` §3). Weakening that threshold breaks the proof of correctness, not just performance.
 - **Theorem statements here are the standard forms, not PRST's exact parameterization.** PRST chooses specific witnesses (`genProthBase`, the Kronecker-symbol `P` search), specific bounds, and the BLS sharpenings; the precise conditions it checks are in the *code* (the engineering docs) and the *proofs* are in BLS / eprint 2023/195. This doc is the bridge, not the authority — verify against the references before relying on a subtle case (e.g. the exact `Q=±1` Lucas conditions, the `gcd` index arithmetic).
 - **Gerbicz soundness is probabilistic in the adversarial sense.** Against random hardware error it's overwhelmingly reliable; the proof-*certificate* soundness against a *malicious* prover is the stronger claim that needs the roots-of-unity defense and the security seed (eprint 2023/195, `proof-system.md` §7) — a passed Gerbicz check alone is not a forgery-proof certificate.
+- **The Gerbicz check's final comparison runs on the same hardware as the test.** A hardware fault can corrupt the comparison — or the check arithmetic — just as it can corrupt the squarings, so "passed Gerbicz" means the *machine reports* its blocks verified, nothing more. A distributed search cannot trust an individual node's verdict on that basis alone; the proof system, with Build and Cert replayed on independent hardware, is the only way to be sure (`proof-system.md` §1).
 - **The `0.4` round-off threshold is a tuned conservative bound, not a theorem constant.** It's below the provable safe limit with margin; treat it as an engineering parameter justified by the multiplication theory, not a magic number (`arithmetic-foundation.md` §9).
 
 ## 8. References & open questions
@@ -90,6 +99,7 @@ Two layers have their own homes; the *why* still lives here in spirit:
 2. eprint 2023/195 — the Gerbicz-Li checking and proof-certificate theory.
 3. `framework/docs/mult_*.pdf` — the IBDWT multiplication and round-off theory.
 4. A standard reference (Crandall & Pomerance, *Prime Numbers*) for Proth, Pocklington, Lucas sequences, and the LLR test in textbook form.
+5. https://www.mersenneforum.org/node/22956 — the forum discussion of the `N∓1` witness semantics behind §2–§3.
 
 **Open / not covered here:**
 - **The actual proofs.** Reproducing BLS Theorem 14, the Gerbicz-Li soundness bound, or the IBDWT error bound is out of scope — this doc cites them. Anyone *modifying* the algorithms (not just the code) must work from the references, not this summary.
