@@ -22,7 +22,7 @@ Pocklington::Pocklington(InputNum& input, Options& options, Logging& logging, Pr
     if (logging.progress().param_int("a") != 0)
     {
         _a = logging.progress().param_int("a");
-        options.maxmulbyconst = _a;
+        logging.report_param("maxmulbyconst", _a);
     }
     _fingerprint = input.fingerprint();
 
@@ -148,6 +148,7 @@ void Pocklington::run(arithmetic::GWState& gwstate, File& file_checkpoint, File&
             if (!_task->smooth())
             {
                 gwstate.done();
+                logging.report_param("maxmulbyconst", _a);
                 gwstate.maxmulbyconst = _a;
                 input.setup(gwstate);
             }
@@ -182,7 +183,7 @@ PocklingtonGeneric::PocklingtonGeneric(InputNum& input, Options& options, Loggin
         _a = logging.progress().param_int("a");
     else
         _a = options.FermatBase ? options.FermatBase.value() : 3;
-    options.maxmulbyconst = (_a > GWMULBYCONST_MAX ? 1 : _a);
+    logging.report_param("maxmulbyconst", (_a > GWMULBYCONST_MAX ? 1 : _a));
     _fingerprint = input.fingerprint();
 
     std::string& st = logging.progress().param("factors");

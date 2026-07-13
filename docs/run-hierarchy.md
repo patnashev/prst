@@ -87,7 +87,7 @@ Field/method reference — every member:
 | Member | Role |
 |---|---|
 | `input` | the parsed candidate (`InputNum&`, a reference — not owned). All dispatch and exponent construction reads `input.factors()`, `input.c()`, `input.type()`, `input.value()`, etc. |
-| `_options` | user knobs (`Options&`, see below). Tests read `CheckStrong`, `StrongCount`, `FermatBase`, `AllFactors`; `Run::create` and ctors *write* `options.maxmulbyconst` as a side effect. |
+| `_options` | user knobs (`Options&`, see below). Tests read `CheckStrong`, `StrongCount`, `FermatBase`, `AllFactors`. |
 | `_name` | human-readable test name (`"Fermat test"`, `"Proth test"`, `"Morrison (LLR) test"`, …). Set in the ctor, sometimes refined mid-ctor once the exact form is known. |
 | `_fingerprint` | 32-bit ID used to namespace checkpoint files. Usually `input.fingerprint()` or `File::unique_fingerprint(input.fingerprint(), <salt>)`. |
 | `_success` | the candidate passed the probable-prime stage (Fermat/Lucas congruence held). Not yet a proof of primality. |
@@ -97,7 +97,7 @@ Field/method reference — every member:
 | `run(gwstate, file_checkpoint, file_recoverypoint, logging)` | the one pure-virtual entrypoint. `file_checkpoint`/`file_recoverypoint` are the `.ckpt`/`.rcpt` `File`s; tests add per-base child files under them. |
 | `create(...)` | the static factory — §3. |
 
-`Options` (`prst.h:10-48`) is a bag of `std::optional`s. The fields the tests in this doc consult: `ForceFermat`, `OrderA` (the base for `-order`), `Check`/`CheckNear` (round-off error checking), `CheckStrong`/`StrongCount`/`StrongL`/`StrongL2` (Gerbicz / Gerbicz-Li), `FermatBase`, `AllFactors`, and the `Proof*`-related fields covered in `proof-system.md`. `maxmulbyconst` is the one field commented `// Set by Run::create()`.
+`Options` (`prst.h:10-48`) is a bag of `std::optional`s. The fields the tests in this doc consult: `ForceFermat`, `OrderA` (the base for `-order`), `Check`/`CheckNear` (round-off error checking), `CheckStrong`/`StrongCount`/`StrongL`/`StrongL2` (Gerbicz / Gerbicz-Li), `FermatBase`, `AllFactors`, and the `Proof*`-related fields covered in `proof-system.md`.
 
 ## 3. Annotated `Run::create` — the dispatcher
 

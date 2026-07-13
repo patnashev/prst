@@ -326,10 +326,9 @@ int boinc_main(int argc, char *argv[])
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
-    if (options.next_fft_count < logging.progress().param_int("next_fft"))
-        options.next_fft_count = logging.progress().param_int("next_fft");
     GWState gwstate;
     options.configure(gwstate);
+    logging.progress().configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 

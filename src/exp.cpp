@@ -596,7 +596,7 @@ void StrongCheckMultipointExp::execute()
                     next_point++;
                 }
                 if (j + 1 != L2 && (j + 1)%L == 0)
-                    gw().mul(X(), D(), D(), is_last(i) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + 1 + L != L2));
+                    gw().mul(X(), D(), D(), is_last(i) ? GWMUL_PRESERVE_S1 : (GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + 1 + L != L2)));
             }
         }
         else if (smooth())
@@ -627,7 +627,7 @@ void StrongCheckMultipointExp::execute()
                     next_point++;
                 }
                 if (j + L != L2)
-                    gw().mul(X(), D(), D(), is_last(i + L - 1) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2));
+                    gw().mul(X(), D(), D(), is_last(i + L - 1) ? GWMUL_PRESERVE_S1 : (GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2)));
             }
         }
         else if(!_X0.empty())
@@ -655,7 +655,7 @@ void StrongCheckMultipointExp::execute()
                 else
                     slide(_exp, i, i + L, false);
                 if (j + L != L2)
-                    gw().mul(X(), D(), D(), is_last(i + L - 1) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2));
+                    gw().mul(X(), D(), D(), is_last(i + L - 1) ? GWMUL_PRESERVE_S1 : (GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(j + L + L != L2)));
             }
         }
         check();

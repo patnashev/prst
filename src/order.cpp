@@ -17,7 +17,7 @@ Order::Order(InputNum& input, Options& options, Logging& logging) : Run("Order",
     create_tasks(ga, logging, false);
 
     if (_task && ga <= GWMULBYCONST_MAX)
-        options.maxmulbyconst = ga.data()[0];
+        logging.report_param("maxmulbyconst", (int)ga.data()[0]);
 
     _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(options.OrderA->fingerprint()));
 }
@@ -469,7 +469,7 @@ void FermatDivisor::run(arithmetic::GWState& gwstate, File& file_checkpoint, Fil
     {
         for (int a = 3; a <= limit; a++)
             for (int b = 2; b < a; b++)
-                if (gcd(a, b) == 1 && !(perfect_power(a)%2 == 0 && perfect_power(b)%2 == 0) && (_bases[a - 2].val == _bases[b - 2].val || _bases[a - 2].val + _bases[b - 2].val == *gwstate.N))
+                if (gcd(a, b) == 1 && gcd(perfect_power(a), perfect_power(b)) == 1 && (_bases[a - 2].val == _bases[b - 2].val || _bases[a - 2].val + _bases[b - 2].val == *gwstate.N))
                 {
                     Base& base_a = (_bases[a - 2].power <= _bases[b - 2].power ? _bases[a - 2] : _bases[b - 2]);
                     Base& base_b = (_bases[a - 2].power <= _bases[b - 2].power ? _bases[b - 2] : _bases[a - 2]);

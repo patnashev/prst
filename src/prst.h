@@ -53,7 +53,6 @@ public:
     double safety_margin = 0;
     int force_mod_type = 0;
     bool information_only = false;
-    int maxmulbyconst = 1; // Set by Run::create()
 
     void configure(arithmetic::GWState& gwstate)
     {
@@ -65,7 +64,6 @@ public:
         gwstate.instructions = instructions;
 
         gwstate.information_only = information_only;
-        gwstate.maxmulbyconst = maxmulbyconst;
         gwstate.known_factors = 1;
     }
 };

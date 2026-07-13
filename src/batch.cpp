@@ -83,12 +83,12 @@ int batch_main(int argc, char *argv[])
                 .ex_case()
                     .check("gf", options.Divides, "GF")
                 .optional()
-                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .value_number("limit", ' ', options.DividesLimit, 2, 1000000)
                     .end()
                 .ex_case()
                     .check("xgf", options.Divides, "xGF")
                 .optional()
-                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .value_number("limit", ' ', options.DividesLimit, 2, 1000)
                     .end()
                 .end()
             .end()
@@ -331,8 +331,7 @@ int batch_main(int argc, char *argv[])
 
         GWState gwstate;
         options.configure(gwstate);
-        if (gwstate.next_fft_count < logging.progress().param_int("next_fft"))
-            gwstate.next_fft_count = logging.progress().param_int("next_fft");
+        logging.progress().configure(gwstate);
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
 

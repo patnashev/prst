@@ -79,7 +79,7 @@ A typical invocation `prst "30006!4-1" -d` flows:
    - `c == 1` and half-factored → `Pocklington` (when the number of factors is small) else `PocklingtonGeneric`
    - `c == -1` and half-factored → `Morrison` (when the number of factors is small) else `MorrisonGeneric`
 7. **Optional proof wrapping** — if `-proof save|build` is requested, the `Run` is wrapped in a `Proof` that delegates the inner Fermat test (`prst.cpp:358-381`).
-8. **GWState setup** — initialize GWnum library, handle all kinds of exceptions (like header/lib version mismatch).
+8. **GWState setup** — configure, initialize GWnum library, handle all kinds of exceptions (like header/lib version mismatch).
 9. **`run->run(gwstate, file_checkpoint, file_recoverypoint, logging)`** — the polymorphic test entrypoint at `prst.cpp:438`. The selected test class drives one or more `Task` instances, writes checkpoints to `prst_<fingerprint>.ckpt`/`.rcpt`, and emits result lines via `logging.result(...)`.
 10. **Exit code** — `PRST_EXIT_PRIMEFOUND` (2) / `PRST_EXIT_NORMAL` (0) / `PRST_EXIT_FAILURE` (1), defined in `src/prst.h`.
 
@@ -129,8 +129,11 @@ primitives are documented in that repo's `docs/` folder — only their PRST-faci
 
 ### `Logging` — user-facing accounting
 
-Message output, results, factor/log files, progress checkpoints, and staged progress/time accounting.
-Tests emit results through `logging.result(...)`; `*Generic` tests run inner work under a `SubLogging`.
+Tracks execution of the run at all levels of hierarchy. Can be subclassed to gain access to task internals like `heartbeat()`.
+
+Base function is message output at configurable verbosity levels, results reporting, shadowing output to log files. Tests emit results through `logging.result(...)`.
+
+Contains `Progress` object which provides staged progress/time accounting and tracks actual parameters of the task being executed. Can be persisted to file.
 
 (Framework: `logging-and-progress.md`.)
 
@@ -178,11 +181,11 @@ Turns `argv` or `*.ini` into `Options`.
 
 Bag of `std::optional`s populated by the `Config` DSL. Test classes consult fields like `Check`, `CheckStrong`, `StrongCount`, `FermatBase`, `AllFactors`, `ProofPointFilename`.
 
-Also contains fields which configure GWState: thread count, spin threads, instruction set (SSE2/AVX/FMA3/AVX512F), FFT size hints, safety margin. `Run::create` may also change these fields as a side-effect.
+Also contains fields which configure GWState: thread count, spin threads, instruction set (SSE2/AVX/FMA3/AVX512F), FFT size hints, safety margin. GWState instance is configured by `options.configure(gwstate)` before a call to `setup()`.
 
 ### `GWState` — the math runtime
 
-Owned by `main()`. Can't be intialized before `Run::create` sets the required parameters in the `options`, which are propagated by `options.configure(gwstate)`. `input.setup(gwstate)` intializes GWState, picks the actual FFT and reports it via `gwstate.fft_description`. `gwstate` can be reused after a call to `gwstate.done()`.
+Owned by `main()`. Can't be intialized before `Run::create` sets the required parameters in the `logging.progress().params()`, which are propagated by `logging.progress().configure(gwstate)`. `input.setup(gwstate)` intializes GWState, picks the actual FFT and reports it via `gwstate.fft_description`. `gwstate` can be reused after a call to `gwstate.done()`.
 
 (Framework: `arithmetic-foundation.md`.)
 

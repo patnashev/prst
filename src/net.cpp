@@ -565,6 +565,7 @@ int net_main(int argc, char *argv[])
             gwstate.next_fft_count = std::stoi(net.task()->options["FFT_Increment"]);
         if (net.task()->options.find("FFT_Safety") != net.task()->options.end())
             gwstate.safety_margin = std::stod(net.task()->options["FFT_Safety"]);
+        logging.progress().configure(gwstate);
         input.setup(gwstate);
         logging.info("Using %s.\n", gwstate.fft_description.data());
         logging.report_param("fft_desc", gwstate.fft_description);

@@ -99,13 +99,13 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging) : Run("M
         exp_morrison <<= n;
         int checks = options.StrongCount ? options.StrongCount.value() : 16;
         _task.reset(new LucasUVMulFast(std::move(exp_morrison), checks));
-        options.maxmulbyconst = 2;
+        logging.report_param("maxmulbyconst", 2);
     }
     else
     {
         if (_negQ)
             taskV->mul_prime(2, n);
-        options.maxmulbyconst = 1;
+        logging.report_param("maxmulbyconst", 1);
     }
 
     if (_factor_tasks.size() > 0)
@@ -357,7 +357,7 @@ MorrisonGeneric::MorrisonGeneric(InputNum& input, Options& options, Logging& log
         logging.error("The implementation of the Morrison test for such numbers requires the strong check.\n");
     CheckStrong = true;
     _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(input.factors().size()));
-    options.maxmulbyconst = 2;
+    logging.report_param("maxmulbyconst", 2);
 
     std::string& st = logging.progress().param("factors");
     for (std::string::const_iterator it = st.begin(), it_p = st.begin(); it != st.end(); )

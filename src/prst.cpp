@@ -152,12 +152,12 @@ int main(int argc, char *argv[])
                 .ex_case()
                     .check("gf", options.Divides, "GF")
                 .optional()
-                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .value_number("limit", ' ', options.DividesLimit, 2, 1000000)
                     .end()
                 .ex_case()
                     .check("xgf", options.Divides, "xGF")
                 .optional()
-                    .value_number("limit", ' ', options.DividesLimit, 2, INT_MAX)
+                    .value_number("limit", ' ', options.DividesLimit, 2, 1000)
                     .end()
                 .end()
             .end()
@@ -403,10 +403,9 @@ int main(int argc, char *argv[])
     File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);
     File file_recoverypoint(filename_prefix + filename_suffix + ".rcpt", fingerprint);
 
-    if (options.next_fft_count < logging.progress().param_int("next_fft"))
-        options.next_fft_count = logging.progress().param_int("next_fft");
     GWState gwstate;
     options.configure(gwstate);
+    logging.progress().configure(gwstate);
     try
     {
         input.setup(gwstate);
@@ -462,7 +461,7 @@ int main(int argc, char *argv[])
 
 Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* proof)
 {
-    options.maxmulbyconst = 1;
+    logging.report_param("maxmulbyconst", 1);
 
     // -order
     if (options.OrderA && !options.OrderA->empty() && options.OrderA->value() > 1)

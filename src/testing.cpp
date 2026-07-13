@@ -296,11 +296,14 @@ void Test::run(Logging& logging, Options& options)
     int proof_count = 16;
 
     uint32_t fingerprint = input.fingerprint();
+    File file_progress("prst_param", fingerprint);
+    file_progress.hash = false;
+    logging.file_progress(&file_progress);
     File file_cert("prst_cert", fingerprint);
     Proof proof(Proof::SAVE, proof_count, input, options, file_cert, logging);
-    Fermat fermat(Fermat::AUTO, input, options, logging, &proof);
 
-    fingerprint = File::unique_fingerprint(fingerprint, std::to_string(fermat.a()) + "." + std::to_string(proof.points()[proof_count].pos));
+    Fermat fermat(Fermat::AUTO, input, options, logging, &proof);
+    fingerprint = proof.fingerprint();
     File file_proofpoint("prst_proof", fingerprint);
     File file_proofproduct("prst_prod", fingerprint);
     File file_checkpoint("prst_ckpt", fingerprint);
@@ -308,11 +311,13 @@ void Test::run(Logging& logging, Options& options)
 
     GWState gwstate;
     options.configure(gwstate);
+    logging.progress().configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
     auto finally = [&]
     {
+        file_progress.clear(true);
         file_cert.clear();
         file_proofpoint.clear(true);
         file_proofproduct.clear(true);
@@ -394,28 +399,31 @@ void Test::run(Logging& logging, Options& options)
 
 void DeterministicTest::run(Logging& logging, Options& options)
 {
-    uint32_t fingerprint = input.fingerprint();
     input.expand_factors();
     if (!input.is_half_factored())
         throw std::runtime_error("Not enough factors.");
+
+    uint32_t fingerprint = input.fingerprint();
+    File file_progress("prst_param", fingerprint);
+    file_progress.hash = false;
+    logging.file_progress(&file_progress);
 
     std::unique_ptr<Run> run(Run::create(input, options, logging));
 
     File file_checkpoint("prst_ckpt", fingerprint);
     File file_recoverypoint("prst_rcpt", fingerprint);
-    File file_params("prst_param", fingerprint);
-    logging.file_progress(&file_params);
 
     GWState gwstate;
     options.configure(gwstate);
+    logging.progress().configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
     auto finally = [&]
     {
+        file_progress.clear(true);
         file_checkpoint.clear(true);
         file_recoverypoint.clear(true);
-        file_params.clear(true);
         gwstate.done();
     };
     try
@@ -634,6 +642,7 @@ void RootsTest(Logging& logging, Options& options)
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
     options.configure(gwstate);
+    logging.progress().configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 
@@ -701,6 +710,7 @@ void RootsTest(Logging& logging, Options& options)
     proof_build.init_files(&file_proofpoint, &file_proofproduct, &file_cert);
 
     options.configure(gwstate);
+    logging.progress().configure(gwstate);
     input.setup(gwstate);
     logging.info("Using %s.\n", gwstate.fft_description.data());
 

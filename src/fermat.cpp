@@ -211,7 +211,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
     if (_type == POCKLINGTON)
         _name = "Pocklington test";
     _fingerprint = File::unique_fingerprint(input.fingerprint(), std::to_string(_a));
-    options.maxmulbyconst = 1;
+    logging.report_param("maxmulbyconst", 1);
 
     if (proof == nullptr && !CheckStrong)
     {
@@ -222,7 +222,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
         }
         _task.reset(new FastExp(std::move(exp)));
         logging.progress().add_stage(_task->exp().bitlen());
-        options.maxmulbyconst = _a;
+        logging.report_param("maxmulbyconst", _a);
     }
     else if (proof == nullptr)
     {
@@ -239,7 +239,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
         else
         {
             _task.reset(new FastLiCheckExp(std::move(exp), checks, options.StrongL ? options.StrongL.value() : 0));
-            options.maxmulbyconst = _a;
+            logging.report_param("maxmulbyconst", _a);
         }
         logging.progress().add_stage(_task->cost());
     }
@@ -272,7 +272,7 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
                 _task.reset(new MultipointExp(std::move(exp), false, proof->points(), on_point));
             else
                 _task.reset(new StrongCheckMultipointExp(std::move(exp), false, proof->points(), L, L2, on_point));
-            options.maxmulbyconst = _a;
+            logging.report_param("maxmulbyconst", _a);
         }
         else
         {
