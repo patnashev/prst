@@ -145,9 +145,8 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
             }
         if (n == 0)
         {
-            _a = -2;
-            logging.result(false, "%s is not prime, divisible by 2.\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is not prime, divisible by 2.\n");
+            _factor = 2;
+            primality_result(logging);
             return;
         }
         if (!input.cofactor().empty())
@@ -181,8 +180,8 @@ Fermat::Fermat(int type, InputNum& input, Options& options, Logging& logging, Pr
             _a = genProthBase(_type == POCKLINGTON ? exp_pocklington : exp, n + 1);
             if (_a < 0)
             {
-                logging.result(false, "%s is not prime, divisible by %d.\n", input.display_text().data(), -_a);
-                logging.result_save(input.input_text() + " is not prime, divisible by " + std::to_string(-_a) + ".\n");
+                _factor = -_a;
+                primality_result(logging);
                 return;
             }
         }
@@ -315,12 +314,12 @@ void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file
 
 void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging, Proof* proof)
 {
+    if (!_factor.empty())
+        return;
     _success = false;
     _res64 = "";
     Giant ak;
     ak = _a; // smooth exp is not using mulbyconst
-    if (_a < 0)
-        return;
 
     if (type() == PROTH)
         logging.info("Proth test of %s, a = %d, complexity = %d.\n", input.display_text().data(), _a, (int)logging.progress().cost_total());
@@ -409,39 +408,35 @@ void Fermat::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file
     }
     else if (*_task->result() == 1)
         _success = true;
-
     if (type() == PROTH)
+    {
         *_task->result() += 1;
+        if (*_task->result() == 0 || *_task->result() == *gwstate.N)
+            _prime = true;
+        else
+            _res64 = _task->result()->to_res64();
+        *_task->result() -= 1;
+    }
+    else if (!_success)
+    {
+        if (_task_fermat_simple)
+            _res64 = _task_fermat_simple->result()->to_res64();
+        else
+            _res64 = _task->result()->to_res64();
+    }
 
     logging.set_prefix("");
     logging.progress().next_stage();
-    if (type() == PROTH && (*_task->result() == 0 || *_task->result() == *gwstate.N))
-    {
-        _prime = true;
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
-    }
-    else if (type() == PROTH || !_success)
-    {
-        if (type() == PROTH || !_task_fermat_simple)
-            _res64 = _task->result()->to_res64();
-        else
-            _res64 = _task_fermat_simple->result()->to_res64();
-        logging.result(_prime, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is not prime. RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
-    }
-    if (!_prime && _success)
-    {
-        logging.result(type() != PROTH && type() != POCKLINGTON, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
-    }
 
-    if (type() == PROTH)
-        *_task->result() -= 1;
+    if (type() != POCKLINGTON)
+        primality_result(logging);
 
     if (proof != nullptr)
         proof->run(gwstate, logging, _success ? nullptr : _task->result());
 
-    file_checkpoint.clear();
-    file_recoverypoint.clear();
+    if (type() != POCKLINGTON)
+    {
+        file_checkpoint.clear();
+        file_recoverypoint.clear();
+    }
 }

@@ -70,8 +70,8 @@ Morrison::Morrison(InputNum& input, Options& options, Logging& logging) : Run("M
     if (n == 0)
     {
         _task.reset();
-        logging.result(false, "%s is not prime, divisible by 2.\n", input.display_text().data());
-        logging.result_save(input.input_text() + " is not prime, divisible by 2.\n");
+        _factor = 2;
+        primality_result(logging);
         return;
     }
     if (!input.cofactor().empty())
@@ -208,10 +208,7 @@ void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& fi
         tmp.gcd(*gwstate.N);
         if (tmp != 1)
         {
-            _res64 = tmp.to_res64();
-            logging.set_prefix("");
-            logging.result(_prime, "%s is not prime. Factor RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-            logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+            _factor = std::move(tmp);
             break;
         }
 
@@ -246,9 +243,6 @@ void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& fi
         if (*result != (_negQ ? 0 : 2))
         {
             _res64 = result->to_res64();
-            logging.set_prefix("");
-            logging.result(_success, "%s is not a probable prime. Have you run Fermat test first? RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-            logging.result_save(input.input_text() + " is not a probable prime. Have you run Fermat test first? RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
             break;
         }
         _success = true;
@@ -327,22 +321,18 @@ void Morrison::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& fi
             logging.progress().update(0, 0);
             if (G != 1) // Q=1: 19*2130-1, Q=-1: 225*5516-1
             {
-                _res64 = G.to_res64();
-                logging.set_prefix("");
-                logging.result(_prime, "%s is not prime. Factor RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-                logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+                _factor = std::move(G);
                 break;
             }
         }
         _prime = true;
     }
 
-    if (_prime)
-    {
-        logging.set_prefix("");
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
-    }
+    logging.set_prefix("");
+    if (!_res64.empty())
+        result_not_probable_prime_res64(input, logging, _res64, logging.progress().time_total());
+    else
+        primality_result(logging);
 
     if (checkpoint)
         checkpoint->clear();
@@ -489,7 +479,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
         last_progress = 0;
     };
 
-    while (_res64.empty() && !_prime)
+    while (!_prime && _res64.empty() && _factor.empty())
     {
         _success = false;
         _res64 = "";
@@ -503,10 +493,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
         tmp.gcd(*gwstate.N);
         if (tmp != 1)
         {
-            _res64 = tmp.to_res64();
-            logging.set_prefix("");
-            logging.result(_prime, "%s is not prime. Factor RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-            logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
+            _factor = std::move(tmp);
             break;
         }
 
@@ -542,10 +529,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
                 tmp.gcd(*gwstate.N);
                 if (tmp != 1)
                 {
-                    logging.set_prefix("");
-                    _res64 = tmp.to_res64();
-                    logging.result(_prime, "%s is not prime. Factor RES64: %s.\n", input.display_text().data(), _res64.data());
-                    logging.result_save(input.input_text() + " is not prime. Factor RES64: " + _res64 + ".\n");
+                    _factor = std::move(tmp);
                     return true;
                 }
             }
@@ -740,10 +724,7 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
                 {
                     if (stack_value.back().V() != (_negQ ? 0 : 2) && !_success)
                     {
-                        logging.set_prefix("");
                         _res64 = stack_value.back().V().to_res64();
-                        logging.result(_success, "%s is not a probable prime. Have you run Fermat test first? RES64: %s, time: %.1f s.\n", input.display_text().data(), _res64.data(), logging.progress().time_total());
-                        logging.result_save(input.input_text() + " is not a probable prime. Have you run Fermat test first? RES64: " + _res64 + ", time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
                         break;
                     }
                     if (stack_value.back().V() != (_negQ ? 0 : 2))
@@ -838,13 +819,13 @@ void MorrisonGeneric::run(arithmetic::GWState& gwstate, File& file_checkpoint, F
     }
 
     logging.progress().next_stage();
-    logging.set_prefix("");
     if (_prime)
-    {
-        logging.info("%s %.1f%% of factors tested.\n", input.display_text().data(), std::floor(_done.bitlen()/pct_bitlen)/10.0);
-        logging.result(_prime, "%s is prime! Time: %.1f s.\n", input.display_text().data(), logging.progress().time_total());
-        logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)logging.progress().time_total()) + " s.\n");
-    }
+        logging.info("%.1f%% of factors tested.\n", std::floor(_done.bitlen()/pct_bitlen)/10.0);
+    logging.set_prefix("");
+    if (!_res64.empty())
+        result_not_probable_prime_res64(input, logging, _res64, logging.progress().time_total());
+    else
+        primality_result(logging);
 
     file_checkpoint.clear(true);
     file_recoverypoint.clear(true);

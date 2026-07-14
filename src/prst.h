@@ -82,10 +82,20 @@ public:
     bool success() { return _success; }
     bool prime() { return _prime; }
     std::string& res64() { return _res64; }
-
-    virtual void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) = 0;
+    arithmetic::Giant& factor() { return _factor; }
+    std::string& result() { return _result; }
+    bool finished() { return _success || _prime || !_res64.empty() || !_factor.empty() || !_result.empty(); }
 
     static Run* create(InputNum& input, Options& options, Logging& logging, Proof* proof = nullptr);
+    virtual void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) = 0;
+    void primality_result(Logging& logging);
+    static void result_prime(InputNum& input, Logging& logging, double time);
+    static void result_probable_prime(InputNum& input, Logging& logging, double time);
+    static void result_not_prime(InputNum& input, Logging& logging, double time);
+    static void result_not_prime_divisible(InputNum& input, Logging& logging, arithmetic::Giant& factor, double time);
+    static void result_not_prime_res64(InputNum& input, Logging& logging, const std::string& res64, double time);
+    static void result_not_prime_but_probable_res64(InputNum& input, Logging& logging, const std::string& res64, double time);
+    static void result_not_probable_prime_res64(InputNum& input, Logging& logging, const std::string& res64, double time);
 
 protected:
     InputNum& input;
@@ -95,4 +105,6 @@ protected:
     bool _success = false;
     bool _prime = false;
     std::string _res64;
+    arithmetic::Giant _factor;
+    std::string _result;
 };

@@ -313,25 +313,25 @@ int main(int argc, char *argv[])
         GWASSERT(!factors.empty());
         if (factors[0] == input.value() || (factors[0] == 0 && factors.size() == 1))
         {
-            logging.result(true, "%s is prime!\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is prime!\n");
+            Run::result_prime(input, logging, 0);
             return PRST_EXIT_PRIMEFOUND;
         }
         else
         {
-            logging.result(false, "%s is not prime.\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is not prime.\n");
+            Run::result_not_prime(input, logging, 0);
             return PRST_EXIT_NORMAL;
         }
     }
     else if (trial_division)
     {
+        logging.progress().time_init(0);
         auto factors = input.factorize_small();
+        logging.progress().update(1, 0);
         if (!factors.empty())
         {
-            logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
-            logging.result(false, "%s is not prime.\n", input.display_text().data());
-            logging.result_save(input.input_text() + " is not prime.\n");
+            Giant factor;
+            factor = factors[0];
+            Run::result_not_prime_divisible(input, logging, factor, logging.progress().time_total());
             return PRST_EXIT_NORMAL;
         }
     }
@@ -368,6 +368,8 @@ int main(int argc, char *argv[])
     std::unique_ptr<Run> run(Run::create(input, options, logging, proof.get()));
     if (!run)
         return PRST_EXIT_FAILURE;
+    if (run->finished())
+        return PRST_EXIT_NORMAL;
     if (run == proof)
         proof.release();
 
@@ -526,4 +528,64 @@ Run* Run::create(InputNum& input, Options& options, Logging& logging, Proof* pro
 
     // Unreachable
     return nullptr;
+}
+
+void Run::primality_result(Logging& logging)
+{
+    if (prime())
+        result_prime(input, logging, logging.progress().time_total());
+    else if (!_factor.empty())
+        result_not_prime_divisible(input, logging, _factor, logging.progress().time_total());
+    else if (success() && res64().empty())
+        result_probable_prime(input, logging, logging.progress().time_total());
+    else if (success() && !res64().empty())
+        result_not_prime_but_probable_res64(input, logging, res64(), logging.progress().time_total());
+    else if (res64().empty())
+        result_not_prime(input, logging, logging.progress().time_total());
+    else
+        result_not_prime_res64(input, logging, res64(), logging.progress().time_total());
+}
+
+void Run::result_prime(InputNum& input, Logging& logging, double time)
+{
+    logging.result(true, "%s is prime! Time: %.1f s.\n", input.display_text().data(), time);
+    logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)time) + " s.\n");
+}
+
+void Run::result_probable_prime(InputNum& input, Logging& logging, double time)
+{
+    logging.result(true, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), time);
+    logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)time) + " s.\n");
+}
+
+void Run::result_not_prime(InputNum& input, Logging& logging, double time)
+{
+    logging.result(false, "%s is not prime. Time: %.1f s.\n", input.display_text().data(), time);
+    logging.result_save(input.input_text() + " is not prime. Time: " + std::to_string((int)time) + " s.\n");
+}
+
+void Run::result_not_prime_divisible(InputNum& input, Logging& logging, Giant& factor, double time)
+{
+    logging.report_factor(input, factor);
+    std::string str = (factor.size() <= 2 ? factor.to_string() : "a factor (see factors.txt)");
+    logging.result(false, "%s is not prime, divisible by %s. Time: %.1f s.\n", input.display_text().data(), str.data(), time);
+    logging.result_save(input.input_text() + " is not prime, divisible by " + str + ". Time: " + std::to_string((int)time) + " s.\n");
+}
+
+void Run::result_not_prime_res64(InputNum& input, Logging& logging, const std::string& res64, double time)
+{
+    logging.result(false, "%s is not prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), res64.data(), time);
+    logging.result_save(input.input_text() + " is not prime. RES64: " + res64 + ", time: " + std::to_string((int)time) + " s.\n");
+}
+
+void Run::result_not_prime_but_probable_res64(InputNum& input, Logging& logging, const std::string& res64, double time)
+{
+    logging.result(false, "%s is not prime, although it's a probable prime. RES64: %s, time: %.1f s.\n", input.display_text().data(), res64.data(), time);
+    logging.result_save(input.input_text() + " is not prime, although it's a probable prime. RES64: " + res64 + ", time: " + std::to_string((int)time) + " s.\n");
+}
+
+void Run::result_not_probable_prime_res64(InputNum& input, Logging& logging, const std::string& res64, double time)
+{
+    logging.result(false, "%s is not a probable prime. Have you run Fermat test first? RES64: %s, time: %.1f s.\n", input.display_text().data(), res64.data(), time);
+    logging.result_save(input.input_text() + " is not a probable prime. Have you run Fermat test first? RES64: " + res64 + ", time: " + std::to_string((int)time) + " s.\n");
 }

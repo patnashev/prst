@@ -303,6 +303,8 @@ int boinc_main(int argc, char *argv[])
     }
     if (!run)
         run.reset(new Fermat(options.ForceFermat ? Fermat::FERMAT : Fermat::AUTO, input, options, logging, proof.get()));
+    if (run->finished())
+        bow_finish(PRST_EXIT_NORMAL);
     
     std::unique_ptr<File> file_proofpoint;
     std::unique_ptr<File> file_proofproduct;

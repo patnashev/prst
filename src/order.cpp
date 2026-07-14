@@ -263,7 +263,6 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
 
     Giant order_div;
     order_div = 1;
-    std::string order;
     for (auto& factor : _order)
     {
         auto it = input.factors().begin();
@@ -271,13 +270,13 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
         if (it->second != factor.second)
             order_div *= power(factor.first, it->second - factor.second);
 
-        if (!order.empty())
-            order += "*";
-        order += factor.first.to_string();
+        if (!_result.empty())
+            _result += "*";
+        _result += factor.first.to_string();
         if (factor.second > 1)
         {
-            order += "^";
-            order += std::to_string(factor.second);
+            _result += "^";
+            _result += std::to_string(factor.second);
         }
     }
     for (auto& factor : input.factors())
@@ -289,13 +288,13 @@ void Order::run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_
     }
     if (order_div.size() == 1)
     {
-        order += " = (N-1)/";
-        order += order_div.to_string();
+        _result += " = (N-1)/";
+        _result += order_div.to_string();
     }
 
     logging.set_prefix("");
-    logging.result(true, "ord(%s) mod %s = %s.\n", _options.OrderA->display_text().data(), input.display_text().data(), order.data());
-    logging.result_save("ord(" + _options.OrderA->display_text() + ") mod " + input.input_text() + " = " + order + ".\n");
+    logging.result(true, "ord(%s) mod %s = %s.\n", _options.OrderA->display_text().data(), input.display_text().data(), _result.data());
+    logging.result_save("ord(" + _options.OrderA->display_text() + ") mod " + input.input_text() + " = " + _result + ".\n");
 
     file_checkpoint.clear(true);
     file_recoverypoint.clear(true);
@@ -528,6 +527,7 @@ void FermatDivisor::run(arithmetic::GWState& gwstate, File& file_checkpoint, Fil
     logging.set_prefix("");
     if (_result.empty())
     {
+        _result = "not found";
         logging.result(false, "%s no divisible numbers found.\n", input.display_text().data());
         logging.result_save(input.input_text() + " no divisible numbers found.\n");
     }

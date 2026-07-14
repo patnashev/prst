@@ -281,34 +281,27 @@ int batch_main(int argc, char *argv[])
         {
             if (batch_name != "stdin")
                 logging_batch.info("%s, Trial division test.\n", run_name.data());
-            else
-                logging.info("Trial division test of %s.\n", input.display_text().data());
+            logging.info("Trial division test of %s.\n", input.display_text().data());
             auto factors = input.factorize_small();
             GWASSERT(!factors.empty());
             if (factors[0] == input.value() || (factors[0] == 0 && factors.size() == 1))
-            {
-                logging.result(true, "%s is prime!\n", input.display_text().data());
-                logging.result_save(input.input_text() + " is prime!\n");
-                continue;
-            }
+                Run::result_prime(input, logging, 0);
             else
-            {
-                logging.result(false, "%s is not prime.\n", input.display_text().data());
-                logging.result_save(input.input_text() + " is not prime.\n");
-                continue;
-            }
+                Run::result_not_prime(input, logging, 0);
+            continue;
         }
         else if (trial_division)
         {
+            logging.progress().time_init(0);
             auto factors = input.factorize_small();
+            logging.progress().update(1, 0);
             if (!factors.empty())
             {
                 if (batch_name != "stdin")
                     logging_batch.info("%s, trial division found factor %d.\n", run_name.data(), factors[0]);
-                else
-                    logging.info("Trial division of %s found factor %d.\n", input.display_text().data(), factors[0]);
-                logging.result(false, "%s is not prime.\n", input.display_text().data());
-                logging.result_save(input.input_text() + " is not prime.\n");
+                Giant factor;
+                factor = factors[0];
+                Run::result_not_prime_divisible(input, logging, factor, logging.progress().time_total());
                 continue;
             }
         }
@@ -324,6 +317,8 @@ int batch_main(int argc, char *argv[])
             continue;
         if (batch_name != "stdin")
             logging_batch.info("%s, %s.\n", run_name.data(), run->name().data());
+        if (run->finished())
+            continue;
 
         fingerprint = run->fingerprint();
         File file_checkpoint(filename_prefix + filename_suffix + ".ckpt", fingerprint);

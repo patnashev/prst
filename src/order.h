@@ -13,7 +13,6 @@ public:
     Order(InputNum& input, Options& options, Logging& logging);
 
     void run(arithmetic::GWState& gwstate, File& file_checkpoint, File& file_recoverypoint, Logging& logging) override;
-    std::string& result() { return _result; }
 
 protected:
     Order(const char* name, InputNum& input, Options& options) : Run(name, input, options) { }
@@ -43,7 +42,6 @@ protected:
     std::unique_ptr<CarefulExp> _task_check;
     std::vector<FactorTask> _tasks;
     int _task_break;
-    std::string _result;
 };
 
 class FermatDivisor : public Order
