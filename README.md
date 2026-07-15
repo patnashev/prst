@@ -51,11 +51,13 @@ Mode:    default is primality testing.
                  processes several numbers.
          -order {<a> | "<number>"}
                  computes multiplicative order of a.
-
+         -divides {f | gf | xgf} [limit 12]
+                 searches for Fermat numbers divisible by the input.
 Options: -ini <filename>
                  reads command line options from ini file. See sample.ini.
-         -log [{debug | info | warning | error}] [file <filename>]
+         -log [{debug | info | warning | error}] [prime] [file <filename>]
                  level of detail of output information.
+                 enables logging all found primes to prime.txt.
                  sets log file to write all output.
          -time [write <sec>] [progress <sec>] [coarse]
                  period of writing checkpoints and outputing progress statistics.

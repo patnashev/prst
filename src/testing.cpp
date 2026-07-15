@@ -106,6 +106,8 @@ int testing_main(int argc, char *argv[])
     TestLogging logging(log_level);
     if (!log_file.empty())
         logging.file_log(log_file);
+    logging.file_prime("");
+    logging.file_factor("");
 
     std::list<std::tuple<std::string,SubLogging,std::deque<std::unique_ptr<Test>>>> tests;
     auto add = [&](const std::string& subset) -> std::deque<std::unique_ptr<Test>>& { return std::get<2>(tests.emplace_back(subset, SubLogging(logging, log_level), std::deque<std::unique_ptr<Test>>())); };
@@ -253,10 +255,7 @@ int testing_main(int argc, char *argv[])
             {
                 test_text = "error";
                 SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
-                if (log_level > Logging::LEVEL_DEBUG)
-                    subLogging.file_result(log_file);
-                else
-                    subLogging.file_log(log_file);
+                subLogging.file_result("");
                 RootsTest(subLogging, options);
             }
             else
@@ -266,10 +265,7 @@ int testing_main(int argc, char *argv[])
                     logging.info("%s\n", test_text.data());
                     std::get<1>(subsetTests).progress().update(0, 0);
                     SubLogging subLogging(std::get<1>(subsetTests), log_level > Logging::LEVEL_DEBUG ? Logging::LEVEL_ERROR : Logging::LEVEL_INFO);
-                    if (log_level > Logging::LEVEL_DEBUG)
-                        subLogging.file_result(log_file);
-                    else
-                        subLogging.file_log(log_file);
+                    subLogging.file_result("");
                     test->run(subLogging, options);
                     std::get<1>(subsetTests).progress().next_stage();
                 }

@@ -113,7 +113,7 @@ public:
     };
 
 public:
-    NetLogging(int level, int net_level, NetContext& net) : Logging(level), _net_level(net_level), _net(net), _file(net) { }
+    NetLogging(int level, int net_level, NetContext& net) : Logging(level), _net_level(net_level), _net(net), _file(net) { _file_prime.clear(); _file_factor.clear(); }
 
     virtual void report(const std::string& message, int level) override;
     virtual void report_progress() override;

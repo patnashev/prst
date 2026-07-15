@@ -77,6 +77,7 @@ int main(int argc, char *argv[])
     bool trial_division = false;
     int log_level = Logging::LEVEL_WARNING;
     std::string log_file;
+    bool log_prime = false;
 
     Config cnfg;
     cnfg.value_number("-t", 0, options.thread_count, 1, 256)
@@ -208,6 +209,7 @@ int main(int argc, char *argv[])
                 .ex_case().check("error", log_level, Logging::LEVEL_ERROR).end()
                 .end()
             .value_string("file", ' ', log_file)
+            .check("prime", log_prime, true)
             .end()
         .check("-d", log_level, Logging::LEVEL_INFO)
         .check_code("-test", [&] { exit(testing_main(argc, argv)); })
@@ -276,7 +278,7 @@ int main(int argc, char *argv[])
         printf("\t-divides {f | gf | xgf} [limit 12]\n");
         printf("Options:\n");
         printf("\t-ini <filename>\n");
-        printf("\t-log [{debug | info | warning | error}] [file <filename>]\n");
+        printf("\t-log [{debug | info | warning | error}] [prime] [file <filename>]\n");
         printf("\t-time [write <sec>] [progress <sec>] [coarse]\n");
         printf("\t-t <threads>\n");
         printf("\t-spin <threads>\n");
@@ -305,6 +307,8 @@ int main(int argc, char *argv[])
     Logging logging(options.information_only && log_level > Logging::LEVEL_INFO ? Logging::LEVEL_INFO : log_level);
     if (!log_file.empty())
         logging.file_log(log_file);
+    if (!log_prime)
+        logging.file_prime("");
 
     if (input.bitlen() <= 40)
     {
@@ -548,12 +552,14 @@ void Run::primality_result(Logging& logging)
 
 void Run::result_prime(InputNum& input, Logging& logging, double time)
 {
+    logging.report_prime(input);
     logging.result(true, "%s is prime! Time: %.1f s.\n", input.display_text().data(), time);
     logging.result_save(input.input_text() + " is prime! Time: " + std::to_string((int)time) + " s.\n");
 }
 
 void Run::result_probable_prime(InputNum& input, Logging& logging, double time)
 {
+    logging.report_prime(input);
     logging.result(true, "%s is a probable prime. Time: %.1f s.\n", input.display_text().data(), time);
     logging.result_save(input.input_text() + " is a probable prime. Time: " + std::to_string((int)time) + " s.\n");
 }
