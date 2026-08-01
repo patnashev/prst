@@ -1,0 +1,108 @@
+name: Linux build
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
+
+jobs:
+  boinc-linux64:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Cache BOINC libs
+        id: cache-boinc-linux64
+        uses: actions/cache@v5
+        with:
+          path: |
+            boinc/*.*
+            boinc/api
+            boinc/lib
+          key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-linux64
+
+      - name: Checkout boinc
+        if: steps.cache-boinc-linux64.outputs.cache-hit != 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: 'BOINC/boinc'
+          ref: ${{ env.boinc_ref }}
+          path: 'boinc'
+
+      - name: install deps
+        if: steps.cache-boinc-linux64.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool pkg-config m4
+
+      - name: build boinc
+        if: steps.cache-boinc-linux64.outputs.cache-hit != 'true'
+        run: |
+          cd ./boinc/
+          ./_autosetup
+          ./configure --disable-server --disable-client --disable-manager --enable-libraries --enable-static --disable-shared
+          make -j$(nproc)
+
+  linux64:
+    needs: [boinc-linux64]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Use cached BOINC libs
+        id: cache-boinc
+        uses: actions/cache@v5
+        with:
+          path: |
+            boinc/*.*
+            boinc/api
+            boinc/lib
+          key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-linux64
+          fail-on-cache-miss: true
+
+      - name: install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev
+
+      - name: Checkout prst
+        uses: actions/checkout@v5
+        with:
+          submodules: 'true'
+          path: 'prst'
+
+      - name: make
+        run: cd prst/src/linux64 && make -j$(nproc)
+
+      - name: make (boinc)
+        run: cd prst/src/linux64 && make -f Makefile.boinc BOINC_DIR=$GITHUB_WORKSPACE/boinc -j$(nproc)
+
+      - name: smoke test
+        run: |
+          cd prst/src/linux64
+          file prst       | grep -q 'statically linked'
+          file prst_boinc | grep -q 'statically linked'
+          ./prst -v
+          ./prst_boinc -v
+          ./prst -log info "3*2^534+1" | tee proth.log
+          grep -q 'is prime!' proth.log
+
+      - name: check binaries run on other distros
+        run: |
+          for image in debian:11 alpine:3.19; do
+            echo "--- $image ---"
+            docker run --rm -v "$PWD/prst/src/linux64:/b:ro" "$image" /b/prst -v
+          done
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux64_bins
+          path: |
+            prst/src/linux64/prst
+            prst/src/linux64/prst_boinc
