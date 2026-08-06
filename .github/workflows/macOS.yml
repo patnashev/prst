@@ -11,9 +11,9 @@ concurrency:
 
 env:
   boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
-  gwnum_ver: "v3106b01"
+  gwnum_ver: "v3107b01"
   gwnum_ver_major: "31"
-  gwnum_ver_minor: "06"
+  gwnum_ver_minor: "07"
   MACOSX_DEPLOYMENT_TARGET: "10.15"
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Cache BOINC libs
         id: cache-boinc-macIntel64
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             boinc/mac_build/build/Deployment
@@ -57,7 +57,7 @@ jobs:
     steps:
       - name: Cache gwnum.a libs
         id: cache-gwnum-macIntel64
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             gwnum/*.h
@@ -89,7 +89,7 @@ jobs:
     steps:
       - name: Use cached BOINC libs
         id: cache-boinc
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             boinc/mac_build/build/Deployment
@@ -101,7 +101,7 @@ jobs:
 
       - name: Use cached gwnum
         id: cache-gwnum
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             gwnum/*.h
@@ -133,7 +133,7 @@ jobs:
           rm -f /usr/local/opt/gmp/lib/libgmp.dylib
 
       - name: Checkout prst
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           submodules: 'true'
           path: 'prst'
@@ -150,7 +150,7 @@ jobs:
         run: cd prst/src/mac64 && make -f Makefile.boinc -j
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: macIntel64_bins
           path: |
