@@ -153,4 +153,5 @@ jobs:
           path: |
             prst/src/linux64/prst
             prst/src/linux64/prst_boinc
-            gwnum
+            gwnum/gwnum.a
+            gwnum/polymult.a

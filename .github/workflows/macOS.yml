@@ -156,4 +156,5 @@ jobs:
           path: |
             prst/src/mac64/prst
             prst/src/mac64/prst_boinc
-            gwnum
+            gwnum/gwnum.a
+            gwnum/polymult.a
