@@ -140,7 +140,8 @@ The parser surface (`abc_parser.h`) is tiny; the driver's option set is the larg
 | `-info` | `print_info` each candidate instead of testing (continues unless `-fft info`). |
 | `-trial` | trial-divide every candidate first; a found factor ⇒ "not prime", skip the full test. |
 | `-ini <file>` | read more options from an ini file (`Config::parse_ini`). |
-| `-t`, `-spin`, `-cpu`, `-fft`, `-check`, `-fermat`, `-order`, `-divides`, `-factors`, `-time`, `-d` | same meanings as in `main()`; parsed once into the shared `Options`, applied to each candidate's `GWState` via `options.configure` (`:333`). |
+| `-factors [list <f>,...] [file <fn>] [all]` | same meanings as in `main()`, but the parsed factors go into one pool shared by the whole batch rather than into a single `InputNum`. Each candidate absorbs them via `add_factor` after its own `parse` — a factor that divides no cofactor of that candidate is ignored, so one helper file may carry the factors of every k in the sieve. As in `main()`, entries are **trusted to be prime and are not verified**. |
+| `-t`, `-spin`, `-cpu`, `-fft`, `-check`, `-fermat`, `-order`, `-divides`, `-time`, `-d` | same meanings as in `main()`; parsed once into the shared `Options`, applied to each candidate's `GWState` via `options.configure` (`:333`). |
 
 Note `Task::PROGRESS_TIME = 60` is set at entry (`:39`) — batch runs report progress less chattily than the 1-candidate default.
 
