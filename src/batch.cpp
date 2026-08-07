@@ -184,7 +184,6 @@ int batch_main(int argc, char *argv[])
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-divides {f | gf | xgf} [limit 12]\n");
         printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
-        printf("\t\tprime factors of k, applied to every candidate they divide.\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>]]\n");
         printf("\t-stop [on error] [on prime] [on primek] [on composites <count>]\n");
         printf("\t\ton prime stops the whole batch; on primek stops only the current k.\n");
@@ -294,8 +293,7 @@ int batch_main(int argc, char *argv[])
             continue;
         }
         // Helper factors are a single pool shared by the whole batch. add_factor()
-        // ignores a factor that does not divide this candidate's cofactor, so one
-        // file may carry the factors of every k in the sieve.
+        // ignores a factor that does not divide this candidate's cofactor.
         for (auto& factor : factors)
             input.add_factor(factor);
         if (show_info)
