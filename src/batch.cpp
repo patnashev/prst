@@ -39,6 +39,7 @@ int batch_main(int argc, char *argv[])
     Task::PROGRESS_TIME = 60;
 
     std::string batch_name;
+    std::vector<Giant> factors;
     bool stop_error = false;
     bool stop_prime = false;
     int stop_composites = 0;
@@ -93,6 +94,34 @@ int batch_main(int argc, char *argv[])
                 .end()
             .end()
         .group("-factors")
+            .list("list", ' ', ',', false)
+                .value_code([&](const char* param) {
+                        Giant tmp;
+                        InputNum input_factor;
+                        if (!input_factor.parse(param) || (tmp = input_factor.value()) == 0)
+                            return false;
+                        if (tmp != 1)
+                            factors.emplace_back(std::move(tmp));
+                        return true;
+                    })
+                .end()
+            .value_code("file", ' ', [&](const char* param) {
+                    File factor_file(param, 0);
+                    factor_file.read_buffer();
+                    if (factor_file.buffer().empty())
+                        printf("factor file not found: %s.\n", param);
+                    else
+                    {
+                        std::unique_ptr<TextReader> reader(factor_file.get_textreader());
+                        Giant tmp;
+                        std::string factor;
+                        InputNum input_factor;
+                        while (reader->read_textline(factor))
+                            if (input_factor.parse(factor) && (tmp = input_factor.value()) != 0 && tmp != 1)
+                                factors.emplace_back(std::move(tmp));
+                    }
+                    return true;
+                })
             .check("all", options.AllFactors, true)
             .end()
         .group("-time")
@@ -154,7 +183,8 @@ int batch_main(int argc, char *argv[])
         printf("\t-fermat [a <a>]\n");
         printf("\t-order {<a> | \"K*B^N+C\"}\n");
         printf("\t-divides {f | gf | xgf} [limit 12]\n");
-        printf("\t-factors all\n");
+        printf("\t-factors [list <factor>,...] [file <filename>] [all]\n");
+        printf("\t\tprime factors of k, applied to every candidate they divide.\n");
         printf("\t-check [{near | always| never}] [strong [disable] [count <count>]]\n");
         printf("\t-stop [on error] [on prime] [on primek] [on composites <count>]\n");
         printf("\t\ton prime stops the whole batch; on primek stops only the current k.\n");
@@ -263,6 +293,11 @@ int batch_main(int argc, char *argv[])
             }
             continue;
         }
+        // Helper factors are a single pool shared by the whole batch. add_factor()
+        // ignores a factor that does not divide this candidate's cofactor, so one
+        // file may carry the factors of every k in the sieve.
+        for (auto& factor : factors)
+            input.add_factor(factor);
         if (show_info)
         {
             input.print_info();
