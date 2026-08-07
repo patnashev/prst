@@ -213,7 +213,4 @@ public:
     {
         LucasUVMul::init(input, gwstate, file, file_recovery, logging, P, negativeQ);
     }
-
-private:
-    using LucasUVMul::init;
 };
