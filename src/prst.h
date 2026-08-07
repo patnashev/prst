@@ -74,7 +74,7 @@ class Run
 {
 public:
     Run(InputNum& input_, Options& options) : input(input_), _options(options) { }
-    Run(const char* name, InputNum& input_, Options& options) : _name(name), input(input_), _options(options) { }
+    Run(const char* name, InputNum& input_, Options& options) : input(input_), _options(options), _name(name) { }
     virtual ~Run() { }
 
     const std::string& name() { return _name; }
